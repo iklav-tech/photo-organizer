@@ -2,6 +2,24 @@
 
 Python command-line photo organizer for renaming and organizing files by date, time, and metadata.
 
+## Current status (initial scaffold)
+
+The initial repository scaffold is in place with:
+
+- `src/` and `tests/` directories;
+- installable package at `src/photo_organizer`;
+- `pyproject.toml` for packaging and local editable install;
+- basic CLI entry point (`photo-organizer`).
+
+Quick local setup:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+python -c "import photo_organizer; print(photo_organizer.__version__)"
+```
+
 **Português:** Organizador de fotos em Python via linha de comando, com renomeação e organização por data, hora e metadados.
 
 ## About the project
