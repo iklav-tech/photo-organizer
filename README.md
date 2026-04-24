@@ -4,6 +4,10 @@ Python command-line photo organizer for renaming and organizing files by date, t
 
 Repository: https://github.com/iklav-tech/photo-organizer
 
+## Changelog
+
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including the full v0.1.0 delivered scope.
+
 ## Current status
 
 The project already includes an end-to-end MVP with automated tests:
@@ -308,27 +312,83 @@ The project uses mostly Python standard library plus Pillow for EXIF handling.
 - test-ready code;
 - simple and evolvable architecture.
 
+## Version v0.1.0 delivered scope
+
+This section consolidates what was implemented in v0.1.0 according to completed issues.
+
+### CLI foundations
+
+- root help works (`photo-organizer --help`);
+- subcommand help works (`scan --help`, `organize --help`);
+- clear required argument errors;
+- root options include `--version` and `--log-level`.
+
+### Scan and file discovery
+
+- recursive scan of input directory;
+- centralized supported extensions (`.jpg`, `.jpeg`, `.png`);
+- case-insensitive extension checks;
+- unsupported files are ignored;
+- stable/consistent discovered path list;
+- clear error message when source directory does not exist.
+
+### Metadata and date resolution
+
+- EXIF extraction for compatible JPEG files;
+- safe behavior when EXIF is missing;
+- safe handling of EXIF read exceptions;
+- date resolution order:
+  1. `DateTimeOriginal`
+  2. `CreateDate`
+  3. `mtime` fallback
+
+### Naming and destination planning
+
+- deterministic name generation with format `YYYY-MM-DD_HH-MM-SS.ext`;
+- original extension preservation;
+- destination tree generation in `YYYY/MM/DD`;
+- `pathlib` compatibility for Linux and Windows.
+
+### Planning, execution and simulation
+
+- explicit operation planning before execution;
+- intermediate operation items with source, destination and action;
+- inspectable planning mode with `--plan`;
+- execution modes with `--move` (default) and `--copy`;
+- dry-run simulation mode with `--dry-run` that does not alter files;
+- end-to-end tested dry-run flow.
+
+### Logging and observability
+
+- start/end execution logs;
+- processed/planned file counters;
+- fallback-decision logs for metadata date resolution;
+- contextual error logs;
+- configurable log levels: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+
+### Automated tests
+
+- unit tests for scanner, metadata, naming, planner and executor;
+- CLI behavior tests;
+- end-to-end dry-run test for `organize`;
+- local suite currently green.
+
 ## Roadmap
 
 ### Version 0.1.0
-- basic image scanning;
-- extension filtering;
-- date extraction and fallback chain;
-- deterministic naming;
-- date-based organization;
-- `dry-run` mode.
+- implemented and stabilized (see Version v0.1.0 delivered scope section).
 
 ### Version 0.2.0
-- copy/move support;
-- plan inspection mode (`--plan`);
-- improved logging and error messages;
-- CLI option maturity.
+- filename conflict prevention;
+- richer filtering (include/exclude and depth controls);
+- summary report generation (human-readable);
+- command UX improvements.
 
 ### Version 0.3.0
-- filename conflict prevention;
 - hash-based duplicate detection;
-- support for more media extensions;
-- richer execution report.
+- support for more media types (including videos);
+- structured report export (JSON/CSV);
+- performance improvements for large collections.
 
 ### Version 0.4.0
 - GPS/EXIF support;
