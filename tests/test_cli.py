@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
 import logging
+import os
+from datetime import datetime
 
 from photo_organizer.cli import main
 from photo_organizer.executor import FileOperation
@@ -111,3 +113,50 @@ def test_log_level_can_be_adjusted(monkeypatch, caplog) -> None:
 
     assert result == 0
     assert "Execution started: scan" not in caplog.text
+
+
+def test_organize_dry_run_end_to_end_shows_expected_destinations_and_keeps_files(
+    tmp_path: Path, caplog
+) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    source_dir.mkdir()
+
+    first = source_dir / "IMG_1.jpg"
+    second = source_dir / "IMG_2.png"
+    first.write_text("a")
+    second.write_text("b")
+
+    first_dt = (2024, 8, 15, 14, 32, 9)
+    second_dt = (2023, 1, 2, 3, 4, 5)
+    first_ts = datetime(*first_dt).timestamp()
+    second_ts = datetime(*second_dt).timestamp()
+    os.utime(first, (first_ts, first_ts))
+    os.utime(second, (second_ts, second_ts))
+
+    with caplog.at_level(logging.INFO):
+        result = main([
+            "organize",
+            str(source_dir),
+            "--output",
+            str(output_dir),
+            "--dry-run",
+        ])
+
+    assert result == 0
+
+    first_expected = (
+        output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+    )
+    second_expected = (
+        output_dir / "2023" / "01" / "02" / "2023-01-02_03-04-05.png"
+    )
+
+    assert f"[DRY-RUN] MOVE {first} -> {first_expected}" in caplog.text
+    assert f"[DRY-RUN] MOVE {second} -> {second_expected}" in caplog.text
+
+    # Dry-run must not alter input files or create output files.
+    assert first.exists()
+    assert second.exists()
+    assert not first_expected.exists()
+    assert not second_expected.exists()
