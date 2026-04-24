@@ -94,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Simulate operations without changing files.",
     )
+    organize_parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Show planned operations and exit without executing.",
+    )
     mode_group = organize_parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--copy",
@@ -130,6 +135,17 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[INFO] Organizing photos from {args.source} to {args.output} by {args.by}"
         )
+        print("[INFO] Generated execution plan:")
+        for operation in operations:
+            print(
+                f"[PLAN] {operation.mode.upper()} {operation.source} -> {operation.destination}"
+            )
+
+        if args.plan:
+            print("[INFO] Plan-only mode enabled: no files will be changed")
+            print(f"[INFO] Planned operations: {len(operations)}")
+            return 0
+
         if args.dry_run:
             print("[INFO] DRY-RUN enabled: no files will be changed")
 

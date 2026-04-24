@@ -1,6 +1,8 @@
 import pytest
+from pathlib import Path
 
 from photo_organizer.cli import main
+from photo_organizer.executor import FileOperation
 
 
 def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
@@ -52,3 +54,33 @@ def test_scan_requires_source(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "error:" in captured.err
     assert "source" in captured.err
+
+
+def test_organize_plan_mode_shows_plan_without_execution(
+    monkeypatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    planned = [
+        FileOperation(
+            source=Path("input/a.jpg"),
+            destination=Path("out/2024/08/15/2024-08-15_14-32-09.jpg"),
+            mode="move",
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("apply_operations must not be called in --plan mode")
+
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fail_if_called)
+
+    result = main(["organize", "./photos", "--output", "./organized", "--plan"])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "[INFO] Generated execution plan:" in captured.out
+    assert "[PLAN] MOVE input/a.jpg -> out/2024/08/15/2024-08-15_14-32-09.jpg" in captured.out
+    assert "Plan-only mode enabled" in captured.out
