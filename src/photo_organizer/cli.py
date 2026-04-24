@@ -6,6 +6,8 @@ import argparse
 from importlib import metadata as importlib_metadata
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
+from photo_organizer.executor import apply_operations, plan_organization_operations
+from photo_organizer.scanner import find_image_files
 
 
 def format_version_info() -> str:
@@ -87,6 +89,22 @@ def build_parser() -> argparse.ArgumentParser:
         default="date",
         help="Organization strategy (default: date).",
     )
+    organize_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate operations without changing files.",
+    )
+    mode_group = organize_parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--copy",
+        action="store_true",
+        help="Copy files instead of moving them.",
+    )
+    mode_group.add_argument(
+        "--move",
+        action="store_true",
+        help="Move files (default behavior).",
+    )
 
     return parser
 
@@ -100,13 +118,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "scan":
+        files = find_image_files(args.source, recursive=True)
         print(f"[INFO] Scanning directory: {args.source}")
+        print(f"[INFO] Found {len(files)} image files")
         return 0
 
     if args.command == "organize":
+        mode = "copy" if args.copy else "move"
+        operations = plan_organization_operations(args.source, args.output, mode=mode)
+
         print(
             f"[INFO] Organizing photos from {args.source} to {args.output} by {args.by}"
         )
+        if args.dry_run:
+            print("[INFO] DRY-RUN enabled: no files will be changed")
+
+        logs = apply_operations(operations, dry_run=args.dry_run)
+        for line in logs:
+            print(line)
+
+        print(f"[INFO] Planned operations: {len(operations)}")
         return 0
 
     parser.print_help()
