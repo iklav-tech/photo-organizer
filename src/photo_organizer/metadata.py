@@ -36,17 +36,34 @@ def _parse_exif_datetime(value: Any) -> datetime | None:
 
 
 def _read_exif_datetime_fields(path: Path) -> dict[str, Any]:
-    """Read EXIF datetime-like fields from a file.
+    """Read EXIF datetime-like fields from a file."""
+    fields = extract_exif_metadata(path)
 
-    Returns an empty dict when EXIF data is unavailable or Pillow is not installed.
+    # Common alias used in tools: "CreateDate" usually maps to DateTime (306).
+    if "CreateDate" not in fields:
+        for alias in ("DateTime", "DateTimeDigitized"):
+            if alias in fields:
+                fields["CreateDate"] = fields[alias]
+                break
+
+    return fields
+
+
+def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
+    """Extract EXIF tags from a supported image file.
+
+    Returns an empty dict when EXIF data is unavailable, the image has no EXIF,
+    or a safe read error happens.
     """
+    file_path = Path(path)
+
     try:
         from PIL import ExifTags, Image
     except ImportError:
         return {}
 
     try:
-        with Image.open(path) as image:
+        with Image.open(file_path) as image:
             exif_data = image.getexif()
     except Exception:
         return {}
@@ -59,13 +76,6 @@ def _read_exif_datetime_fields(path: Path) -> dict[str, Any]:
         tag_name = ExifTags.TAGS.get(key)
         if isinstance(tag_name, str):
             fields[tag_name] = value
-
-    # Common alias used in tools: "CreateDate" usually maps to DateTime (306).
-    if "CreateDate" not in fields:
-        for alias in ("DateTime", "DateTimeDigitized"):
-            if alias in fields:
-                fields["CreateDate"] = fields[alias]
-                break
 
     return fields
 

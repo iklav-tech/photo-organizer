@@ -1,7 +1,97 @@
 from datetime import datetime
 from pathlib import Path
+import sys
+import types
 
 import photo_organizer.metadata as metadata
+
+
+def test_extract_exif_metadata_reads_compatible_jpeg_exif(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    class FakeImage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return {
+                36867: "2024:01:02 03:04:05",
+                306: "2024:01:02 03:04:05",
+            }
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(
+        TAGS={36867: "DateTimeOriginal", 306: "DateTime"}
+    )
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
+
+
+def test_extract_exif_metadata_returns_empty_when_no_exif(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    class FakeImage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return {}
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(TAGS={})
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result == {}
+
+
+def test_extract_exif_metadata_handles_read_exceptions_safely(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    def raise_open(_path):
+        raise OSError("cannot read")
+
+    fake_image_module = types.SimpleNamespace(open=raise_open)
+    fake_exif_tags_module = types.SimpleNamespace(TAGS={})
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result == {}
 
 
 def test_get_best_available_datetime_prioritizes_datetimeoriginal(
