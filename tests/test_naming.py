@@ -1,4 +1,7 @@
 from datetime import datetime
+import re
+
+import pytest
 
 from photo_organizer.naming import build_default_filename
 
@@ -9,13 +12,22 @@ def test_build_default_filename_matches_expected_format() -> None:
     result = build_default_filename(dt, "IMG_1034.jpg")
 
     assert result == "2024-08-15_14-32-09.jpg"
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.jpg", result)
 
 
-def test_build_default_filename_preserves_original_extension() -> None:
+@pytest.mark.parametrize(
+    ("original", "expected"),
+    [
+        ("photo.jpeg", "2024-01-02_03-04-05.jpeg"),
+        ("photo.PNG", "2024-01-02_03-04-05.PNG"),
+    ],
+)
+def test_build_default_filename_preserves_original_extension(
+    original: str, expected: str
+) -> None:
     dt = datetime(2024, 1, 2, 3, 4, 5)
 
-    assert build_default_filename(dt, "photo.jpeg") == "2024-01-02_03-04-05.jpeg"
-    assert build_default_filename(dt, "photo.PNG") == "2024-01-02_03-04-05.PNG"
+    assert build_default_filename(dt, original) == expected
 
 
 def test_build_default_filename_is_deterministic() -> None:
