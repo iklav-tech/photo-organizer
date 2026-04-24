@@ -11,6 +11,10 @@ requires-python = ">=3.10"
 authors = [{ name = "photo-organizer contributors" }]
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/iklav-tech/photo-organizer"
+Issues = "https://github.com/iklav-tech/photo-organizer/issues"
+
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 
