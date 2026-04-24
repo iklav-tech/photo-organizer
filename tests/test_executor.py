@@ -1,8 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 import logging
-
-import pytest
+import os
 
 from photo_organizer.executor import FileOperation, apply_operations, plan_organization_operations
 
@@ -113,12 +112,55 @@ def test_apply_operations_logs_errors_with_context(
     monkeypatch.setattr("photo_organizer.executor.shutil.move", raise_move)
 
     with caplog.at_level(logging.ERROR):
-        with pytest.raises(OSError):
-            apply_operations(
-                [FileOperation(source=source, destination=destination, mode="move")],
-                dry_run=False,
-            )
+        logs = apply_operations(
+            [FileOperation(source=source, destination=destination, mode="move")],
+            dry_run=False,
+        )
 
     assert "Failed to execute operation: action=MOVE" in caplog.text
     assert str(source) in caplog.text
     assert str(destination) in caplog.text
+    assert logs[0].startswith("[ERROR] MOVE")
+
+
+def test_apply_operations_copy_preserves_basic_metadata_when_possible(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("image-data")
+    expected_mtime = datetime(2024, 2, 3, 4, 5, 6).timestamp()
+    os.utime(source, (expected_mtime, expected_mtime))
+
+    destination = tmp_path / "out" / "source.jpg"
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+    )
+
+    assert source.exists()
+    assert destination.exists()
+    assert destination.read_text() == "image-data"
+    assert destination.stat().st_mtime == source.stat().st_mtime
+    assert logs == [f"[INFO] COPY {source} -> {destination}"]
+
+
+def test_apply_operations_reports_success_and_failure_per_item(tmp_path: Path) -> None:
+    good_source = tmp_path / "good.jpg"
+    good_source.write_text("ok")
+    bad_source = tmp_path / "missing.jpg"
+
+    good_destination = tmp_path / "out" / "good.jpg"
+    bad_destination = tmp_path / "out" / "missing.jpg"
+
+    logs = apply_operations(
+        [
+            FileOperation(source=good_source, destination=good_destination, mode="copy"),
+            FileOperation(source=bad_source, destination=bad_destination, mode="copy"),
+        ],
+        dry_run=False,
+    )
+
+    assert good_destination.exists()
+    assert len(logs) == 2
+    assert logs[0] == f"[INFO] COPY {good_source} -> {good_destination}"
+    assert logs[1].startswith(f"[ERROR] COPY {bad_source} -> {bad_destination}")

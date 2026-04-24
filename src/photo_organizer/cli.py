@@ -194,7 +194,10 @@ def main(argv: list[str] | None = None) -> int:
 
         logs = apply_operations(operations, dry_run=args.dry_run)
         for line in logs:
-            logger.info(line)
+            if line.startswith("[ERROR]"):
+                logger.error(line)
+            else:
+                logger.info(line)
 
         logger.info("Execution finished: organize processed_files=%d", len(operations))
         return 0

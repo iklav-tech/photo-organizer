@@ -56,7 +56,11 @@ def apply_operations(
     operations: list[FileOperation],
     dry_run: bool = False,
 ) -> list[str]:
-    """Apply planned operations or only simulate them when dry_run is True."""
+    """Apply planned operations or simulate them when dry_run is True.
+
+    Returns one status line per operation, including failures, so callers can
+    inspect per-item outcomes.
+    """
     logs: list[str] = []
 
     for operation in operations:
@@ -82,7 +86,8 @@ def apply_operations(
                 operation.destination,
                 exc,
             )
-            raise
+            logs.append(f"[ERROR] {line_suffix} (error: {exc})")
+            continue
 
         logs.append(f"[INFO] {line_suffix}")
 
