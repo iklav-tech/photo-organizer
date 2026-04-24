@@ -136,7 +136,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "scan":
         logger.info("Execution started: scan source=%s", args.source)
-        files = find_image_files(args.source, recursive=True)
+        try:
+            files = find_image_files(args.source, recursive=True)
+        except FileNotFoundError:
+            logger.error("Source directory does not exist: %s", args.source)
+            logger.info("Execution finished: scan processed_files=0")
+            return 1
+        except NotADirectoryError:
+            logger.error("Source path is not a directory: %s", args.source)
+            logger.info("Execution finished: scan processed_files=0")
+            return 1
         logger.info("Found image files: count=%d", len(files))
         logger.info("Execution finished: scan processed_files=%d", len(files))
         return 0
@@ -151,7 +160,16 @@ def main(argv: list[str] | None = None) -> int:
             args.dry_run,
             args.plan,
         )
-        operations = plan_organization_operations(args.source, args.output, mode=mode)
+        try:
+            operations = plan_organization_operations(args.source, args.output, mode=mode)
+        except FileNotFoundError:
+            logger.error("Source directory does not exist: %s", args.source)
+            logger.info("Execution finished: organize processed_files=0")
+            return 1
+        except NotADirectoryError:
+            logger.error("Source path is not a directory: %s", args.source)
+            logger.info("Execution finished: organize processed_files=0")
+            return 1
 
         logger.info(
             "Generated execution plan: operations=%d strategy=%s",

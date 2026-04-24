@@ -102,6 +102,15 @@ def test_scan_logs_start_end_and_count(monkeypatch, caplog) -> None:
     assert "Execution finished: scan processed_files=2" in caplog.text
 
 
+def test_scan_nonexistent_directory_returns_clear_message(caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        result = main(["scan", "./does-not-exist"])
+
+    assert result == 1
+    assert "Source directory does not exist" in caplog.text
+    assert "Execution finished: scan processed_files=0" in caplog.text
+
+
 def test_log_level_can_be_adjusted(monkeypatch, caplog) -> None:
     monkeypatch.setattr(
         "photo_organizer.cli.find_image_files",
