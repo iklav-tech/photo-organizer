@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import shutil
 
@@ -10,6 +11,9 @@ from photo_organizer.metadata import get_best_available_datetime
 from photo_organizer.naming import build_default_filename
 from photo_organizer.planner import build_date_destination
 from photo_organizer.scanner import find_image_files
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,12 @@ def plan_organization_operations(
     """Plan organization operations for all supported images in source_dir."""
     source_path = Path(source_dir)
     output_path = Path(output_dir)
+    logger.debug(
+        "Planning operations: source=%s output=%s mode=%s",
+        source_path,
+        output_path,
+        mode,
+    )
 
     operations: list[FileOperation] = []
     for image_path in find_image_files(source_path, recursive=True):
@@ -57,12 +67,22 @@ def apply_operations(
             logs.append(f"[DRY-RUN] {line_suffix}")
             continue
 
-        operation.destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            operation.destination.parent.mkdir(parents=True, exist_ok=True)
 
-        if operation.mode == "copy":
-            shutil.copy2(operation.source, operation.destination)
-        else:
-            shutil.move(str(operation.source), str(operation.destination))
+            if operation.mode == "copy":
+                shutil.copy2(operation.source, operation.destination)
+            else:
+                shutil.move(str(operation.source), str(operation.destination))
+        except Exception as exc:
+            logger.error(
+                "Failed to execute operation: action=%s source=%s destination=%s error=%s",
+                action,
+                operation.source,
+                operation.destination,
+                exc,
+            )
+            raise
 
         logs.append(f"[INFO] {line_suffix}")
 

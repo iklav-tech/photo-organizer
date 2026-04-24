@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from importlib import metadata as importlib_metadata
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.executor import apply_operations, plan_organization_operations
+from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.scanner import find_image_files
+
+
+logger = logging.getLogger(__name__)
 
 
 def format_version_info() -> str:
@@ -55,6 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--version",
         action="store_true",
         help="Show project version and exit.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=LOG_LEVEL_CHOICES,
+        help="Set logging verbosity (default: INFO).",
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -117,43 +128,57 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    configure_logging(args.log_level)
 
     if args.version:
         print(format_version_info())
         return 0
 
     if args.command == "scan":
+        logger.info("Execution started: scan source=%s", args.source)
         files = find_image_files(args.source, recursive=True)
-        print(f"[INFO] Scanning directory: {args.source}")
-        print(f"[INFO] Found {len(files)} image files")
+        logger.info("Found image files: count=%d", len(files))
+        logger.info("Execution finished: scan processed_files=%d", len(files))
         return 0
 
     if args.command == "organize":
         mode = "copy" if args.copy else "move"
+        logger.info(
+            "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s",
+            args.source,
+            args.output,
+            mode,
+            args.dry_run,
+            args.plan,
+        )
         operations = plan_organization_operations(args.source, args.output, mode=mode)
 
-        print(
-            f"[INFO] Organizing photos from {args.source} to {args.output} by {args.by}"
+        logger.info(
+            "Generated execution plan: operations=%d strategy=%s",
+            len(operations),
+            args.by,
         )
-        print("[INFO] Generated execution plan:")
         for operation in operations:
-            print(
-                f"[PLAN] {operation.mode.upper()} {operation.source} -> {operation.destination}"
+            logger.debug(
+                "Plan item: action=%s source=%s destination=%s",
+                operation.mode.upper(),
+                operation.source,
+                operation.destination,
             )
 
         if args.plan:
-            print("[INFO] Plan-only mode enabled: no files will be changed")
-            print(f"[INFO] Planned operations: {len(operations)}")
+            logger.info("Plan-only mode enabled: no files will be changed")
+            logger.info("Execution finished: organize processed_files=0 planned_files=%d", len(operations))
             return 0
 
         if args.dry_run:
-            print("[INFO] DRY-RUN enabled: no files will be changed")
+            logger.info("DRY-RUN enabled: no files will be changed")
 
         logs = apply_operations(operations, dry_run=args.dry_run)
         for line in logs:
-            print(line)
+            logger.info(line)
 
-        print(f"[INFO] Planned operations: {len(operations)}")
+        logger.info("Execution finished: organize processed_files=%d", len(operations))
         return 0
 
     parser.print_help()

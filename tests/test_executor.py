@@ -1,5 +1,8 @@
 from pathlib import Path
 from datetime import datetime
+import logging
+
+import pytest
 
 from photo_organizer.executor import FileOperation, apply_operations, plan_organization_operations
 
@@ -95,3 +98,27 @@ def test_plan_organization_operations_builds_operations_for_found_images(
     assert operations[0].source == first_image
     assert operations[0].destination == output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
     assert operations[0].mode == "move"
+
+
+def test_apply_operations_logs_errors_with_context(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    source = tmp_path / "input.jpg"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "2024" / "08" / "15" / "input.jpg"
+
+    def raise_move(_src, _dst):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr("photo_organizer.executor.shutil.move", raise_move)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(OSError):
+            apply_operations(
+                [FileOperation(source=source, destination=destination, mode="move")],
+                dry_run=False,
+            )
+
+    assert "Failed to execute operation: action=MOVE" in caplog.text
+    assert str(source) in caplog.text
+    assert str(destination) in caplog.text

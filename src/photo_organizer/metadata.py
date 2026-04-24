@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from pathlib import Path
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_exif_datetime(value: Any) -> datetime | None:
@@ -60,12 +64,14 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
     try:
         from PIL import ExifTags, Image
     except ImportError:
+        logger.debug("Pillow not available; EXIF extraction skipped for file=%s", file_path)
         return {}
 
     try:
         with Image.open(file_path) as image:
             exif_data = image.getexif()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to read EXIF for file=%s error=%s", file_path, exc)
         return {}
 
     if not exif_data:
@@ -94,6 +100,8 @@ def get_best_available_datetime(path: str | Path) -> datetime:
     for field_name in ("DateTimeOriginal", "CreateDate"):
         parsed = _parse_exif_datetime(exif_fields.get(field_name))
         if parsed is not None:
+            logger.info("Datetime resolved from %s for file=%s", field_name, file_path)
             return parsed
 
+    logger.info("Datetime fallback to file modification time for file=%s", file_path)
     return datetime.fromtimestamp(file_path.stat().st_mtime)

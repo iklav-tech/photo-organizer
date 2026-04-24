@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+import logging
 
 from photo_organizer.cli import main
 from photo_organizer.executor import FileOperation
@@ -57,7 +58,7 @@ def test_scan_requires_source(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_organize_plan_mode_shows_plan_without_execution(
-    monkeypatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch, caplog
 ) -> None:
     planned = [
         FileOperation(
@@ -77,10 +78,36 @@ def test_organize_plan_mode_shows_plan_without_execution(
 
     monkeypatch.setattr("photo_organizer.cli.apply_operations", fail_if_called)
 
-    result = main(["organize", "./photos", "--output", "./organized", "--plan"])
+    with caplog.at_level(logging.INFO):
+        result = main(["organize", "./photos", "--output", "./organized", "--plan"])
 
     assert result == 0
-    captured = capsys.readouterr()
-    assert "[INFO] Generated execution plan:" in captured.out
-    assert "[PLAN] MOVE input/a.jpg -> out/2024/08/15/2024-08-15_14-32-09.jpg" in captured.out
-    assert "Plan-only mode enabled" in captured.out
+    assert "Generated execution plan: operations=1" in caplog.text
+    assert "Plan-only mode enabled" in caplog.text
+
+
+def test_scan_logs_start_end_and_count(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [Path("a.jpg"), Path("b.jpg")],
+    )
+
+    with caplog.at_level(logging.INFO):
+        result = main(["scan", "./photos"])
+
+    assert result == 0
+    assert "Execution started: scan source=./photos" in caplog.text
+    assert "Execution finished: scan processed_files=2" in caplog.text
+
+
+def test_log_level_can_be_adjusted(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [],
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        result = main(["--log-level", "ERROR", "scan", "./photos"])
+
+    assert result == 0
+    assert "Execution started: scan" not in caplog.text

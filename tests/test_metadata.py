@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import sys
 import types
+import logging
 
 import photo_organizer.metadata as metadata
 
@@ -157,3 +158,16 @@ def test_get_best_available_datetime_falls_back_to_file_modification_time(
 
     assert result == datetime.fromtimestamp(timestamp)
     assert isinstance(result, datetime)
+
+
+def test_get_best_available_datetime_logs_fallback_decision(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+
+    with caplog.at_level(logging.INFO):
+        metadata.get_best_available_datetime(file_path)
+
+    assert "Datetime fallback to file modification time" in caplog.text
