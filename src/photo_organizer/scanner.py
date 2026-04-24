@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+from photo_organizer.constants import IMAGE_FILE_EXTENSIONS
 
 
 def is_supported_image_file(path: str | Path) -> bool:
     """Return True when the file extension is supported."""
     candidate = Path(path)
-    return candidate.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
+    return candidate.suffix.lower() in IMAGE_FILE_EXTENSIONS
 
 
 def find_image_files(directory: str | Path, recursive: bool = True) -> list[Path]:

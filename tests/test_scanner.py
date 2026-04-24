@@ -40,6 +40,21 @@ def test_find_image_files_ignores_unsupported(tmp_path: Path) -> None:
     assert result == [tmp_path / "ok.jpg"]
 
 
+def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> None:
+    (tmp_path / "upper.JPG").write_text("x")
+    (tmp_path / "mixed.JpEg").write_text("x")
+    (tmp_path / "lower.png").write_text("x")
+    (tmp_path / "ignored.BMP").write_text("x")
+
+    result = find_image_files(tmp_path)
+
+    assert result == [
+        tmp_path / "lower.png",
+        tmp_path / "mixed.JpEg",
+        tmp_path / "upper.JPG",
+    ]
+
+
 def test_find_image_files_returns_stable_sorted_paths(tmp_path: Path) -> None:
     (tmp_path / "z.jpg").write_text("x")
     (tmp_path / "m.png").write_text("x")
