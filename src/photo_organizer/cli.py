@@ -54,15 +54,59 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show project version and exit.",
     )
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    scan_parser = subparsers.add_parser(
+        "scan",
+        help="Scan a directory for photo files.",
+        description="Scan a directory recursively for photo files.",
+    )
+    scan_parser.add_argument(
+        "source",
+        help="Source directory to scan.",
+    )
+
+    organize_parser = subparsers.add_parser(
+        "organize",
+        help="Organize photos from source to output directory.",
+        description="Organize photos by strategy into an output directory.",
+    )
+    organize_parser.add_argument(
+        "source",
+        help="Source directory containing photos.",
+    )
+    organize_parser.add_argument(
+        "--output",
+        required=True,
+        help="Output directory for organized photos.",
+    )
+    organize_parser.add_argument(
+        "--by",
+        choices=["date"],
+        default="date",
+        help="Organization strategy (default: date).",
+    )
+
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.version:
         print(format_version_info())
+        return 0
+
+    if args.command == "scan":
+        print(f"[INFO] Scanning directory: {args.source}")
+        return 0
+
+    if args.command == "organize":
+        print(
+            f"[INFO] Organizing photos from {args.source} to {args.output} by {args.by}"
+        )
         return 0
 
     parser.print_help()
