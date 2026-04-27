@@ -16,6 +16,28 @@ from photo_organizer.scanner import find_image_files
 logger = logging.getLogger(__name__)
 
 
+def _move_file_after_successful_copy(source: Path, destination: Path) -> None:
+    """Move a file by copying first and removing the source only after success."""
+    shutil.copy2(source, destination)
+    if not destination.exists():
+        raise FileNotFoundError(f"Destination was not created: {destination}")
+
+    try:
+        source.unlink()
+    except Exception:
+        try:
+            destination.unlink(missing_ok=True)
+        except OSError as cleanup_exc:
+            logger.warning(
+                "Failed to clean up copied destination after source removal failure: "
+                "source=%s destination=%s error=%s",
+                source,
+                destination,
+                cleanup_exc,
+            )
+        raise
+
+
 @dataclass(frozen=True)
 class FileOperation:
     """A planned file operation from source to destination."""
@@ -77,7 +99,10 @@ def apply_operations(
             if operation.mode == "copy":
                 shutil.copy2(operation.source, operation.destination)
             else:
-                shutil.move(str(operation.source), str(operation.destination))
+                _move_file_after_successful_copy(
+                    operation.source,
+                    operation.destination,
+                )
         except Exception as exc:
             logger.error(
                 "Failed to execute operation: action=%s source=%s destination=%s error=%s",

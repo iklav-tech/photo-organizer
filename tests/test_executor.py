@@ -106,10 +106,10 @@ def test_apply_operations_logs_errors_with_context(
     source.write_text("image-data")
     destination = tmp_path / "out" / "2024" / "08" / "15" / "input.jpg"
 
-    def raise_move(_src, _dst):
+    def raise_copy(_src, _dst):
         raise OSError("permission denied")
 
-    monkeypatch.setattr("photo_organizer.executor.shutil.move", raise_move)
+    monkeypatch.setattr("photo_organizer.executor.shutil.copy2", raise_copy)
 
     with caplog.at_level(logging.ERROR):
         logs = apply_operations(
@@ -121,6 +121,55 @@ def test_apply_operations_logs_errors_with_context(
     assert str(source) in caplog.text
     assert str(destination) in caplog.text
     assert logs[0].startswith("[ERROR] MOVE")
+    assert source.exists()
+    assert not destination.exists()
+
+
+def test_apply_operations_move_removes_source_after_success(tmp_path: Path) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("image-data")
+    expected_mtime = datetime(2024, 2, 3, 4, 5, 6).timestamp()
+    os.utime(source, (expected_mtime, expected_mtime))
+
+    destination = tmp_path / "out" / "source.jpg"
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="move")],
+        dry_run=False,
+    )
+
+    assert not source.exists()
+    assert destination.exists()
+    assert destination.read_text() == "image-data"
+    assert destination.stat().st_mtime == expected_mtime
+    assert logs == [f"[INFO] MOVE {source} -> {destination}"]
+
+
+def test_apply_operations_move_keeps_source_when_removal_fails(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "source.jpg"
+
+    original_unlink = Path.unlink
+
+    def raise_for_source(path: Path, *args, **kwargs):
+        if path == source:
+            raise OSError("cannot remove source")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", raise_for_source)
+
+    with caplog.at_level(logging.ERROR):
+        logs = apply_operations(
+            [FileOperation(source=source, destination=destination, mode="move")],
+            dry_run=False,
+        )
+
+    assert source.exists()
+    assert not destination.exists()
+    assert "cannot remove source" in caplog.text
+    assert logs[0].startswith(f"[ERROR] MOVE {source} -> {destination}")
 
 
 def test_apply_operations_copy_preserves_basic_metadata_when_possible(
