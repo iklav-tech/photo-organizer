@@ -169,3 +169,51 @@ def test_organize_dry_run_end_to_end_shows_expected_destinations_and_keeps_files
     assert second.exists()
     assert not first_expected.exists()
     assert not second_expected.exists()
+
+
+def test_organize_end_to_end_adds_suffixes_for_destination_collisions(
+    tmp_path: Path, caplog
+) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    source_dir.mkdir()
+
+    first = source_dir / "2025-10-31_11-07-10 (Copia 2).png"
+    second = source_dir / "2025-10-31_11-07-10 (Copia).png"
+    third = source_dir / "2025-10-31_11-07-10.png"
+    first.write_text("first")
+    second.write_text("second")
+    third.write_text("third")
+
+    fallback_ts = datetime(2025, 10, 31, 11, 7, 10).timestamp()
+    for source in [first, second, third]:
+        os.utime(source, (fallback_ts, fallback_ts))
+
+    expected_base = output_dir / "2025" / "10" / "31" / "2025-10-31_11-07-10.png"
+    expected_first_suffix = (
+        output_dir / "2025" / "10" / "31" / "2025-10-31_11-07-10_01.png"
+    )
+    expected_second_suffix = (
+        output_dir / "2025" / "10" / "31" / "2025-10-31_11-07-10_02.png"
+    )
+
+    with caplog.at_level(logging.INFO):
+        result = main([
+            "organize",
+            str(source_dir),
+            "--output",
+            str(output_dir),
+        ])
+
+    assert result == 0
+
+    assert expected_base.read_text() == "first"
+    assert expected_first_suffix.read_text() == "second"
+    assert expected_second_suffix.read_text() == "third"
+    assert not first.exists()
+    assert not second.exists()
+    assert not third.exists()
+
+    assert f"MOVE {first} -> {expected_base}" in caplog.text
+    assert f"MOVE {second} -> {expected_first_suffix}" in caplog.text
+    assert f"MOVE {third} -> {expected_second_suffix}" in caplog.text

@@ -16,6 +16,21 @@ from photo_organizer.scanner import find_image_files
 logger = logging.getLogger(__name__)
 
 
+def _resolve_available_destination(destination: Path, reserved: set[Path]) -> Path:
+    """Return a destination path that does not overwrite existing or reserved files."""
+    if not destination.exists() and destination not in reserved:
+        return destination
+
+    counter = 1
+    while True:
+        candidate = destination.with_name(
+            f"{destination.stem}_{counter:02d}{destination.suffix}"
+        )
+        if not candidate.exists() and candidate not in reserved:
+            return candidate
+        counter += 1
+
+
 def _move_file_after_successful_copy(source: Path, destination: Path) -> None:
     """Move a file by copying first and removing the source only after success."""
     shutil.copy2(source, destination)
@@ -84,31 +99,37 @@ def apply_operations(
     inspect per-item outcomes.
     """
     logs: list[str] = []
+    reserved_destinations: set[Path] = set()
 
     for operation in operations:
         action = operation.mode.upper()
-        line_suffix = f"{action} {operation.source} -> {operation.destination}"
+        destination = _resolve_available_destination(
+            operation.destination,
+            reserved_destinations,
+        )
+        reserved_destinations.add(destination)
+        line_suffix = f"{action} {operation.source} -> {destination}"
 
         if dry_run:
             logs.append(f"[DRY-RUN] {line_suffix}")
             continue
 
         try:
-            operation.destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.parent.mkdir(parents=True, exist_ok=True)
 
             if operation.mode == "copy":
-                shutil.copy2(operation.source, operation.destination)
+                shutil.copy2(operation.source, destination)
             else:
                 _move_file_after_successful_copy(
                     operation.source,
-                    operation.destination,
+                    destination,
                 )
         except Exception as exc:
             logger.error(
                 "Failed to execute operation: action=%s source=%s destination=%s error=%s",
                 action,
                 operation.source,
-                operation.destination,
+                destination,
                 exc,
             )
             logs.append(f"[ERROR] {line_suffix} (error: {exc})")

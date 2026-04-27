@@ -252,6 +252,100 @@ def test_apply_operations_copy_preserves_basic_metadata_when_possible(
     assert logs == [f"[INFO] COPY {source} -> {destination}"]
 
 
+def test_apply_operations_copy_uses_suffix_when_destination_exists(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+
+    suffixed_destination = tmp_path / "out" / "source_01.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+    )
+
+    assert destination.read_text() == "existing-data"
+    assert suffixed_destination.read_text() == "new-data"
+    assert source.exists()
+    assert logs == [f"[INFO] COPY {source} -> {suffixed_destination}"]
+
+
+def test_apply_operations_move_uses_suffix_when_destination_exists(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+
+    suffixed_destination = tmp_path / "out" / "source_01.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="move")],
+        dry_run=False,
+    )
+
+    assert destination.read_text() == "existing-data"
+    assert suffixed_destination.read_text() == "new-data"
+    assert not source.exists()
+    assert logs == [f"[INFO] MOVE {source} -> {suffixed_destination}"]
+
+
+def test_apply_operations_uses_next_available_suffix_predictably(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    first_collision = tmp_path / "out" / "source_01.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+    first_collision.write_text("also-existing")
+
+    second_suffix = tmp_path / "out" / "source_02.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+    )
+
+    assert destination.read_text() == "existing-data"
+    assert first_collision.read_text() == "also-existing"
+    assert second_suffix.read_text() == "new-data"
+    assert logs == [f"[INFO] COPY {source} -> {second_suffix}"]
+
+
+def test_apply_operations_dry_run_reserves_destinations_for_same_batch(
+    tmp_path: Path,
+) -> None:
+    first_source = tmp_path / "first.jpg"
+    second_source = tmp_path / "second.jpg"
+    first_source.write_text("first")
+    second_source.write_text("second")
+    destination = tmp_path / "out" / "same.jpg"
+    suffixed_destination = tmp_path / "out" / "same_01.jpg"
+
+    logs = apply_operations(
+        [
+            FileOperation(source=first_source, destination=destination, mode="copy"),
+            FileOperation(source=second_source, destination=destination, mode="copy"),
+        ],
+        dry_run=True,
+    )
+
+    assert logs == [
+        f"[DRY-RUN] COPY {first_source} -> {destination}",
+        f"[DRY-RUN] COPY {second_source} -> {suffixed_destination}",
+    ]
+    assert not destination.exists()
+    assert not suffixed_destination.exists()
+
+
 def test_apply_operations_reports_success_and_failure_per_item(tmp_path: Path) -> None:
     good_source = tmp_path / "good.jpg"
     good_source.write_text("ok")
