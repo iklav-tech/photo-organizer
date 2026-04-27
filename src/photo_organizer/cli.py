@@ -5,14 +5,24 @@ from __future__ import annotations
 import argparse
 import logging
 from importlib import metadata as importlib_metadata
+from pathlib import Path
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.executor import apply_operations, plan_organization_operations
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
-from photo_organizer.scanner import find_image_files
+from photo_organizer.scanner import find_image_files, is_supported_image_file
 
 
 logger = logging.getLogger(__name__)
+
+
+def _count_ignored_files(source: str) -> int:
+    root = Path(source)
+    return sum(
+        1
+        for path in root.rglob("*")
+        if path.is_file() and not is_supported_image_file(path)
+    )
 
 
 def format_version_info() -> str:
@@ -162,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         try:
             operations = plan_organization_operations(args.source, args.output, mode=mode)
+            ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
             logger.error("Source directory does not exist: %s", args.source)
             logger.info("Execution finished: organize processed_files=0")
@@ -186,6 +197,11 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.plan:
             logger.info("Plan-only mode enabled: no files will be changed")
+            logger.info(
+                "Execution summary: mode=plan processed_files=0 ignored_files=%d error_files=0 fallback_files=%d",
+                ignored_files,
+                sum(1 for operation in operations if operation.date_fallback),
+            )
             logger.info("Execution finished: organize processed_files=0 planned_files=%d", len(operations))
             return 0
 
@@ -199,7 +215,19 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 logger.info(line)
 
-        logger.info("Execution finished: organize processed_files=%d", len(operations))
+        error_files = sum(1 for line in logs if line.startswith("[ERROR]"))
+        processed_files = len(logs) - error_files
+        summary_mode = "dry-run" if args.dry_run else "execute"
+        fallback_files = sum(1 for operation in operations if operation.date_fallback)
+        logger.info(
+            "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d",
+            summary_mode,
+            processed_files,
+            ignored_files,
+            error_files,
+            fallback_files,
+        )
+        logger.info("Execution finished: organize processed_files=%d", processed_files)
         return 0
 
     parser.print_help()

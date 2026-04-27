@@ -133,8 +133,10 @@ def test_organize_dry_run_end_to_end_shows_expected_destinations_and_keeps_files
 
     first = source_dir / "IMG_1.jpg"
     second = source_dir / "IMG_2.png"
+    ignored = source_dir / "notes.txt"
     first.write_text("a")
     second.write_text("b")
+    ignored.write_text("ignore me")
 
     first_dt = (2024, 8, 15, 14, 32, 9)
     second_dt = (2023, 1, 2, 3, 4, 5)
@@ -167,8 +169,13 @@ def test_organize_dry_run_end_to_end_shows_expected_destinations_and_keeps_files
     # Dry-run must not alter input files or create output files.
     assert first.exists()
     assert second.exists()
+    assert ignored.exists()
     assert not first_expected.exists()
     assert not second_expected.exists()
+    assert (
+        "Execution summary: mode=dry-run processed_files=2 ignored_files=1 "
+        "error_files=0 fallback_files=2"
+    ) in caplog.text
 
 
 def test_organize_end_to_end_adds_suffixes_for_destination_collisions(
@@ -217,3 +224,45 @@ def test_organize_end_to_end_adds_suffixes_for_destination_collisions(
     assert f"MOVE {first} -> {expected_base}" in caplog.text
     assert f"MOVE {second} -> {expected_first_suffix}" in caplog.text
     assert f"MOVE {third} -> {expected_second_suffix}" in caplog.text
+    assert (
+        "Execution summary: mode=execute processed_files=3 ignored_files=0 "
+        "error_files=0 fallback_files=3"
+    ) in caplog.text
+
+
+def test_organize_summary_counts_operation_errors(monkeypatch, caplog) -> None:
+    planned = [
+        FileOperation(
+            source=Path("input/good.jpg"),
+            destination=Path("out/good.jpg"),
+            mode="copy",
+            date_fallback=True,
+        ),
+        FileOperation(
+            source=Path("input/bad.jpg"),
+            destination=Path("out/bad.jpg"),
+            mode="copy",
+            date_fallback=False,
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/good.jpg -> out/good.jpg",
+            "[ERROR] COPY input/bad.jpg -> out/bad.jpg (error: failed)",
+        ],
+    )
+
+    with caplog.at_level(logging.INFO):
+        result = main(["organize", "./photos", "--output", "./organized", "--copy"])
+
+    assert result == 0
+    assert (
+        "Execution summary: mode=execute processed_files=1 ignored_files=0 "
+        "error_files=1 fallback_files=1"
+    ) in caplog.text

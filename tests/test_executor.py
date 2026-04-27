@@ -4,6 +4,7 @@ import logging
 import os
 
 from photo_organizer.executor import FileOperation, apply_operations, plan_organization_operations
+from photo_organizer.metadata import DateTimeResolution
 
 
 def test_apply_operations_dry_run_move_does_not_modify_files(tmp_path: Path) -> None:
@@ -87,8 +88,11 @@ def test_plan_organization_operations_builds_operations_for_found_images(
         lambda _src, recursive=True: [first_image, second_image],
     )
     monkeypatch.setattr(
-        "photo_organizer.executor.get_best_available_datetime",
-        lambda _p: datetime(2024, 8, 15, 14, 32, 9),
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
     )
 
     operations = plan_organization_operations(source_dir, output_dir, mode="move")

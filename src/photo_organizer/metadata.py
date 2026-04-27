@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -9,6 +10,14 @@ from typing import Any
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DateTimeResolution:
+    """Resolved datetime and whether it came from the mtime fallback."""
+
+    value: datetime
+    used_fallback: bool
 
 
 def _parse_exif_datetime(value: Any) -> datetime | None:
@@ -86,8 +95,8 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
     return fields
 
 
-def get_best_available_datetime(path: str | Path) -> datetime:
-    """Return the best available datetime for a file.
+def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
+    """Return the best available datetime plus fallback metadata.
 
     Priority order:
     1. EXIF DateTimeOriginal
@@ -101,7 +110,15 @@ def get_best_available_datetime(path: str | Path) -> datetime:
         parsed = _parse_exif_datetime(exif_fields.get(field_name))
         if parsed is not None:
             logger.info("Datetime resolved from %s for file=%s", field_name, file_path)
-            return parsed
+            return DateTimeResolution(value=parsed, used_fallback=False)
 
     logger.info("Datetime fallback to file modification time for file=%s", file_path)
-    return datetime.fromtimestamp(file_path.stat().st_mtime)
+    return DateTimeResolution(
+        value=datetime.fromtimestamp(file_path.stat().st_mtime),
+        used_fallback=True,
+    )
+
+
+def get_best_available_datetime(path: str | Path) -> datetime:
+    """Return the best available datetime for a file."""
+    return resolve_best_available_datetime(path).value
