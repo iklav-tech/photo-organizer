@@ -320,6 +320,33 @@ def test_apply_operations_uses_next_available_suffix_predictably(
     assert logs == [f"[INFO] COPY {source} -> {second_suffix}"]
 
 
+def test_apply_operations_uses_third_suffix_without_overwriting_existing_files(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    first_collision = tmp_path / "out" / "source_01.jpg"
+    second_collision = tmp_path / "out" / "source_02.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-base")
+    first_collision.write_text("existing-01")
+    second_collision.write_text("existing-02")
+
+    third_suffix = tmp_path / "out" / "source_03.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+    )
+
+    assert destination.read_text() == "existing-base"
+    assert first_collision.read_text() == "existing-01"
+    assert second_collision.read_text() == "existing-02"
+    assert third_suffix.read_text() == "new-data"
+    assert logs == [f"[INFO] COPY {source} -> {third_suffix}"]
+
+
 def test_apply_operations_dry_run_reserves_destinations_for_same_batch(
     tmp_path: Path,
 ) -> None:
