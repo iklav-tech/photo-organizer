@@ -144,6 +144,65 @@ def test_apply_operations_move_removes_source_after_success(tmp_path: Path) -> N
     assert logs == [f"[INFO] MOVE {source} -> {destination}"]
 
 
+def test_apply_operations_move_creates_missing_destination_directories(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "2024" / "08" / "15" / "source.jpg"
+
+    assert not destination.parent.exists()
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="move")],
+        dry_run=False,
+    )
+
+    assert destination.parent.is_dir()
+    assert destination.exists()
+    assert not source.exists()
+    assert logs == [f"[INFO] MOVE {source} -> {destination}"]
+
+
+def test_apply_operations_copy_creates_missing_destination_directories(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "2024" / "08" / "15" / "source.jpg"
+
+    assert not destination.parent.exists()
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+    )
+
+    assert destination.parent.is_dir()
+    assert destination.exists()
+    assert source.exists()
+    assert logs == [f"[INFO] COPY {source} -> {destination}"]
+
+
+def test_apply_operations_is_idempotent_when_destination_directory_exists(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "2024" / "08" / "15" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+    )
+
+    assert destination.parent.is_dir()
+    assert destination.exists()
+    assert source.exists()
+    assert logs == [f"[INFO] COPY {source} -> {destination}"]
+
+
 def test_apply_operations_move_keeps_source_when_removal_fails(
     tmp_path: Path, monkeypatch, caplog
 ) -> None:
