@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import logging
 from importlib import metadata as importlib_metadata
 from pathlib import Path
@@ -22,6 +24,76 @@ def _count_ignored_files(source: str) -> int:
         1
         for path in root.rglob("*")
         if path.is_file() and not is_supported_image_file(path)
+    )
+
+
+def _report_item_from_operation_log(line: str) -> dict[str, str]:
+    level, details = line.split("] ", maxsplit=1)
+    marker = level.removeprefix("[")
+    observations = ""
+
+    if marker == "ERROR" and " (error: " in details:
+        details, error_text = details.rsplit(" (error: ", maxsplit=1)
+        observations = error_text.removesuffix(")")
+
+    action, paths = details.split(" ", maxsplit=1)
+    source, destination = paths.split(" -> ", maxsplit=1)
+    status = {
+        "DRY-RUN": "dry-run",
+        "ERROR": "error",
+        "INFO": "success",
+    }.get(marker, marker.lower())
+
+    if marker == "DRY-RUN":
+        observations = "simulated; no filesystem changes applied"
+
+    return {
+        "source": source,
+        "destination": destination,
+        "action": action.lower(),
+        "status": status,
+        "observations": observations,
+    }
+
+
+def _write_execution_report(
+    report_path: str | Path,
+    operation_logs: list[str],
+    summary: dict[str, int | str],
+) -> None:
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    operations = [
+        _report_item_from_operation_log(line)
+        for line in operation_logs
+    ]
+
+    if path.suffix.lower() == ".csv":
+        with path.open("w", encoding="utf-8", newline="") as report_file:
+            writer = csv.DictWriter(
+                report_file,
+                fieldnames=[
+                    "source",
+                    "destination",
+                    "action",
+                    "status",
+                    "observations",
+                ],
+            )
+            writer.writeheader()
+            writer.writerows(operations)
+        return
+
+    if path.suffix.lower() != ".json":
+        raise ValueError("Report path must end with .json or .csv")
+
+    report = {
+        "summary": summary,
+        "operations": operations,
+    }
+    path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -120,6 +192,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show planned operations and exit without executing.",
     )
+    organize_parser.add_argument(
+        "--report",
+        help="Write a structured execution report to this .json or .csv path.",
+    )
     mode_group = organize_parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--copy",
@@ -197,10 +273,22 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.plan:
             logger.info("Plan-only mode enabled: no files will be changed")
+            summary: dict[str, int | str] = {
+                "mode": "plan",
+                "processed_files": 0,
+                "ignored_files": ignored_files,
+                "error_files": 0,
+                "fallback_files": sum(
+                    1 for operation in operations if operation.date_fallback
+                ),
+            }
             logger.info(
-                "Execution summary: mode=plan processed_files=0 ignored_files=%d error_files=0 fallback_files=%d",
-                ignored_files,
-                sum(1 for operation in operations if operation.date_fallback),
+                "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d",
+                summary["mode"],
+                summary["processed_files"],
+                summary["ignored_files"],
+                summary["error_files"],
+                summary["fallback_files"],
             )
             logger.info("Execution finished: organize processed_files=0 planned_files=%d", len(operations))
             return 0
@@ -219,14 +307,26 @@ def main(argv: list[str] | None = None) -> int:
         processed_files = len(logs) - error_files
         summary_mode = "dry-run" if args.dry_run else "execute"
         fallback_files = sum(1 for operation in operations if operation.date_fallback)
+        summary = {
+            "mode": summary_mode,
+            "processed_files": processed_files,
+            "ignored_files": ignored_files,
+            "error_files": error_files,
+            "fallback_files": fallback_files,
+        }
         logger.info(
             "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d",
-            summary_mode,
-            processed_files,
-            ignored_files,
-            error_files,
-            fallback_files,
+            summary["mode"],
+            summary["processed_files"],
+            summary["ignored_files"],
+            summary["error_files"],
+            summary["fallback_files"],
         )
+
+        if args.report:
+            _write_execution_report(args.report, logs, summary)
+            logger.info("Execution report written: path=%s", args.report)
+
         logger.info("Execution finished: organize processed_files=%d", processed_files)
         return 0
 

@@ -1,4 +1,6 @@
 import pytest
+import csv
+import json
 from pathlib import Path
 import logging
 import os
@@ -266,3 +268,162 @@ def test_organize_summary_counts_operation_errors(monkeypatch, caplog) -> None:
         "Execution summary: mode=execute processed_files=1 ignored_files=0 "
         "error_files=1 fallback_files=1"
     ) in caplog.text
+
+
+def test_organize_writes_valid_structured_execution_report(
+    tmp_path: Path, caplog
+) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    report_path = tmp_path / "reports" / "execution.json"
+    source_dir.mkdir()
+
+    source = source_dir / "IMG_1.jpg"
+    source.write_text("image-data")
+    expected_ts = datetime(2024, 8, 15, 14, 32, 9).timestamp()
+    os.utime(source, (expected_ts, expected_ts))
+
+    destination = output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+
+    with caplog.at_level(logging.INFO):
+        result = main([
+            "organize",
+            str(source_dir),
+            "--output",
+            str(output_dir),
+            "--copy",
+            "--report",
+            str(report_path),
+        ])
+
+    assert result == 0
+    assert "Execution report written" in caplog.text
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"] == {
+        "mode": "execute",
+        "processed_files": 1,
+        "ignored_files": 0,
+        "error_files": 0,
+        "fallback_files": 1,
+    }
+    assert report["operations"] == [
+        {
+            "source": str(source),
+            "destination": str(destination),
+            "action": "copy",
+            "status": "success",
+            "observations": "",
+        }
+    ]
+
+
+def test_organize_report_includes_error_status_and_observation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "execution.json"
+    planned = [
+        FileOperation(
+            source=Path("input/bad.jpg"),
+            destination=Path("out/bad.jpg"),
+            mode="copy",
+            date_fallback=False,
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[ERROR] COPY input/bad.jpg -> out/bad.jpg (error: permission denied)",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"]["error_files"] == 1
+    assert report["operations"] == [
+        {
+            "source": "input/bad.jpg",
+            "destination": "out/bad.jpg",
+            "action": "copy",
+            "status": "error",
+            "observations": "permission denied",
+        }
+    ]
+
+
+def test_organize_writes_valid_csv_execution_report(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "reports" / "execution.csv"
+    planned = [
+        FileOperation(
+            source=Path("input/good.jpg"),
+            destination=Path("out/good.jpg"),
+            mode="copy",
+            date_fallback=False,
+        ),
+        FileOperation(
+            source=Path("input/bad.jpg"),
+            destination=Path("out/bad.jpg"),
+            mode="copy",
+            date_fallback=False,
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/good.jpg -> out/good.jpg",
+            "[ERROR] COPY input/bad.jpg -> out/bad.jpg (error: permission denied)",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    with report_path.open(encoding="utf-8", newline="") as report_file:
+        rows = list(csv.DictReader(report_file))
+
+    assert rows == [
+        {
+            "source": "input/good.jpg",
+            "destination": "out/good.jpg",
+            "action": "copy",
+            "status": "success",
+            "observations": "",
+        },
+        {
+            "source": "input/bad.jpg",
+            "destination": "out/bad.jpg",
+            "action": "copy",
+            "status": "error",
+            "observations": "permission denied",
+        },
+    ]
