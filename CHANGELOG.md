@@ -4,6 +4,72 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and follows semantic versioning.
 
+## [0.2.0] - 2026-04-27
+
+### Added
+
+- Safe move execution that copies the destination first and removes the source only after success.
+- Automatic destination directory creation before real copy/move operations.
+- Filename collision handling with deterministic suffixes:
+  - `_01`
+  - `_02`
+  - `_03`
+  - and the next available numeric suffix.
+- Execution summary at the end of `organize` with:
+  - processed file count
+  - ignored file count
+  - error count
+  - date fallback count
+  - execution mode (`dry-run`, `execute` or `plan`)
+- Audit report export with `--report`:
+  - JSON when the path ends in `.json`
+  - CSV when the path ends in `.csv`
+- Structured report rows containing:
+  - source
+  - destination
+  - action
+  - status
+  - observations
+- Improved CLI help with examples.
+- Grouped `organize --help` arguments:
+  - paths
+  - execution
+  - audit report
+  - operation mode
+- Integration tests for the complete planning and execution pipeline using temporary directories.
+
+### Changed
+
+- `organize` now reports the effective destination path after collision resolution.
+- Move mode now behaves as a safer copy-then-remove operation instead of relying on direct move semantics.
+- `FileOperation` now records whether date resolution used the file modification time fallback.
+- Metadata date resolution now exposes fallback information while preserving the existing datetime-only helper.
+- README updated to document the delivered v0.2.0 scope, report formats and updated roadmap.
+- CLI validation now gives clearer errors for missing `--output`.
+- CLI validation now rejects unsupported report extensions before execution.
+
+### Fixed
+
+- Existing destination files are no longer overwritten by default.
+- Multiple operations targeting the same planned destination now receive unique suffixes in the same batch.
+- Dry-run now reserves destination names consistently, matching real execution planning.
+- Source files are preserved when a move operation fails before successful source removal.
+- Copied destination artifacts are cleaned up when source removal fails during safe move.
+
+### Behavior guarantees in v0.2.0
+
+- Missing destination directories are created automatically for real operations.
+- Move operations remove the source only after the destination exists.
+- Name collisions are resolved predictably using the next available suffix.
+- Dry-run does not create output directories or output files.
+- JSON and CSV reports are valid and include one row per operation.
+- CLI help exposes practical examples for common workflows.
+
+### Validation
+
+- Local automated tests passing for v0.2.0 scope (`pytest -q`, 58 tests).
+- Integration tests cover copy, move, dry-run, directory creation and destination conflicts.
+
 ## [0.1.0] - 2026-04-24
 
 ### Added
