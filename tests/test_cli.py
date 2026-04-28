@@ -18,6 +18,7 @@ def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "scan" in captured.out
+    assert "dedupe" in captured.out
     assert "organize" in captured.out
     assert "Examples:" in captured.out
 
@@ -30,6 +31,18 @@ def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
+    assert "Examples:" in captured.out
+
+
+def test_dedupe_help_works(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["dedupe", "--help"])
+
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out
+    assert "SOURCE" in captured.out
+    assert "--read-only" in captured.out
     assert "Examples:" in captured.out
 
 
@@ -136,6 +149,60 @@ def test_scan_nonexistent_directory_returns_clear_message(caplog) -> None:
     assert result == 1
     assert "Source directory does not exist" in caplog.text
     assert "Execution finished: scan processed_files=0" in caplog.text
+
+
+def test_dedupe_lists_duplicate_groups_read_only(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_dir = tmp_path / "photos"
+    nested_dir = source_dir / "nested"
+    nested_dir.mkdir(parents=True)
+    original = source_dir / "a.jpg"
+    duplicate = nested_dir / "b.png"
+    different = source_dir / "c.jpg"
+    original.write_bytes(b"same content")
+    duplicate.write_bytes(b"same content")
+    different.write_bytes(b"different content")
+
+    result = main(["dedupe", str(source_dir), "--read-only"])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "Duplicate group 1:" in captured.out
+    assert f"Original: {original}" in captured.out
+    assert f"Duplicate: {duplicate}" in captured.out
+    assert str(different) not in captured.out
+    assert original.read_bytes() == b"same content"
+    assert duplicate.read_bytes() == b"same content"
+    assert different.read_bytes() == b"different content"
+
+
+def test_dedupe_reports_no_duplicates_for_different_files(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_dir = tmp_path / "photos"
+    source_dir.mkdir()
+    first = source_dir / "first.jpg"
+    second = source_dir / "second.png"
+    first.write_bytes(b"content one")
+    second.write_bytes(b"content two")
+
+    result = main(["dedupe", str(source_dir)])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert captured.out == "No duplicate images found.\n"
+
+
+def test_dedupe_nonexistent_directory_returns_clear_message(caplog) -> None:
+    with caplog.at_level(logging.INFO):
+        result = main(["dedupe", "./does-not-exist"])
+
+    assert result == 1
+    assert "Source directory does not exist" in caplog.text
+    assert "Execution finished: dedupe duplicate_groups=0 duplicate_files=0" in caplog.text
 
 
 def test_log_level_can_be_adjusted(monkeypatch, caplog) -> None:

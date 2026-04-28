@@ -13,6 +13,7 @@ Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered 
 The project includes a tested v0.2.0 CLI workflow:
 
 - CLI with `scan` and `organize` commands;
+- `dedupe` command for read-only duplicate discovery;
 - image scanning with recursive search;
 - centralized supported extension list (`.jpg`, `.jpeg`, `.png`);
 - case-insensitive extension matching;
@@ -80,6 +81,7 @@ Example use cases:
 - `photo-organizer --help`
 - `photo-organizer --version`
 - `photo-organizer scan --help`
+- `photo-organizer dedupe --help`
 - `photo-organizer organize --help`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
@@ -92,6 +94,14 @@ Example use cases:
 - unsupported files are ignored;
 - stable/consistent returned path list;
 - user-friendly message when source directory does not exist.
+
+### Dedupe behavior
+
+- `photo-organizer dedupe SOURCE` scans supported images recursively;
+- duplicate groups are identified by deterministic content hash;
+- output shows one original and one or more duplicates per group;
+- files with different content are not grouped together;
+- the command is read-only and does not move, copy or delete files.
 
 ### Metadata behavior
 

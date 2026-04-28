@@ -11,6 +11,7 @@ from pathlib import Path
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.executor import apply_operations, plan_organization_operations
+from photo_organizer.hashing import find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.scanner import find_image_files, is_supported_image_file
 
@@ -140,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   photo-organizer scan ./Photos
+  photo-organizer dedupe ./Photos
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.json
@@ -173,6 +175,28 @@ def build_parser() -> argparse.ArgumentParser:
         "source",
         metavar="SOURCE",
         help="Directory to scan.",
+    )
+
+    dedupe_parser = subparsers.add_parser(
+        "dedupe",
+        help="List duplicate images in a directory by content hash.",
+        description="Find supported image files with identical content hashes.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer dedupe ./Photos
+  photo-organizer dedupe ./Photos --read-only
+  photo-organizer --log-level DEBUG dedupe ./Photos
+""",
+    )
+    dedupe_parser.add_argument(
+        "source",
+        metavar="SOURCE",
+        help="Directory to scan for duplicate images.",
+    )
+    dedupe_parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Only list duplicate groups without changing files (default behavior).",
     )
 
     organize_parser = subparsers.add_parser(
@@ -263,6 +287,40 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         logger.info("Found image files: count=%d", len(files))
         logger.info("Execution finished: scan processed_files=%d", len(files))
+        return 0
+
+    if args.command == "dedupe":
+        logger.info(
+            "Execution started: dedupe source=%s read_only=%s",
+            args.source,
+            True,
+        )
+        try:
+            groups = find_duplicate_image_groups(args.source, recursive=True)
+        except FileNotFoundError:
+            logger.error("Source directory does not exist: %s", args.source)
+            logger.info("Execution finished: dedupe duplicate_groups=0 duplicate_files=0")
+            return 1
+        except NotADirectoryError:
+            logger.error("Source path is not a directory: %s", args.source)
+            logger.info("Execution finished: dedupe duplicate_groups=0 duplicate_files=0")
+            return 1
+
+        if not groups:
+            print("No duplicate images found.")
+        else:
+            for index, group in enumerate(groups, start=1):
+                print(f"Duplicate group {index}:")
+                print(f"  Original: {group.original}")
+                for duplicate in group.duplicates:
+                    print(f"  Duplicate: {duplicate}")
+
+        duplicate_files = sum(len(group.duplicates) for group in groups)
+        logger.info(
+            "Execution finished: dedupe duplicate_groups=%d duplicate_files=%d",
+            len(groups),
+            duplicate_files,
+        )
         return 0
 
     if args.command == "organize":
