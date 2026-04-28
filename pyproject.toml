@@ -16,7 +16,7 @@ Repository = "https://github.com/iklav-tech/photo-organizer"
 Issues = "https://github.com/iklav-tech/photo-organizer/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pylint>=3.0", "pytest>=8.0"]
 
 [project.scripts]
 photo-organizer = "photo_organizer.cli:main"
@@ -29,3 +29,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.pylint.main]
+fail-under = 8.0
