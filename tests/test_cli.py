@@ -1,5 +1,6 @@
 import pytest
 import csv
+import hashlib
 import json
 from pathlib import Path
 import logging
@@ -43,6 +44,7 @@ def test_dedupe_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
     assert "--read-only" in captured.out
+    assert "--report" in captured.out
     assert "Examples:" in captured.out
 
 
@@ -97,6 +99,18 @@ def test_organize_rejects_unknown_report_extension(
     captured = capsys.readouterr()
     assert "organize --report must end with .json or .csv" in captured.err
     assert "--report audit.csv" in captured.err
+
+
+def test_dedupe_rejects_unknown_report_extension(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["dedupe", "./photos", "--report", "duplicates.txt"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "dedupe --report must end with .json or .csv" in captured.err
+    assert "--report duplicates.json" in captured.err
 
 
 def test_organize_plan_mode_shows_plan_without_execution(
@@ -170,6 +184,8 @@ def test_dedupe_lists_duplicate_groups_read_only(
     assert result == 0
     captured = capsys.readouterr()
     assert "Duplicate group 1:" in captured.out
+    assert "Hash:" in captured.out
+    assert "Quantity: 2" in captured.out
     assert f"Original: {original}" in captured.out
     assert f"Duplicate: {duplicate}" in captured.out
     assert str(different) not in captured.out
@@ -194,6 +210,81 @@ def test_dedupe_reports_no_duplicates_for_different_files(
     assert result == 0
     captured = capsys.readouterr()
     assert captured.out == "No duplicate images found.\n"
+
+
+def test_dedupe_writes_structured_json_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_dir = tmp_path / "photos"
+    report_path = tmp_path / "reports" / "duplicates.json"
+    source_dir.mkdir()
+    original = source_dir / "a.jpg"
+    duplicate = source_dir / "b.png"
+    different = source_dir / "c.jpg"
+    original.write_bytes(b"same content")
+    duplicate.write_bytes(b"same content")
+    different.write_bytes(b"different content")
+    expected_hash = hashlib.sha256(b"same content").hexdigest()
+
+    result = main(["dedupe", str(source_dir), "--report", str(report_path)])
+
+    assert result == 0
+    capsys.readouterr()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"] == {
+        "duplicate_groups": 1,
+        "duplicate_files": 1,
+        "total_files_in_duplicate_groups": 2,
+    }
+    assert report["duplicate_groups"] == [
+        {
+            "group_id": 1,
+            "hash": expected_hash,
+            "quantity": 2,
+            "original": str(original),
+            "duplicates": [str(duplicate)],
+            "paths": [str(original), str(duplicate)],
+        }
+    ]
+
+
+def test_dedupe_writes_analysis_friendly_csv_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_dir = tmp_path / "photos"
+    report_path = tmp_path / "duplicates.csv"
+    source_dir.mkdir()
+    original = source_dir / "a.jpg"
+    duplicate = source_dir / "b.jpg"
+    original.write_bytes(b"same content")
+    duplicate.write_bytes(b"same content")
+    expected_hash = hashlib.sha256(b"same content").hexdigest()
+
+    result = main(["dedupe", str(source_dir), "--report", str(report_path)])
+
+    assert result == 0
+    capsys.readouterr()
+    with report_path.open(encoding="utf-8", newline="") as report_file:
+        rows = list(csv.DictReader(report_file))
+
+    assert rows == [
+        {
+            "group_id": "1",
+            "hash": expected_hash,
+            "quantity": "2",
+            "role": "original",
+            "path": str(original),
+        },
+        {
+            "group_id": "1",
+            "hash": expected_hash,
+            "quantity": "2",
+            "role": "duplicate",
+            "path": str(duplicate),
+        },
+    ]
 
 
 def test_dedupe_nonexistent_directory_returns_clear_message(caplog) -> None:

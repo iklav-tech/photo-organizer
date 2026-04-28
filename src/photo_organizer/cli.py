@@ -11,7 +11,7 @@ from pathlib import Path
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.executor import apply_operations, plan_organization_operations
-from photo_organizer.hashing import find_duplicate_image_groups
+from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.scanner import find_image_files, is_supported_image_file
 
@@ -91,6 +91,87 @@ def _write_execution_report(
     report = {
         "summary": summary,
         "operations": operations,
+    }
+    path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _duplicate_group_to_report_item(
+    group_id: int,
+    group: DuplicateGroup,
+) -> dict[str, object]:
+    paths = [str(group.original), *(str(path) for path in group.duplicates)]
+    return {
+        "group_id": group_id,
+        "hash": group.content_hash,
+        "quantity": len(paths),
+        "original": str(group.original),
+        "duplicates": [str(path) for path in group.duplicates],
+        "paths": paths,
+    }
+
+
+def _write_dedupe_report(
+    report_path: str | Path,
+    groups: list[DuplicateGroup],
+) -> None:
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    group_items = [
+        _duplicate_group_to_report_item(group_id, group)
+        for group_id, group in enumerate(groups, start=1)
+    ]
+    summary = {
+        "duplicate_groups": len(groups),
+        "duplicate_files": sum(len(group.duplicates) for group in groups),
+        "total_files_in_duplicate_groups": sum(
+            int(item["quantity"]) for item in group_items
+        ),
+    }
+
+    if path.suffix.lower() == ".csv":
+        with path.open("w", encoding="utf-8", newline="") as report_file:
+            writer = csv.DictWriter(
+                report_file,
+                fieldnames=[
+                    "group_id",
+                    "hash",
+                    "quantity",
+                    "role",
+                    "path",
+                ],
+            )
+            writer.writeheader()
+            for item in group_items:
+                writer.writerow(
+                    {
+                        "group_id": item["group_id"],
+                        "hash": item["hash"],
+                        "quantity": item["quantity"],
+                        "role": "original",
+                        "path": item["original"],
+                    }
+                )
+                for duplicate in item["duplicates"]:
+                    writer.writerow(
+                        {
+                            "group_id": item["group_id"],
+                            "hash": item["hash"],
+                            "quantity": item["quantity"],
+                            "role": "duplicate",
+                            "path": duplicate,
+                        }
+                    )
+        return
+
+    if path.suffix.lower() != ".json":
+        raise ValueError("Report path must end with .json or .csv")
+
+    report = {
+        "summary": summary,
+        "duplicate_groups": group_items,
     }
     path.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n",
@@ -184,6 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   photo-organizer dedupe ./Photos
+  photo-organizer dedupe ./Photos --report duplicates.json
   photo-organizer dedupe ./Photos --read-only
   photo-organizer --log-level DEBUG dedupe ./Photos
 """,
@@ -197,6 +279,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--read-only",
         action="store_true",
         help="Only list duplicate groups without changing files (default behavior).",
+    )
+    dedupe_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Write a structured duplicate report to this .json or .csv path.",
     )
 
     organize_parser = subparsers.add_parser(
@@ -290,6 +377,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "dedupe":
+        if args.report and Path(args.report).suffix.lower() not in {".json", ".csv"}:
+            parser.error(
+                "dedupe --report must end with .json or .csv. "
+                "Example: --report duplicates.json"
+            )
+
         logger.info(
             "Execution started: dedupe source=%s read_only=%s",
             args.source,
@@ -311,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             for index, group in enumerate(groups, start=1):
                 print(f"Duplicate group {index}:")
+                print(f"  Hash: {group.content_hash}")
+                print(f"  Quantity: {len(group.duplicates) + 1}")
                 print(f"  Original: {group.original}")
                 for duplicate in group.duplicates:
                     print(f"  Duplicate: {duplicate}")
@@ -321,6 +416,9 @@ def main(argv: list[str] | None = None) -> int:
             len(groups),
             duplicate_files,
         )
+        if args.report:
+            _write_dedupe_report(args.report, groups)
+            logger.info("Dedupe report written: path=%s", args.report)
         return 0
 
     if args.command == "organize":

@@ -21,6 +21,7 @@ The project includes a tested v0.2.0 CLI workflow:
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
 - duplicate image grouping by content hash with original/duplicates output;
+- structured duplicate reports in JSON or CSV for later analysis;
 - date resolution with EXIF priority and fallback;
 - deterministic naming rules;
 - destination folder planning by date (`YYYY/MM/DD`);
@@ -101,7 +102,9 @@ Example use cases:
 - duplicate groups are identified by deterministic content hash;
 - output shows one original and one or more duplicates per group;
 - files with different content are not grouped together;
-- the command is read-only and does not move, copy or delete files.
+- the command is read-only and does not move, copy or delete files;
+- `--report duplicates.json` writes summary and grouped duplicate details;
+- `--report duplicates.csv` writes one analysis-friendly row per duplicate-group file.
 
 ### Metadata behavior
 
