@@ -17,6 +17,8 @@ The project includes a tested v0.2.0 CLI workflow:
 - centralized supported extension list (`.jpg`, `.jpeg`, `.png`);
 - case-insensitive extension matching;
 - EXIF extraction for compatible JPEG images;
+- deterministic image hashing with chunked reads for large files;
+- safe hash comparison for duplicate detection workflows;
 - date resolution with EXIF priority and fallback;
 - deterministic naming rules;
 - destination folder planning by date (`YYYY/MM/DD`);
@@ -155,6 +157,7 @@ photo-organizer/
       constants.py
       scanner.py
       metadata.py
+      hashing.py
       naming.py
       planner.py
       executor.py
@@ -175,6 +178,7 @@ photo-organizer/
 - `cli.py`: command-line interface and command orchestration;
 - `scanner.py`: recursive file scanning and extension filtering;
 - `metadata.py`: EXIF extraction and best-date resolution;
+- `hashing.py`: deterministic file/image hashes and safe digest comparison;
 - `naming.py`: deterministic filename generation;
 - `planner.py`: destination folder planning by date;
 - `executor.py`: operation planning and execution/simulation;
