@@ -6,11 +6,11 @@ Repository: https://github.com/iklav-tech/photo-organizer
 
 ## Changelog
 
-Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered v0.1.0 and v0.2.0 scope.
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered v0.1.0, v0.2.0 and v0.3.0 scope.
 
 ## Current status
 
-The project includes a tested v0.2.0 CLI workflow:
+The project includes a tested v0.3.0 CLI workflow:
 
 - CLI with `scan` and `organize` commands;
 - `dedupe` command for read-only duplicate discovery;
@@ -74,7 +74,9 @@ Example use cases:
 - avoid filename conflicts;
 - run in simulation mode before changing real files;
 - export an audit report of what happened;
-- eventually organize by location and detect duplicates.
+- eventually organize by location;
+- find duplicate images by content hash before organizing or cleaning a collection;
+- export duplicate reports for spreadsheet or automated analysis.
 
 ## Implemented features
 
@@ -85,6 +87,8 @@ Example use cases:
 - `photo-organizer scan --help`
 - `photo-organizer dedupe --help`
 - `photo-organizer organize --help`
+- `photo-organizer dedupe SOURCE --report duplicates.json`
+- `photo-organizer dedupe SOURCE --report duplicates.csv`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters and invalid report extensions.
@@ -158,6 +162,16 @@ EXIF from that format.
 - `--report path.csv` exports a CSV report;
 - report rows include source, destination, action, status and observations.
 
+Duplicate reports:
+
+- `photo-organizer dedupe SOURCE --report duplicates.json` writes `summary` and
+  `duplicate_groups`;
+- each JSON duplicate group includes `group_id`, `hash`, `quantity`, `original`,
+  `duplicates` and `paths`;
+- `photo-organizer dedupe SOURCE --report duplicates.csv` writes one row per file
+  in a duplicate group;
+- CSV duplicate rows include `group_id`, `hash`, `quantity`, `role` and `path`.
+
 ### Logging
 
 - logs include start/end markers and processed counts;
@@ -195,6 +209,7 @@ photo-organizer/
     test_integration.py
     test_naming.py
     test_metadata.py
+    test_hashing.py
     test_planner.py
 ```
 
@@ -208,7 +223,7 @@ photo-organizer/
 - `planner.py`: destination folder planning by date;
 - `executor.py`: operation planning and execution/simulation;
 - `logging_config.py`: logging setup and level control;
-- `constants.py`: centralized extension definitions.
+- `constants.py`: centralized image format definitions, including EXIF capability flags.
 
 ## Organization rules
 
@@ -286,6 +301,30 @@ photo-organizer --log-level DEBUG scan ~/Photos
 
 ```bash
 photo-organizer scan ~/Photos
+```
+
+### Example: finding duplicate images
+
+```bash
+photo-organizer dedupe ~/Photos
+```
+
+The command is read-only. It prints duplicate groups with the hash, quantity,
+original file and duplicated files:
+
+```text
+Duplicate group 1:
+  Hash: de7030234493a8bea844dbe1d8676e68a2c1a4b014c721f0425a22b6df66faec
+  Quantity: 2
+  Original: /home/user/Photos/a.jpg
+  Duplicate: /home/user/Photos/copy/a.jpg
+```
+
+### Example: export duplicate reports
+
+```bash
+photo-organizer dedupe ~/Photos --report duplicates.json
+photo-organizer dedupe ~/Photos --report duplicates.csv
 ```
 
 ### Example: organizing by date
@@ -380,6 +419,41 @@ CSV reports use the following columns:
 source,destination,action,status,observations
 ```
 
+## Duplicate report format
+
+JSON duplicate reports include a summary and grouped details:
+
+```json
+{
+  "summary": {
+    "duplicate_files": 1,
+    "duplicate_groups": 1,
+    "total_files_in_duplicate_groups": 2
+  },
+  "duplicate_groups": [
+    {
+      "duplicates": [
+        "/home/user/Photos/copy/a.jpg"
+      ],
+      "group_id": 1,
+      "hash": "de7030234493a8bea844dbe1d8676e68a2c1a4b014c721f0425a22b6df66faec",
+      "original": "/home/user/Photos/a.jpg",
+      "paths": [
+        "/home/user/Photos/a.jpg",
+        "/home/user/Photos/copy/a.jpg"
+      ],
+      "quantity": 2
+    }
+  ]
+}
+```
+
+CSV duplicate reports use the following columns:
+
+```text
+group_id,hash,quantity,role,path
+```
+
 ## Libraries
 
 The project uses mostly Python standard library plus Pillow for EXIF handling.
@@ -391,6 +465,7 @@ The project uses mostly Python standard library plus Pillow for EXIF handling.
 - `datetime`
 - `shutil`
 - `hashlib`
+- `hmac`
 - `logging`
 - `csv`
 - `json`
@@ -413,6 +488,9 @@ The project uses mostly Python standard library plus Pillow for EXIF handling.
 - safe move behavior;
 - non-overwriting destination conflict handling;
 - structured audit reports;
+- structured duplicate reports;
+- deterministic chunked hashing for large files;
+- safe digest comparison;
 - test-ready code;
 - simple and evolvable architecture.
 
@@ -518,6 +596,50 @@ This section consolidates what was implemented after the v0.1.0 MVP.
 - copy, move and dry-run flows are tested end to end;
 - tests cover automatic directory creation and destination conflicts.
 
+## Version v0.3.0 delivered scope
+
+This section consolidates what was implemented after the v0.2.0 workflow.
+
+### Hashing and duplicate detection
+
+- SHA-256 hashes are calculated in chunks so large files are not loaded fully
+  into memory;
+- hash values are deterministic for identical content;
+- digest comparison uses `hmac.compare_digest`;
+- duplicate groups expose the content hash, original file and duplicate files;
+- files with different content are not reported as duplicates.
+
+### Dedupe command
+
+- `photo-organizer dedupe SOURCE` scans supported images recursively;
+- the command is read-only by default and also accepts `--read-only` explicitly;
+- output lists duplicate groups with hash, quantity, original and duplicates;
+- missing or invalid source directories return a clear non-zero error;
+- `--report duplicates.json` and `--report duplicates.csv` export structured
+  duplicate reports for later analysis.
+
+### Additional image formats
+
+- supported image extensions now include `.jpg`, `.jpeg`, `.png`, `.tif`,
+  `.tiff`, `.webp` and `.bmp`;
+- format support is centralized in `IMAGE_FORMATS`;
+- EXIF extraction is attempted only for formats marked with `supports_exif=True`;
+- formats without reliable EXIF support safely use file modification time as
+  the date fallback.
+
+### Resilience
+
+- invalid files and malformed metadata are handled per file;
+- failures while reading EXIF, planning an operation or hashing a file are logged
+  with the affected path and error message;
+- processing continues for remaining files instead of aborting the whole run.
+
+### Automated hash and dedupe tests
+
+- tests cover equal and different file content;
+- tests use temporary files and directories;
+- CLI tests cover `dedupe`, duplicate reports and no-duplicate output.
+
 ## Roadmap
 
 ### Version 0.1.0
@@ -527,12 +649,14 @@ This section consolidates what was implemented after the v0.1.0 MVP.
 - implemented and stabilized (see Version v0.2.0 delivered scope section).
 
 ### Version 0.3.0
-- hash-based duplicate detection;
+- implemented and stabilized (see Version v0.3.0 delivered scope section).
+
+### Version 0.4.0
 - support for more media types (including videos);
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections.
 
-### Version 0.4.0
+### Version 0.5.0
 - GPS/EXIF support;
 - location-based organization;
 - reverse geocoding;
@@ -541,7 +665,8 @@ This section consolidates what was implemented after the v0.1.0 MVP.
 
 ## Project status
 
-In active development, with a stable tested v0.2.0 workflow for scan + organize flows.
+In active development, with a stable tested v0.3.0 workflow for scan, organize
+and dedupe flows.
 
 ## Motivation
 
