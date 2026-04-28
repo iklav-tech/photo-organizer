@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from dataclasses import dataclass
+import logging
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from photo_organizer.scanner import find_image_files, is_supported_image_file
@@ -13,6 +14,8 @@ from photo_organizer.scanner import find_image_files, is_supported_image_file
 
 DEFAULT_HASH_ALGORITHM = "sha256"
 DEFAULT_CHUNK_SIZE = 1024 * 1024
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -129,11 +132,19 @@ def find_duplicate_images(
         if not is_supported_image_file(path):
             continue
 
-        hashes_by_path[path] = calculate_image_hash(
-            path,
-            algorithm=algorithm,
-            chunk_size=chunk_size,
-        )
+        try:
+            hashes_by_path[path] = calculate_image_hash(
+                path,
+                algorithm=algorithm,
+                chunk_size=chunk_size,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to calculate image hash: file=%s error=%s",
+                path,
+                exc,
+            )
+            continue
 
     paths_by_hash: dict[str, list[Path]] = {}
     for path, content_hash in hashes_by_path.items():

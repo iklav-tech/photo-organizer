@@ -103,6 +103,45 @@ def test_plan_organization_operations_builds_operations_for_found_images(
     assert operations[0].mode == "move"
 
 
+def test_plan_organization_operations_continues_after_bad_file(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    bad_image = source_dir / "bad.jpg"
+    good_image = source_dir / "good.jpg"
+    bad_image.write_text("bad")
+    good_image.write_text("good")
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [bad_image, good_image],
+    )
+
+    def resolve_or_fail(path: Path) -> DateTimeResolution:
+        if path == bad_image:
+            raise ValueError("malformed metadata")
+        return DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        resolve_or_fail,
+    )
+
+    with caplog.at_level(logging.ERROR):
+        operations = plan_organization_operations(source_dir, output_dir, mode="move")
+
+    assert len(operations) == 1
+    assert operations[0].source == good_image
+    assert "Failed to plan file operation" in caplog.text
+    assert str(bad_image) in caplog.text
+    assert "malformed metadata" in caplog.text
+
+
 def test_apply_operations_logs_errors_with_context(
     tmp_path: Path, monkeypatch, caplog
 ) -> None:

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any
+import logging
 
 import pytest
 
@@ -165,3 +166,33 @@ def test_find_duplicate_image_groups_scans_supported_images(tmp_path: Path) -> N
     assert len(groups) == 1
     assert groups[0].original == original
     assert groups[0].duplicates == (duplicate,)
+
+
+def test_find_duplicate_images_continues_after_hash_error(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    bad = tmp_path / "a_bad.jpg"
+    original = tmp_path / "b_original.jpg"
+    duplicate = tmp_path / "c_duplicate.jpg"
+    bad.write_bytes(b"bad")
+    original.write_bytes(b"same")
+    duplicate.write_bytes(b"same")
+
+    original_calculate_image_hash = hashing.calculate_image_hash
+
+    def calculate_or_fail(path: str | Path, **kwargs: Any) -> str:
+        if Path(path) == bad:
+            raise OSError("cannot read file")
+        return original_calculate_image_hash(path, **kwargs)
+
+    monkeypatch.setattr(hashing, "calculate_image_hash", calculate_or_fail)
+
+    with caplog.at_level(logging.ERROR):
+        groups = hashing.find_duplicate_images([bad, original, duplicate])
+
+    assert len(groups) == 1
+    assert groups[0].original == original
+    assert groups[0].duplicates == (duplicate,)
+    assert "Failed to calculate image hash" in caplog.text
+    assert str(bad) in caplog.text
+    assert "cannot read file" in caplog.text

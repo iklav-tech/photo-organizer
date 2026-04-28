@@ -32,6 +32,7 @@ The project includes a tested v0.2.0 CLI workflow:
 - `--dry-run` simulation with no filesystem changes;
 - `--plan` inspection mode without execution;
 - structured execution summaries;
+- resilient per-file error handling for invalid files and malformed metadata;
 - optional audit report export in JSON or CSV with `--report`;
 - improved CLI help with examples and grouped arguments;
 - structured logging with configurable log level;
@@ -118,6 +119,7 @@ EXIF from that format.
   and BMP, safely skip EXIF extraction and use file `mtime` fallback;
 - safe handling when EXIF is missing;
 - safe handling of EXIF read exceptions;
+- safe handling of malformed EXIF data without interrupting the whole run;
 - primary date resolution priority:
   1. `DateTimeOriginal`
   2. `CreateDate`
@@ -160,6 +162,8 @@ EXIF from that format.
 
 - logs include start/end markers and processed counts;
 - logs include fallback decisions for date resolution;
+- logs include per-file errors for invalid files or malformed metadata while
+  processing continues for remaining files;
 - logs include execution summary counters;
 - errors include contextual details;
 - log verbosity configurable with `--log-level` (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).

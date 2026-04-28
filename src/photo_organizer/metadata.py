@@ -94,8 +94,14 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
     if not exif_data:
         return {}
 
+    try:
+        exif_items = exif_data.items()
+    except Exception as exc:
+        logger.warning("Failed to parse EXIF for file=%s error=%s", file_path, exc)
+        return {}
+
     fields: dict[str, Any] = {}
-    for key, value in exif_data.items():
+    for key, value in exif_items:
         tag_name = ExifTags.TAGS.get(key)
         if isinstance(tag_name, str):
             fields[tag_name] = value

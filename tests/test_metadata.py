@@ -118,6 +118,46 @@ def test_extract_exif_metadata_handles_read_exceptions_safely(
     assert result == {}
 
 
+def test_extract_exif_metadata_handles_malformed_exif_safely(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    class MalformedExif:
+        def __bool__(self):
+            return True
+
+        def items(self):
+            raise ValueError("malformed exif")
+
+    class FakeImage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return MalformedExif()
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(TAGS={})
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    with caplog.at_level(logging.WARNING):
+        result = metadata.extract_exif_metadata(file_path)
+
+    assert result == {}
+    assert "Failed to parse EXIF" in caplog.text
+    assert "malformed exif" in caplog.text
+
+
 def test_get_best_available_datetime_prioritizes_datetimeoriginal(
     tmp_path: Path, monkeypatch
 ) -> None:

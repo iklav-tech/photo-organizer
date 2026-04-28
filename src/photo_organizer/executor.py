@@ -80,7 +80,16 @@ def plan_organization_operations(
 
     operations: list[FileOperation] = []
     for image_path in find_image_files(source_path, recursive=True):
-        resolved_dt = resolve_best_available_datetime(image_path)
+        try:
+            resolved_dt = resolve_best_available_datetime(image_path)
+        except Exception as exc:
+            logger.error(
+                "Failed to plan file operation: source=%s error=%s",
+                image_path,
+                exc,
+            )
+            continue
+
         dt = resolved_dt.value
         destination_dir = Path(build_date_destination(output_path, dt))
         destination_file = destination_dir / build_default_filename(dt, image_path)
