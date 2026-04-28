@@ -6,11 +6,11 @@ Repository: https://github.com/iklav-tech/photo-organizer
 
 ## Changelog
 
-Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including the full v0.1.0 delivered scope.
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered v0.1.0 and v0.2.0 scope.
 
 ## Current status
 
-The project already includes an end-to-end MVP with automated tests:
+The project includes a tested v0.2.0 CLI workflow:
 
 - CLI with `scan` and `organize` commands;
 - image scanning with recursive search;
@@ -21,8 +21,14 @@ The project already includes an end-to-end MVP with automated tests:
 - deterministic naming rules;
 - destination folder planning by date (`YYYY/MM/DD`);
 - explicit planning layer separated from execution;
+- automatic destination directory creation;
+- safe move behavior that removes the source only after a successful copy;
+- filename collision handling with predictable suffixes (`_01`, `_02`, `_03`);
 - `--dry-run` simulation with no filesystem changes;
 - `--plan` inspection mode without execution;
+- structured execution summaries;
+- optional audit report export in JSON or CSV with `--report`;
+- improved CLI help with examples and grouped arguments;
 - structured logging with configurable log level;
 - friendly error messages for invalid/missing source directory.
 
@@ -61,6 +67,7 @@ Example use cases:
 - organize photos into folders by year, month, and day;
 - avoid filename conflicts;
 - run in simulation mode before changing real files;
+- export an audit report of what happened;
 - eventually organize by location and detect duplicates.
 
 ## Implemented features
@@ -71,7 +78,9 @@ Example use cases:
 - `photo-organizer --version`
 - `photo-organizer scan --help`
 - `photo-organizer organize --help`
-- clear argument errors for missing required parameters.
+- grouped `organize` help sections for paths, execution, reports and mode;
+- examples shown directly in help output;
+- clear argument errors for missing required parameters and invalid report extensions.
 
 ### Scan behavior
 
@@ -97,13 +106,14 @@ Example use cases:
 - default naming format: `YYYY-MM-DD_HH-MM-SS.ext`;
 - original extension preserved;
 - deterministic name generation;
+- collision handling with suffixes such as `_01`, `_02`, `_03`;
 - destination directory structure: `YYYY/MM/DD`;
 - `pathlib`-based path generation for Linux/Windows compatibility.
 
 ### Plan and execution separation
 
 - operations are planned first into an intermediate structure;
-- each plan item contains source, destination, and action (`move`/`copy`);
+- each plan item contains source, destination, action (`move`/`copy`) and fallback metadata;
 - plan can be inspected without execution using `--plan`.
 
 ### Dry-run and operation modes
@@ -111,12 +121,23 @@ Example use cases:
 - `--dry-run` simulates all operations without changing files;
 - dry-run output shows exactly what would happen;
 - behavior matches real execution except physical file operations;
-- `--copy` and `--move` are supported (`move` is default).
+- `--copy` and `--move` are supported (`move` is default);
+- destination directories are created automatically for real operations;
+- move operations are implemented safely: copy first, then remove source after success.
+
+### Reporting and audit
+
+- final execution summary includes processed, ignored, error and fallback counts;
+- summary distinguishes `dry-run`, `execute` and `plan` modes;
+- `--report path.json` exports a structured JSON report;
+- `--report path.csv` exports a CSV report;
+- report rows include source, destination, action, status and observations.
 
 ### Logging
 
 - logs include start/end markers and processed counts;
 - logs include fallback decisions for date resolution;
+- logs include execution summary counters;
 - errors include contextual details;
 - log verbosity configurable with `--log-level` (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).
 
@@ -143,6 +164,7 @@ photo-organizer/
     test_cli.py
     test_scanner.py
     test_executor.py
+    test_integration.py
     test_naming.py
     test_metadata.py
     test_planner.py
@@ -179,7 +201,13 @@ Example folder organization:
 Photos/2024/08/15/2024-08-15_14-32-09.jpg
 ```
 
-Current implementation focuses on deterministic naming; conflict handling is planned as a future enhancement.
+When a destination already exists, the organizer does not overwrite it by default. It appends the next available numeric suffix:
+
+```text
+2024-08-15_14-32-09.jpg
+2024-08-15_14-32-09_01.jpg
+2024-08-15_14-32-09_02.jpg
+```
 
 ## Installation
 
@@ -261,6 +289,18 @@ photo-organizer organize ~/Photos --output ~/OrganizedPhotos --by date --move
 photo-organizer organize ~/Photos --output ~/OrganizedPhotos --plan
 ```
 
+### Example: export JSON audit report
+
+```bash
+photo-organizer organize ~/Photos --output ~/OrganizedPhotos --report audit.json
+```
+
+### Example: export CSV audit report
+
+```bash
+photo-organizer organize ~/Photos --output ~/OrganizedPhotos --report audit.csv
+```
+
 ### Scan behavior when directory does not exist
 
 ```bash
@@ -276,7 +316,39 @@ If the directory does not exist, the CLI returns a clear error message and non-z
 [INFO] Generated execution plan: operations=248 strategy=date
 [INFO] DRY-RUN enabled: no files will be changed
 [INFO] [DRY-RUN] MOVE /home/user/Photos/IMG_1034.jpg -> /home/user/OrganizedPhotos/2024/08/15/2024-08-15_14-32-09.jpg
+[INFO] Execution summary: mode=dry-run processed_files=248 ignored_files=12 error_files=0 fallback_files=31
 [INFO] Execution finished: organize processed_files=248
+```
+
+## Audit report format
+
+JSON reports include a summary and operation rows:
+
+```json
+{
+  "summary": {
+    "mode": "execute",
+    "processed_files": 1,
+    "ignored_files": 0,
+    "error_files": 0,
+    "fallback_files": 1
+  },
+  "operations": [
+    {
+      "source": "/home/user/Photos/IMG_1034.jpg",
+      "destination": "/home/user/OrganizedPhotos/2024/08/15/2024-08-15_14-32-09.jpg",
+      "action": "move",
+      "status": "success",
+      "observations": ""
+    }
+  ]
+}
+```
+
+CSV reports use the following columns:
+
+```text
+source,destination,action,status,observations
 ```
 
 ## Libraries
@@ -309,6 +381,9 @@ The project uses mostly Python standard library plus Pillow for EXIF handling.
 - clear logging;
 - planning and execution separation;
 - safe mode with `--dry-run`;
+- safe move behavior;
+- non-overwriting destination conflict handling;
+- structured audit reports;
 - test-ready code;
 - simple and evolvable architecture.
 
@@ -373,21 +448,59 @@ This section consolidates what was implemented in v0.1.0 according to completed 
 - end-to-end dry-run test for `organize`;
 - local suite currently green.
 
+## Version v0.2.0 delivered scope
+
+This section consolidates what was implemented after the v0.1.0 MVP.
+
+### Safer execution
+
+- move operations now remove the source only after the destination is successfully created;
+- missing destination directories are created automatically;
+- existing destination files are not overwritten by default.
+
+### Conflict handling
+
+- filename collisions are resolved with deterministic suffixes (`_01`, `_02`, `_03`, ...);
+- suffix generation is applied consistently for copy, move and dry-run planning;
+- tests cover collision behavior and ensure existing files are preserved.
+
+### Execution summaries
+
+- `organize` prints a final execution summary;
+- summary includes processed, ignored, error and fallback counts;
+- summary distinguishes `dry-run`, `execute` and `plan` modes.
+
+### Audit reports
+
+- `--report` exports an audit report when the path ends in `.json` or `.csv`;
+- JSON reports contain `summary` and `operations`;
+- CSV reports contain one row per operation;
+- operation records include source, destination, action, status and observations.
+
+### CLI UX
+
+- help output now includes examples;
+- `organize --help` groups related arguments;
+- errors for missing `--output` and invalid report extensions are clearer.
+
+### Integration tests
+
+- integration tests cover the complete planning and execution pipeline using temporary directories;
+- copy, move and dry-run flows are tested end to end;
+- tests cover automatic directory creation and destination conflicts.
+
 ## Roadmap
 
 ### Version 0.1.0
 - implemented and stabilized (see Version v0.1.0 delivered scope section).
 
 ### Version 0.2.0
-- filename conflict prevention;
-- richer filtering (include/exclude and depth controls);
-- summary report generation (human-readable);
-- command UX improvements.
+- implemented and stabilized (see Version v0.2.0 delivered scope section).
 
 ### Version 0.3.0
 - hash-based duplicate detection;
 - support for more media types (including videos);
-- structured report export (JSON/CSV);
+- richer filtering (include/exclude and depth controls);
 - performance improvements for large collections.
 
 ### Version 0.4.0
@@ -395,11 +508,11 @@ This section consolidates what was implemented in v0.1.0 according to completed 
 - location-based organization;
 - reverse geocoding;
 - external configuration;
-- report export formats (CSV/JSON).
+- richer report analytics.
 
 ## Project status
 
-In active development, with a stable tested MVP for scan + organize flows.
+In active development, with a stable tested v0.2.0 workflow for scan + organize flows.
 
 ## Motivation
 
