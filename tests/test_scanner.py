@@ -9,6 +9,10 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
     (tmp_path / "a.jpg").write_text("x")
     (tmp_path / "b.jpeg").write_text("x")
     (tmp_path / "c.png").write_text("x")
+    (tmp_path / "d.tif").write_text("x")
+    (tmp_path / "e.tiff").write_text("x")
+    (tmp_path / "f.webp").write_text("x")
+    (tmp_path / "g.bmp").write_text("x")
 
     result = find_image_files(tmp_path)
 
@@ -16,6 +20,10 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
         tmp_path / "a.jpg",
         tmp_path / "b.jpeg",
         tmp_path / "c.png",
+        tmp_path / "d.tif",
+        tmp_path / "e.tiff",
+        tmp_path / "f.webp",
+        tmp_path / "g.bmp",
     ]
 
 
@@ -44,14 +52,18 @@ def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> 
     (tmp_path / "upper.JPG").write_text("x")
     (tmp_path / "mixed.JpEg").write_text("x")
     (tmp_path / "lower.png").write_text("x")
-    (tmp_path / "ignored.BMP").write_text("x")
+    (tmp_path / "bitmap.BMP").write_text("x")
+    (tmp_path / "web.WEBP").write_text("x")
+    (tmp_path / "ignored.GIF").write_text("x")
 
     result = find_image_files(tmp_path)
 
     assert result == [
+        tmp_path / "bitmap.BMP",
         tmp_path / "lower.png",
         tmp_path / "mixed.JpEg",
         tmp_path / "upper.JPG",
+        tmp_path / "web.WEBP",
     ]
 
 

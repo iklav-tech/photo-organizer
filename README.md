@@ -15,9 +15,9 @@ The project includes a tested v0.2.0 CLI workflow:
 - CLI with `scan` and `organize` commands;
 - `dedupe` command for read-only duplicate discovery;
 - image scanning with recursive search;
-- centralized supported extension list (`.jpg`, `.jpeg`, `.png`);
+- centralized and easily extensible supported image format list;
 - case-insensitive extension matching;
-- EXIF extraction for compatible JPEG images;
+- EXIF extraction for compatible JPEG/TIFF images;
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
 - duplicate image grouping by content hash with original/duplicates output;
@@ -91,10 +91,15 @@ Example use cases:
 ### Scan behavior
 
 - recursive search in source directory;
-- supported extensions: `.jpg`, `.jpeg`, `.png`;
+- supported extensions: `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.webp`, `.bmp`;
 - unsupported files are ignored;
 - stable/consistent returned path list;
 - user-friendly message when source directory does not exist.
+
+Supported formats are configured in `photo_organizer.constants.IMAGE_FORMATS`.
+To add another format, add one `ImageFormat` entry with its extensions and set
+`supports_exif=True` only when the current metadata reader can reliably extract
+EXIF from that format.
 
 ### Dedupe behavior
 
@@ -108,7 +113,9 @@ Example use cases:
 
 ### Metadata behavior
 
-- EXIF extraction for compatible JPEG images;
+- EXIF extraction for compatible JPEG and TIFF images;
+- formats without real EXIF support in the current reader, such as PNG, WEBP
+  and BMP, safely skip EXIF extraction and use file `mtime` fallback;
 - safe handling when EXIF is missing;
 - safe handling of EXIF read exceptions;
 - primary date resolution priority:
@@ -419,7 +426,7 @@ This section consolidates what was implemented in v0.1.0 according to completed 
 ### Scan and file discovery
 
 - recursive scan of input directory;
-- centralized supported extensions (`.jpg`, `.jpeg`, `.png`);
+- centralized supported image format configuration;
 - case-insensitive extension checks;
 - unsupported files are ignored;
 - stable/consistent discovered path list;

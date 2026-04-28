@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,12 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
     or a safe read error happens.
     """
     file_path = Path(path)
+    if file_path.suffix.lower() not in EXIF_IMAGE_FILE_EXTENSIONS:
+        logger.debug(
+            "EXIF extraction skipped for unsupported metadata format: file=%s",
+            file_path,
+        )
+        return {}
 
     try:
         from PIL import ExifTags, Image
