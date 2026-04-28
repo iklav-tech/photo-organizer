@@ -100,3 +100,68 @@ def test_calculate_file_hash_rejects_invalid_chunk_size(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="chunk_size"):
         hashing.calculate_file_hash(file_path, chunk_size=0)
+
+
+def test_find_duplicate_images_returns_original_and_duplicates(tmp_path: Path) -> None:
+    original = tmp_path / "a_original.jpg"
+    duplicate = tmp_path / "b_duplicate.png"
+    other = tmp_path / "c_other.jpg"
+    original.write_bytes(b"same content")
+    duplicate.write_bytes(b"same content")
+    other.write_bytes(b"different content")
+
+    groups = hashing.find_duplicate_images([other, duplicate, original])
+
+    assert len(groups) == 1
+    assert groups[0].original == original
+    assert groups[0].duplicates == (duplicate,)
+
+
+def test_find_duplicate_images_identifies_multiple_groups(tmp_path: Path) -> None:
+    first_original = tmp_path / "a.jpg"
+    first_duplicate = tmp_path / "b.jpg"
+    second_original = tmp_path / "c.png"
+    second_duplicate = tmp_path / "d.jpeg"
+    first_original.write_bytes(b"group one")
+    first_duplicate.write_bytes(b"group one")
+    second_original.write_bytes(b"group two")
+    second_duplicate.write_bytes(b"group two")
+
+    groups = hashing.find_duplicate_images(
+        [second_duplicate, first_duplicate, second_original, first_original]
+    )
+
+    assert [(group.original, group.duplicates) for group in groups] == [
+        (first_original, (first_duplicate,)),
+        (second_original, (second_duplicate,)),
+    ]
+
+
+def test_find_duplicate_images_has_no_false_positive_for_different_files(
+    tmp_path: Path,
+) -> None:
+    first_path = tmp_path / "first.jpg"
+    second_path = tmp_path / "second.jpg"
+    first_path.write_bytes(b"similar but not equal")
+    second_path.write_bytes(b"similar but not equal.")
+
+    groups = hashing.find_duplicate_images([first_path, second_path])
+
+    assert groups == []
+
+
+def test_find_duplicate_image_groups_scans_supported_images(tmp_path: Path) -> None:
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    original = tmp_path / "a.jpg"
+    duplicate = nested / "b.jpg"
+    unsupported = tmp_path / "c.gif"
+    original.write_bytes(b"same")
+    duplicate.write_bytes(b"same")
+    unsupported.write_bytes(b"same")
+
+    groups = hashing.find_duplicate_image_groups(tmp_path)
+
+    assert len(groups) == 1
+    assert groups[0].original == original
+    assert groups[0].duplicates == (duplicate,)

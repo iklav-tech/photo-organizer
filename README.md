@@ -19,6 +19,7 @@ The project includes a tested v0.2.0 CLI workflow:
 - EXIF extraction for compatible JPEG images;
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
+- duplicate image grouping by content hash with original/duplicates output;
 - date resolution with EXIF priority and fallback;
 - deterministic naming rules;
 - destination folder planning by date (`YYYY/MM/DD`);
@@ -178,7 +179,7 @@ photo-organizer/
 - `cli.py`: command-line interface and command orchestration;
 - `scanner.py`: recursive file scanning and extension filtering;
 - `metadata.py`: EXIF extraction and best-date resolution;
-- `hashing.py`: deterministic file/image hashes and safe digest comparison;
+- `hashing.py`: deterministic file/image hashes, safe digest comparison and duplicate grouping;
 - `naming.py`: deterministic filename generation;
 - `planner.py`: destination folder planning by date;
 - `executor.py`: operation planning and execution/simulation;

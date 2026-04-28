@@ -4,13 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from dataclasses import dataclass
+from collections.abc import Iterable
 from pathlib import Path
 
-from photo_organizer.scanner import is_supported_image_file
+from photo_organizer.scanner import find_image_files, is_supported_image_file
 
 
 DEFAULT_HASH_ALGORITHM = "sha256"
 DEFAULT_CHUNK_SIZE = 1024 * 1024
+
+
+@dataclass(frozen=True)
+class DuplicateGroup:
+    """A group of files with identical content."""
+
+    content_hash: str
+    original: Path
+    duplicates: tuple[Path, ...]
 
 
 def calculate_file_hash(
@@ -99,3 +110,61 @@ def image_hashes_match(
     )
 
     return hmac.compare_digest(first_hash, second_hash)
+
+
+def find_duplicate_images(
+    paths: Iterable[str | Path],
+    *,
+    algorithm: str = DEFAULT_HASH_ALGORITHM,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> list[DuplicateGroup]:
+    """Identify supported image files with identical content.
+
+    The first file in stable path order is treated as the original. Remaining
+    files in the same hash bucket are reported as duplicates.
+    """
+    hashes_by_path: dict[Path, str] = {}
+
+    for path in sorted((Path(candidate) for candidate in paths), key=lambda item: str(item)):
+        if not is_supported_image_file(path):
+            continue
+
+        hashes_by_path[path] = calculate_image_hash(
+            path,
+            algorithm=algorithm,
+            chunk_size=chunk_size,
+        )
+
+    paths_by_hash: dict[str, list[Path]] = {}
+    for path, content_hash in hashes_by_path.items():
+        paths_by_hash.setdefault(content_hash, []).append(path)
+
+    groups: list[DuplicateGroup] = []
+    for content_hash, grouped_paths in paths_by_hash.items():
+        if len(grouped_paths) < 2:
+            continue
+
+        groups.append(
+            DuplicateGroup(
+                content_hash=content_hash,
+                original=grouped_paths[0],
+                duplicates=tuple(grouped_paths[1:]),
+            )
+        )
+
+    return groups
+
+
+def find_duplicate_image_groups(
+    directory: str | Path,
+    *,
+    recursive: bool = True,
+    algorithm: str = DEFAULT_HASH_ALGORITHM,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> list[DuplicateGroup]:
+    """Find duplicate supported image groups inside a directory."""
+    return find_duplicate_images(
+        find_image_files(directory, recursive=recursive),
+        algorithm=algorithm,
+        chunk_size=chunk_size,
+    )
