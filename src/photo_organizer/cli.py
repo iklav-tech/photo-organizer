@@ -136,7 +136,14 @@ def format_version_info() -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="photo-organizer",
-        description="Organize photos by metadata and date.",
+        description="Organize photo files by date metadata.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer scan ./Photos
+  photo-organizer organize ./Photos --output ./OrganizedPhotos
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.json
+""",
     )
     parser.add_argument(
         "--version",
@@ -154,49 +161,71 @@ def build_parser() -> argparse.ArgumentParser:
 
     scan_parser = subparsers.add_parser(
         "scan",
-        help="Scan a directory for photo files.",
-        description="Scan a directory recursively for photo files.",
+        help="List supported image files in a directory.",
+        description="Scan a directory recursively for supported image files.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer scan ./Photos
+  photo-organizer --log-level DEBUG scan ./Photos
+""",
     )
     scan_parser.add_argument(
         "source",
-        help="Source directory to scan.",
+        metavar="SOURCE",
+        help="Directory to scan.",
     )
 
     organize_parser = subparsers.add_parser(
         "organize",
-        help="Organize photos from source to output directory.",
-        description="Organize photos by strategy into an output directory.",
+        help="Copy or move photos into date-based folders.",
+        description="Organize supported image files into YYYY/MM/DD folders.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer organize ./Photos --output ./OrganizedPhotos
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --copy
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
+""",
     )
-    organize_parser.add_argument(
+    path_group = organize_parser.add_argument_group("Paths")
+    path_group.add_argument(
         "source",
-        help="Source directory containing photos.",
+        metavar="SOURCE",
+        help="Directory containing photos to organize.",
     )
-    organize_parser.add_argument(
+    path_group.add_argument(
         "--output",
-        required=True,
-        help="Output directory for organized photos.",
+        metavar="DIR",
+        help="Directory where organized photos will be written.",
     )
-    organize_parser.add_argument(
+
+    execution_group = organize_parser.add_argument_group("Execution")
+    execution_group.add_argument(
         "--by",
         choices=["date"],
         default="date",
-        help="Organization strategy (default: date).",
+        help="Organization strategy. Currently only 'date' is supported.",
     )
-    organize_parser.add_argument(
+    execution_group.add_argument(
         "--dry-run",
         action="store_true",
         help="Simulate operations without changing files.",
     )
-    organize_parser.add_argument(
+    execution_group.add_argument(
         "--plan",
         action="store_true",
         help="Show planned operations and exit without executing.",
     )
-    organize_parser.add_argument(
+
+    report_group = organize_parser.add_argument_group("Audit report")
+    report_group.add_argument(
         "--report",
+        metavar="PATH",
         help="Write a structured execution report to this .json or .csv path.",
     )
-    mode_group = organize_parser.add_mutually_exclusive_group()
+
+    mode_arguments = organize_parser.add_argument_group("Operation mode")
+    mode_group = mode_arguments.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--copy",
         action="store_true",
@@ -237,6 +266,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "organize":
+        if not args.output:
+            parser.error(
+                "organize requires --output DIR. Example: "
+                "photo-organizer organize ./Photos --output ./OrganizedPhotos"
+            )
+        if args.report and Path(args.report).suffix.lower() not in {".json", ".csv"}:
+            parser.error(
+                "organize --report must end with .json or .csv. "
+                "Example: --report audit.csv"
+            )
+
         mode = "copy" if args.copy else "move"
         logger.info(
             "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s",

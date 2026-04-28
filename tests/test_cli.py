@@ -19,6 +19,7 @@ def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out
     assert "scan" in captured.out
     assert "organize" in captured.out
+    assert "Examples:" in captured.out
 
 
 def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
@@ -28,7 +29,8 @@ def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     assert "usage:" in captured.out
-    assert "source" in captured.out
+    assert "SOURCE" in captured.out
+    assert "Examples:" in captured.out
 
 
 def test_organize_help_works(capsys: pytest.CaptureFixture[str]) -> None:
@@ -39,6 +41,9 @@ def test_organize_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "--output" in captured.out
+    assert "Paths:" in captured.out
+    assert "Audit report:" in captured.out
+    assert "Examples:" in captured.out
 
 
 def test_organize_requires_output(capsys: pytest.CaptureFixture[str]) -> None:
@@ -48,7 +53,8 @@ def test_organize_requires_output(capsys: pytest.CaptureFixture[str]) -> None:
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert "error:" in captured.err
-    assert "--output" in captured.err
+    assert "organize requires --output DIR" in captured.err
+    assert "photo-organizer organize ./Photos --output ./OrganizedPhotos" in captured.err
 
 
 def test_scan_requires_source(capsys: pytest.CaptureFixture[str]) -> None:
@@ -58,7 +64,26 @@ def test_scan_requires_source(capsys: pytest.CaptureFixture[str]) -> None:
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert "error:" in captured.err
-    assert "source" in captured.err
+    assert "SOURCE" in captured.err
+
+
+def test_organize_rejects_unknown_report_extension(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--report",
+            "audit.txt",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "organize --report must end with .json or .csv" in captured.err
+    assert "--report audit.csv" in captured.err
 
 
 def test_organize_plan_mode_shows_plan_without_execution(
