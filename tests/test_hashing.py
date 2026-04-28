@@ -78,6 +78,26 @@ def test_file_hashes_match_uses_safe_compare(tmp_path: Path, monkeypatch) -> Non
     assert len(calls) == 1
 
 
+def test_image_hashes_match_identical_content(tmp_path: Path) -> None:
+    first_path = tmp_path / "first.jpg"
+    second_path = tmp_path / "second.png"
+    first_path.write_bytes(b"identical image bytes")
+    second_path.write_bytes(b"identical image bytes")
+
+    assert hashing.image_hashes_match(first_path, second_path) is True
+
+
+def test_calculate_image_hash_differs_for_different_content(tmp_path: Path) -> None:
+    first_path = tmp_path / "first.jpg"
+    second_path = tmp_path / "second.jpg"
+    first_path.write_bytes(b"first content")
+    second_path.write_bytes(b"second content")
+
+    assert hashing.calculate_image_hash(first_path) != hashing.calculate_image_hash(
+        second_path
+    )
+
+
 def test_image_hashes_match_distinguishes_different_content(tmp_path: Path) -> None:
     first_path = tmp_path / "first.jpg"
     second_path = tmp_path / "second.jpg"

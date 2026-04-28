@@ -194,6 +194,30 @@ def test_dedupe_lists_duplicate_groups_read_only(
     assert different.read_bytes() == b"different content"
 
 
+def test_dedupe_lists_all_duplicates_in_group(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_dir = tmp_path / "photos"
+    source_dir.mkdir()
+    original = source_dir / "a.jpg"
+    first_duplicate = source_dir / "b.jpg"
+    second_duplicate = source_dir / "c.png"
+    original.write_bytes(b"same content")
+    first_duplicate.write_bytes(b"same content")
+    second_duplicate.write_bytes(b"same content")
+
+    result = main(["dedupe", str(source_dir)])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "Duplicate group 1:" in captured.out
+    assert "Quantity: 3" in captured.out
+    assert f"Original: {original}" in captured.out
+    assert f"Duplicate: {first_duplicate}" in captured.out
+    assert f"Duplicate: {second_duplicate}" in captured.out
+
+
 def test_dedupe_reports_no_duplicates_for_different_files(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
