@@ -42,6 +42,89 @@ def test_extract_exif_metadata_reads_compatible_jpeg_exif(
     assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
 
 
+def test_extract_exif_metadata_reads_gps_coordinates_as_decimal(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    class FakeImage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return {
+                34853: {
+                    1: "N",
+                    2: ((23, 1), (30, 1), (0, 1)),
+                    3: "W",
+                    4: ((46, 1), (37, 1), (30, 1)),
+                },
+            }
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(
+        TAGS={34853: "GPSInfo"},
+        GPSTAGS={
+            1: "GPSLatitudeRef",
+            2: "GPSLatitude",
+            3: "GPSLongitudeRef",
+            4: "GPSLongitude",
+        },
+    )
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["GPSLatitudeDecimal"] == 23.5
+    assert result["GPSLongitudeDecimal"] == -46.625
+
+
+def test_extract_gps_coordinates_returns_decimal_coordinates(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    monkeypatch.setattr(
+        metadata,
+        "extract_exif_metadata",
+        lambda _path: {
+            "GPSInfo": {
+                "GPSLatitudeRef": "S",
+                "GPSLatitude": (12, 15, 30),
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": (45, 30, 0),
+            },
+        },
+    )
+
+    result = metadata.extract_gps_coordinates(file_path)
+
+    assert result == metadata.GPSCoordinates(latitude=-12.258333333333333, longitude=45.5)
+
+
+def test_extract_gps_coordinates_returns_none_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    monkeypatch.setattr(metadata, "extract_exif_metadata", lambda _path: {})
+
+    result = metadata.extract_gps_coordinates(file_path)
+
+    assert result is None
+
+
 def test_extract_exif_metadata_returns_empty_when_no_exif(
     tmp_path: Path, monkeypatch
 ) -> None:

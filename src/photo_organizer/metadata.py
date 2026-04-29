@@ -22,6 +22,14 @@ class DateTimeResolution:
     used_fallback: bool
 
 
+@dataclass(frozen=True)
+class GPSCoordinates:
+    """Resolved GPS coordinates in decimal degrees."""
+
+    latitude: float
+    longitude: float
+
+
 def _parse_exif_datetime(value: Any) -> datetime | None:
     """Parse common EXIF datetime string formats into a datetime."""
     if value is None:
@@ -48,6 +56,80 @@ def _parse_exif_datetime(value: Any) -> datetime | None:
             continue
 
     return None
+
+
+def _rational_to_float(value: Any) -> float | None:
+    """Convert common EXIF rational values to float."""
+    try:
+        if isinstance(value, tuple) and len(value) == 2:
+            numerator, denominator = value
+            if denominator == 0:
+                return None
+            return float(numerator) / float(denominator)
+        return float(value)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _gps_dms_to_decimal(value: Any, ref: Any) -> float | None:
+    """Convert EXIF GPS degrees/minutes/seconds to signed decimal degrees."""
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+
+    degrees = _rational_to_float(value[0])
+    minutes = _rational_to_float(value[1])
+    seconds = _rational_to_float(value[2])
+    if degrees is None or minutes is None or seconds is None:
+        return None
+
+    decimal = degrees + minutes / 60 + seconds / 3600
+
+    if isinstance(ref, bytes):
+        ref = ref.decode("ascii", errors="ignore")
+    if isinstance(ref, str) and ref.strip().upper() in {"S", "W"}:
+        decimal *= -1
+
+    return decimal
+
+
+def _normalize_gps_info(gps_info: Any, gps_tags: dict[int, str]) -> dict[str, Any]:
+    """Convert Pillow's numeric GPS tag ids to EXIF GPS tag names."""
+    if not hasattr(gps_info, "items"):
+        return {}
+
+    normalized: dict[str, Any] = {}
+    try:
+        gps_items = gps_info.items()
+    except Exception as exc:
+        logger.warning("Failed to parse GPS EXIF block: error=%s", exc)
+        return {}
+
+    for key, value in gps_items:
+        tag_name = gps_tags.get(key)
+        if isinstance(tag_name, str):
+            normalized[tag_name] = value
+
+    return normalized
+
+
+def _extract_gps_coordinates_from_fields(fields: dict[str, Any]) -> GPSCoordinates | None:
+    """Read decimal GPS coordinates from normalized EXIF fields."""
+    gps_info = fields.get("GPSInfo")
+    if not isinstance(gps_info, dict):
+        return None
+
+    latitude = _gps_dms_to_decimal(
+        gps_info.get("GPSLatitude"),
+        gps_info.get("GPSLatitudeRef"),
+    )
+    longitude = _gps_dms_to_decimal(
+        gps_info.get("GPSLongitude"),
+        gps_info.get("GPSLongitudeRef"),
+    )
+    if latitude is None or longitude is None:
+        return None
+
+    return GPSCoordinates(latitude=latitude, longitude=longitude)
 
 
 def _read_exif_datetime_fields(path: Path) -> dict[str, Any]:
@@ -101,12 +183,25 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         return {}
 
     fields: dict[str, Any] = {}
+    gps_tags = getattr(ExifTags, "GPSTAGS", {})
     for key, value in exif_items:
         tag_name = ExifTags.TAGS.get(key)
         if isinstance(tag_name, str):
+            if tag_name == "GPSInfo":
+                value = _normalize_gps_info(value, gps_tags)
             fields[tag_name] = value
 
+    gps_coordinates = _extract_gps_coordinates_from_fields(fields)
+    if gps_coordinates is not None:
+        fields["GPSLatitudeDecimal"] = gps_coordinates.latitude
+        fields["GPSLongitudeDecimal"] = gps_coordinates.longitude
+
     return fields
+
+
+def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:
+    """Extract GPS coordinates in decimal degrees when available."""
+    return _extract_gps_coordinates_from_fields(extract_exif_metadata(path))
 
 
 def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
