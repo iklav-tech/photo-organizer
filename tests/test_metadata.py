@@ -88,6 +88,61 @@ def test_extract_exif_metadata_reads_gps_coordinates_as_decimal(
     assert result["GPSLongitudeDecimal"] == -46.625
 
 
+def test_extract_exif_metadata_reads_gps_coordinates_from_ifd_pointer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    class FakeExif:
+        def __bool__(self):
+            return True
+
+        def items(self):
+            return [(34853, 1352)]
+
+        def get_ifd(self, key):
+            assert key == 34853
+            return {
+                1: "N",
+                2: (26.0, 34.951, 0.0),
+                3: "W",
+                4: (80.0, 12.014, 0.0),
+            }
+
+    class FakeImage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return FakeExif()
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(
+        TAGS={34853: "GPSInfo"},
+        GPSTAGS={
+            1: "GPSLatitudeRef",
+            2: "GPSLatitude",
+            3: "GPSLongitudeRef",
+            4: "GPSLongitude",
+        },
+    )
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["GPSLatitudeDecimal"] == 26.582516666666666
+    assert result["GPSLongitudeDecimal"] == -80.20023333333333
+
+
 def test_extract_gps_coordinates_returns_decimal_coordinates(
     tmp_path: Path, monkeypatch
 ) -> None:

@@ -12,11 +12,12 @@ from photo_organizer.geocoding import (
     reverse_geocode_coordinates,
 )
 from photo_organizer.metadata import (
+    GPSCoordinates,
     extract_gps_coordinates,
     resolve_best_available_datetime,
 )
 from photo_organizer.naming import build_default_filename
-from photo_organizer.planner import build_date_destination
+from photo_organizer.planner import build_date_destination, build_location_destination
 from photo_organizer.scanner import find_image_files
 
 
@@ -68,8 +69,10 @@ class FileOperation:
     destination: Path
     mode: str
     date_fallback: bool = False
+    coordinates: GPSCoordinates | None = None
     location: ReverseGeocodedLocation | None = None
     location_status: str = "disabled"
+    organization_fallback: bool = False
 
 
 def plan_organization_operations(
@@ -77,6 +80,7 @@ def plan_organization_operations(
     output_dir: str | Path,
     mode: str = "move",
     reverse_geocode: bool = False,
+    organization_strategy: str = "date",
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
     source_path = Path(source_dir)
@@ -101,9 +105,11 @@ def plan_organization_operations(
             continue
 
         dt = resolved_dt.value
+        coordinates = None
         location = None
         location_status = "disabled"
-        if reverse_geocode:
+        should_reverse_geocode = reverse_geocode or organization_strategy == "location"
+        if should_reverse_geocode:
             location_status = "missing-gps"
             try:
                 coordinates = extract_gps_coordinates(image_path)
@@ -127,7 +133,12 @@ def plan_organization_operations(
                     exc,
                 )
 
-        destination_dir = Path(build_date_destination(output_path, dt))
+        organization_fallback = False
+        if organization_strategy == "location" and location is not None:
+            destination_dir = Path(build_location_destination(output_path, location))
+        else:
+            organization_fallback = organization_strategy == "location"
+            destination_dir = Path(build_date_destination(output_path, dt))
         destination_file = destination_dir / build_default_filename(dt, image_path)
         operations.append(
             FileOperation(
@@ -135,8 +146,10 @@ def plan_organization_operations(
                 destination=destination_file,
                 mode=mode,
                 date_fallback=resolved_dt.used_fallback,
+                coordinates=coordinates,
                 location=location,
                 location_status=location_status,
+                organization_fallback=organization_fallback,
             )
         )
 

@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path, PureWindowsPath
+from types import SimpleNamespace
 
 import photo_organizer.planner as planner
 
@@ -33,3 +34,27 @@ def test_build_date_destination_supports_windows_pathlib_paths() -> None:
     result = planner.build_date_destination(base_dir, dt)
 
     assert result == PureWindowsPath("C:/OrganizedPhotos/2023/12/05")
+
+
+def test_build_location_destination_uses_country_state_city_pattern() -> None:
+    location = SimpleNamespace(
+        country="Brazil",
+        state="Sao Paulo",
+        city="Sao Paulo",
+    )
+
+    result = planner.build_location_destination("organized", location)
+
+    assert result == Path("organized") / "Brazil" / "Sao Paulo" / "Sao Paulo"
+
+
+def test_build_location_destination_sanitizes_folder_names() -> None:
+    location = SimpleNamespace(
+        country="Brasil",
+        state="Rio/Minas",
+        city="  Sao  Tome:*  ",
+    )
+
+    result = planner.build_location_destination("organized", location)
+
+    assert result == Path("organized") / "Brasil" / "Rio-Minas" / "Sao Tome--"

@@ -87,12 +87,34 @@ def _write_execution_report(
         )
         for operation in planned_operations or []
     }
+    coordinates_by_source = {
+        str(operation.source): operation.coordinates
+        for operation in planned_operations or []
+        if operation.coordinates is not None
+    }
+    planned_operation_by_source = {
+        str(operation.source): operation
+        for operation in planned_operations or []
+    }
     if include_location_fields:
         for operation in operations:
+            planned_operation = planned_operation_by_source.get(operation["source"])
             location = location_by_source.get(operation["source"])
             operation["location_status"] = location_status_by_source.get(
                 operation["source"],
                 "",
+            )
+            operation["organization_fallback"] = (
+                planned_operation.organization_fallback
+                if planned_operation is not None
+                else False
+            )
+            coordinates = coordinates_by_source.get(operation["source"])
+            operation["latitude"] = (
+                coordinates.latitude if coordinates is not None else ""
+            )
+            operation["longitude"] = (
+                coordinates.longitude if coordinates is not None else ""
             )
             operation["city"] = location.city if location is not None else ""
             operation["state"] = location.state if location is not None else ""
@@ -107,7 +129,17 @@ def _write_execution_report(
             "observations",
         ]
         if include_location_fields:
-            fieldnames.extend(["location_status", "city", "state", "country"])
+            fieldnames.extend(
+                [
+                    "location_status",
+                    "organization_fallback",
+                    "latitude",
+                    "longitude",
+                    "city",
+                    "state",
+                    "country",
+                ]
+            )
 
         with path.open("w", encoding="utf-8", newline="") as report_file:
             writer = csv.DictWriter(
@@ -346,9 +378,9 @@ def build_parser() -> argparse.ArgumentParser:
     execution_group = organize_parser.add_argument_group("Execution")
     execution_group.add_argument(
         "--by",
-        choices=["date"],
+        choices=["date", "location"],
         default="date",
-        help="Organization strategy. Currently only 'date' is supported.",
+        help="Organization strategy. Use 'location' for country/state/city folders.",
     )
     execution_group.add_argument(
         "--dry-run",
@@ -372,7 +404,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="reverse_geocode",
         help="Disable reverse geocoding (default).",
     )
-    organize_parser.set_defaults(reverse_geocode=False)
+    organize_parser.set_defaults(reverse_geocode=None)
 
     report_group = organize_parser.add_argument_group("Audit report")
     report_group.add_argument(
@@ -478,8 +510,18 @@ def main(argv: list[str] | None = None) -> int:
                 "organize --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
+        if args.by == "location" and args.reverse_geocode is False:
+            parser.error(
+                "organize --by location requires reverse geocoding. "
+                "Remove --no-reverse-geocode or use --by date."
+            )
 
         mode = "copy" if args.copy else "move"
+        reverse_geocode = (
+            args.reverse_geocode
+            if args.reverse_geocode is not None
+            else args.by == "location"
+        )
         logger.info(
             "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
             args.source,
@@ -487,14 +529,15 @@ def main(argv: list[str] | None = None) -> int:
             mode,
             args.dry_run,
             args.plan,
-            args.reverse_geocode,
+            reverse_geocode,
         )
         try:
             operations = plan_organization_operations(
                 args.source,
                 args.output,
                 mode=mode,
-                reverse_geocode=args.reverse_geocode,
+                reverse_geocode=reverse_geocode,
+                organization_strategy=args.by,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
@@ -532,21 +575,29 @@ def main(argv: list[str] | None = None) -> int:
                 "location_files": sum(
                     1 for operation in operations if operation.location is not None
                 ),
+                "gps_files": sum(
+                    1 for operation in operations if operation.coordinates is not None
+                ),
                 "missing_gps_files": sum(
                     1
                     for operation in operations
                     if operation.location_status == "missing-gps"
                 ),
+                "organization_fallback_files": sum(
+                    1 for operation in operations if operation.organization_fallback
+                ),
             }
             logger.info(
-                "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d location_files=%d missing_gps_files=%d",
+                "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d location_files=%d gps_files=%d missing_gps_files=%d organization_fallback_files=%d",
                 summary["mode"],
                 summary["processed_files"],
                 summary["ignored_files"],
                 summary["error_files"],
                 summary["fallback_files"],
                 summary["location_files"],
+                summary["gps_files"],
                 summary["missing_gps_files"],
+                summary["organization_fallback_files"],
             )
             logger.info(
                 "Execution finished: organize processed_files=0 planned_files=%d",
@@ -578,21 +629,29 @@ def main(argv: list[str] | None = None) -> int:
             "error_files": error_files,
             "fallback_files": fallback_files,
             "location_files": location_files,
+            "gps_files": sum(
+                1 for operation in operations if operation.coordinates is not None
+            ),
             "missing_gps_files": sum(
                 1
                 for operation in operations
                 if operation.location_status == "missing-gps"
             ),
+            "organization_fallback_files": sum(
+                1 for operation in operations if operation.organization_fallback
+            ),
         }
         logger.info(
-            "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d location_files=%d missing_gps_files=%d",
+            "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d location_files=%d gps_files=%d missing_gps_files=%d organization_fallback_files=%d",
             summary["mode"],
             summary["processed_files"],
             summary["ignored_files"],
             summary["error_files"],
             summary["fallback_files"],
             summary["location_files"],
+            summary["gps_files"],
             summary["missing_gps_files"],
+            summary["organization_fallback_files"],
         )
 
         if args.report:
@@ -601,7 +660,7 @@ def main(argv: list[str] | None = None) -> int:
                 logs,
                 summary,
                 operations,
-                include_location_fields=args.reverse_geocode,
+                include_location_fields=reverse_geocode,
             )
             logger.info("Execution report written: path=%s", args.report)
 

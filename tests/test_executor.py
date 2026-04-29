@@ -153,6 +153,93 @@ def test_plan_organization_operations_resolves_location_when_enabled(
     assert operations[0].location_status == "resolved"
 
 
+def test_plan_organization_operations_uses_location_destination_when_selected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.jpg"
+    image.write_text("a")
+    coordinates = GPSCoordinates(latitude=-23.5, longitude=-46.625)
+    location = ReverseGeocodedLocation(
+        city="Sao Paulo",
+        state="Sao Paulo",
+        country="Brazil",
+    )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: coordinates,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.reverse_geocode_coordinates",
+        lambda value: location if value == coordinates else None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="move",
+        organization_strategy="location",
+    )
+
+    assert operations[0].destination == (
+        output_dir / "Brazil" / "Sao Paulo" / "Sao Paulo" / "2024-08-15_14-32-09.jpg"
+    )
+    assert operations[0].organization_fallback is False
+
+
+def test_plan_organization_operations_falls_back_to_date_without_location(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.png"
+    image.write_text("a")
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="move",
+        organization_strategy="location",
+    )
+
+    assert operations[0].destination == (
+        output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.png"
+    )
+    assert operations[0].location_status == "missing-gps"
+    assert operations[0].organization_fallback is True
+
+
 def test_plan_organization_operations_does_not_read_gps_when_geocoding_disabled(
     tmp_path: Path, monkeypatch
 ) -> None:

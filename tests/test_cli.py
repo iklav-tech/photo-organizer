@@ -10,6 +10,7 @@ from datetime import datetime
 from photo_organizer.cli import main
 from photo_organizer.executor import FileOperation
 from photo_organizer.geocoding import ReverseGeocodedLocation
+from photo_organizer.metadata import GPSCoordinates
 
 
 def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
@@ -163,6 +164,50 @@ def test_organize_reverse_geocode_option_is_passed_to_planner(monkeypatch) -> No
 
     assert result == 0
     assert captured["reverse_geocode"] is True
+    assert captured["organization_strategy"] == "date"
+
+
+def test_organize_location_strategy_enables_reverse_geocoding(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--by",
+        "location",
+    ])
+
+    assert result == 0
+    assert captured["reverse_geocode"] is True
+    assert captured["organization_strategy"] == "location"
+
+
+def test_organize_location_strategy_rejects_disabled_geocoding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--by",
+            "location",
+            "--no-reverse-geocode",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "--by location requires reverse geocoding" in captured.err
 
 
 def test_scan_logs_start_end_and_count(monkeypatch, caplog) -> None:
@@ -406,7 +451,9 @@ def test_organize_dry_run_end_to_end_shows_expected_destinations_and_keeps_files
     assert not second_expected.exists()
     assert (
         "Execution summary: mode=dry-run processed_files=2 ignored_files=1 "
-        "error_files=0 fallback_files=2 location_files=0 missing_gps_files=0"
+        "error_files=0 fallback_files=2 location_files=0 gps_files=0 "
+        "missing_gps_files=0 "
+        "organization_fallback_files=0"
     ) in caplog.text
 
 
@@ -458,7 +505,9 @@ def test_organize_end_to_end_adds_suffixes_for_destination_collisions(
     assert f"MOVE {third} -> {expected_second_suffix}" in caplog.text
     assert (
         "Execution summary: mode=execute processed_files=3 ignored_files=0 "
-        "error_files=0 fallback_files=3 location_files=0 missing_gps_files=0"
+        "error_files=0 fallback_files=3 location_files=0 gps_files=0 "
+        "missing_gps_files=0 "
+        "organization_fallback_files=0"
     ) in caplog.text
 
 
@@ -496,7 +545,9 @@ def test_organize_summary_counts_operation_errors(monkeypatch, caplog) -> None:
     assert result == 0
     assert (
         "Execution summary: mode=execute processed_files=1 ignored_files=0 "
-        "error_files=1 fallback_files=1 location_files=0 missing_gps_files=0"
+        "error_files=1 fallback_files=1 location_files=0 gps_files=0 "
+        "missing_gps_files=0 "
+        "organization_fallback_files=0"
     ) in caplog.text
 
 
@@ -537,7 +588,9 @@ def test_organize_writes_valid_structured_execution_report(
         "error_files": 0,
         "fallback_files": 1,
         "location_files": 0,
+        "gps_files": 0,
         "missing_gps_files": 0,
+        "organization_fallback_files": 0,
     }
     assert report["operations"] == [
         {
@@ -607,6 +660,7 @@ def test_organize_report_includes_resolved_location(
             source=Path("input/good.jpg"),
             destination=Path("out/good.jpg"),
             mode="copy",
+            coordinates=GPSCoordinates(latitude=-23.5, longitude=-46.625),
             location=ReverseGeocodedLocation(
                 city="Sao Paulo",
                 state="Sao Paulo",
@@ -640,7 +694,11 @@ def test_organize_report_includes_resolved_location(
     assert result == 0
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["summary"]["location_files"] == 1
+    assert report["summary"]["gps_files"] == 1
     assert report["operations"][0]["location_status"] == "resolved"
+    assert report["operations"][0]["organization_fallback"] is False
+    assert report["operations"][0]["latitude"] == -23.5
+    assert report["operations"][0]["longitude"] == -46.625
     assert report["operations"][0]["city"] == "Sao Paulo"
     assert report["operations"][0]["state"] == "Sao Paulo"
     assert report["operations"][0]["country"] == "Brazil"
@@ -684,7 +742,11 @@ def test_organize_report_marks_missing_gps_when_reverse_geocoding_requested(
     assert result == 0
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["summary"]["missing_gps_files"] == 1
+    assert report["summary"]["gps_files"] == 0
     assert report["operations"][0]["location_status"] == "missing-gps"
+    assert report["operations"][0]["organization_fallback"] is False
+    assert report["operations"][0]["latitude"] == ""
+    assert report["operations"][0]["longitude"] == ""
     assert report["operations"][0]["city"] == ""
     assert report["operations"][0]["state"] == ""
     assert report["operations"][0]["country"] == ""

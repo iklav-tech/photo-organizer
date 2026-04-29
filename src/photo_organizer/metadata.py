@@ -112,6 +112,17 @@ def _normalize_gps_info(gps_info: Any, gps_tags: dict[int, str]) -> dict[str, An
     return normalized
 
 
+def _read_gps_ifd(exif_data: Any, gps_key: int) -> Any:
+    if not hasattr(exif_data, "get_ifd"):
+        return None
+
+    try:
+        return exif_data.get_ifd(gps_key)
+    except Exception as exc:
+        logger.warning("Failed to read GPS EXIF IFD: error=%s", exc)
+        return None
+
+
 def _extract_gps_coordinates_from_fields(fields: dict[str, Any]) -> GPSCoordinates | None:
     """Read decimal GPS coordinates from normalized EXIF fields."""
     gps_info = fields.get("GPSInfo")
@@ -189,6 +200,8 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         if isinstance(tag_name, str):
             if tag_name == "GPSInfo":
                 value = _normalize_gps_info(value, gps_tags)
+                if not value:
+                    value = _normalize_gps_info(_read_gps_ifd(exif_data, key), gps_tags)
             fields[tag_name] = value
 
     gps_coordinates = _extract_gps_coordinates_from_fields(fields)
