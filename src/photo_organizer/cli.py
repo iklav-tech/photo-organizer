@@ -10,7 +10,11 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
-from photo_organizer.executor import apply_operations, plan_organization_operations
+from photo_organizer.executor import (
+    FileOperation,
+    apply_operations,
+    plan_organization_operations,
+)
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.scanner import find_image_files, is_supported_image_file
@@ -61,6 +65,8 @@ def _write_execution_report(
     report_path: str | Path,
     operation_logs: list[str],
     summary: dict[str, int | str],
+    planned_operations: list[FileOperation] | None = None,
+    include_location_fields: bool = False,
 ) -> None:
     path = Path(report_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,18 +74,45 @@ def _write_execution_report(
         _report_item_from_operation_log(line)
         for line in operation_logs
     ]
+    location_by_source = {
+        str(operation.source): operation.location
+        for operation in planned_operations or []
+        if operation.location is not None
+    }
+    location_status_by_source = {
+        str(operation.source): (
+            "resolved"
+            if operation.location is not None
+            else operation.location_status
+        )
+        for operation in planned_operations or []
+    }
+    if include_location_fields:
+        for operation in operations:
+            location = location_by_source.get(operation["source"])
+            operation["location_status"] = location_status_by_source.get(
+                operation["source"],
+                "",
+            )
+            operation["city"] = location.city if location is not None else ""
+            operation["state"] = location.state if location is not None else ""
+            operation["country"] = location.country if location is not None else ""
 
     if path.suffix.lower() == ".csv":
+        fieldnames = [
+            "source",
+            "destination",
+            "action",
+            "status",
+            "observations",
+        ]
+        if include_location_fields:
+            fieldnames.extend(["location_status", "city", "state", "country"])
+
         with path.open("w", encoding="utf-8", newline="") as report_file:
             writer = csv.DictWriter(
                 report_file,
-                fieldnames=[
-                    "source",
-                    "destination",
-                    "action",
-                    "status",
-                    "observations",
-                ],
+                fieldnames=fieldnames,
             )
             writer.writeheader()
             writer.writerows(operations)
@@ -327,6 +360,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show planned operations and exit without executing.",
     )
+    geocoding_group = execution_group.add_mutually_exclusive_group()
+    geocoding_group.add_argument(
+        "--reverse-geocode",
+        action="store_true",
+        help="Resolve GPS coordinates into city, state and country.",
+    )
+    geocoding_group.add_argument(
+        "--no-reverse-geocode",
+        action="store_false",
+        dest="reverse_geocode",
+        help="Disable reverse geocoding (default).",
+    )
+    organize_parser.set_defaults(reverse_geocode=False)
 
     report_group = organize_parser.add_argument_group("Audit report")
     report_group.add_argument(
@@ -435,15 +481,21 @@ def main(argv: list[str] | None = None) -> int:
 
         mode = "copy" if args.copy else "move"
         logger.info(
-            "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s",
+            "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
             args.source,
             args.output,
             mode,
             args.dry_run,
             args.plan,
+            args.reverse_geocode,
         )
         try:
-            operations = plan_organization_operations(args.source, args.output, mode=mode)
+            operations = plan_organization_operations(
+                args.source,
+                args.output,
+                mode=mode,
+                reverse_geocode=args.reverse_geocode,
+            )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
             logger.error("Source directory does not exist: %s", args.source)
@@ -477,16 +529,29 @@ def main(argv: list[str] | None = None) -> int:
                 "fallback_files": sum(
                     1 for operation in operations if operation.date_fallback
                 ),
+                "location_files": sum(
+                    1 for operation in operations if operation.location is not None
+                ),
+                "missing_gps_files": sum(
+                    1
+                    for operation in operations
+                    if operation.location_status == "missing-gps"
+                ),
             }
             logger.info(
-                "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d",
+                "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d location_files=%d missing_gps_files=%d",
                 summary["mode"],
                 summary["processed_files"],
                 summary["ignored_files"],
                 summary["error_files"],
                 summary["fallback_files"],
+                summary["location_files"],
+                summary["missing_gps_files"],
             )
-            logger.info("Execution finished: organize processed_files=0 planned_files=%d", len(operations))
+            logger.info(
+                "Execution finished: organize processed_files=0 planned_files=%d",
+                len(operations),
+            )
             return 0
 
         if args.dry_run:
@@ -503,24 +568,41 @@ def main(argv: list[str] | None = None) -> int:
         processed_files = len(logs) - error_files
         summary_mode = "dry-run" if args.dry_run else "execute"
         fallback_files = sum(1 for operation in operations if operation.date_fallback)
+        location_files = sum(
+            1 for operation in operations if operation.location is not None
+        )
         summary = {
             "mode": summary_mode,
             "processed_files": processed_files,
             "ignored_files": ignored_files,
             "error_files": error_files,
             "fallback_files": fallback_files,
+            "location_files": location_files,
+            "missing_gps_files": sum(
+                1
+                for operation in operations
+                if operation.location_status == "missing-gps"
+            ),
         }
         logger.info(
-            "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d",
+            "Execution summary: mode=%s processed_files=%d ignored_files=%d error_files=%d fallback_files=%d location_files=%d missing_gps_files=%d",
             summary["mode"],
             summary["processed_files"],
             summary["ignored_files"],
             summary["error_files"],
             summary["fallback_files"],
+            summary["location_files"],
+            summary["missing_gps_files"],
         )
 
         if args.report:
-            _write_execution_report(args.report, logs, summary)
+            _write_execution_report(
+                args.report,
+                logs,
+                summary,
+                operations,
+                include_location_fields=args.reverse_geocode,
+            )
             logger.info("Execution report written: path=%s", args.report)
 
         logger.info("Execution finished: organize processed_files=%d", processed_files)

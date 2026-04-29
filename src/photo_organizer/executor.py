@@ -7,7 +7,14 @@ import logging
 from pathlib import Path
 import shutil
 
-from photo_organizer.metadata import resolve_best_available_datetime
+from photo_organizer.geocoding import (
+    ReverseGeocodedLocation,
+    reverse_geocode_coordinates,
+)
+from photo_organizer.metadata import (
+    extract_gps_coordinates,
+    resolve_best_available_datetime,
+)
 from photo_organizer.naming import build_default_filename
 from photo_organizer.planner import build_date_destination
 from photo_organizer.scanner import find_image_files
@@ -61,12 +68,15 @@ class FileOperation:
     destination: Path
     mode: str
     date_fallback: bool = False
+    location: ReverseGeocodedLocation | None = None
+    location_status: str = "disabled"
 
 
 def plan_organization_operations(
     source_dir: str | Path,
     output_dir: str | Path,
     mode: str = "move",
+    reverse_geocode: bool = False,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
     source_path = Path(source_dir)
@@ -91,6 +101,32 @@ def plan_organization_operations(
             continue
 
         dt = resolved_dt.value
+        location = None
+        location_status = "disabled"
+        if reverse_geocode:
+            location_status = "missing-gps"
+            try:
+                coordinates = extract_gps_coordinates(image_path)
+                if coordinates is not None:
+                    location_status = "unresolved"
+                    location = reverse_geocode_coordinates(coordinates)
+                if location is not None:
+                    location_status = "resolved"
+                    logger.info(
+                        "Location resolved from GPS: source=%s city=%s state=%s country=%s",
+                        image_path,
+                        location.city,
+                        location.state,
+                        location.country,
+                    )
+            except Exception as exc:
+                location_status = "error"
+                logger.warning(
+                    "Reverse geocoding skipped after metadata error: source=%s error=%s",
+                    image_path,
+                    exc,
+                )
+
         destination_dir = Path(build_date_destination(output_path, dt))
         destination_file = destination_dir / build_default_filename(dt, image_path)
         operations.append(
@@ -99,6 +135,8 @@ def plan_organization_operations(
                 destination=destination_file,
                 mode=mode,
                 date_fallback=resolved_dt.used_fallback,
+                location=location,
+                location_status=location_status,
             )
         )
 
