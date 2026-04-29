@@ -17,7 +17,11 @@ from photo_organizer.metadata import (
     resolve_best_available_datetime,
 )
 from photo_organizer.naming import build_default_filename
-from photo_organizer.planner import build_date_destination, build_location_destination
+from photo_organizer.planner import (
+    build_date_destination,
+    build_location_date_destination,
+    build_location_destination,
+)
 from photo_organizer.scanner import find_image_files
 
 
@@ -108,7 +112,10 @@ def plan_organization_operations(
         coordinates = None
         location = None
         location_status = "disabled"
-        should_reverse_geocode = reverse_geocode or organization_strategy == "location"
+        should_reverse_geocode = reverse_geocode or organization_strategy in {
+            "location",
+            "location-date",
+        }
         if should_reverse_geocode:
             location_status = "missing-gps"
             try:
@@ -136,8 +143,12 @@ def plan_organization_operations(
         organization_fallback = False
         if organization_strategy == "location" and location is not None:
             destination_dir = Path(build_location_destination(output_path, location))
+        elif organization_strategy == "location-date" and location is not None:
+            destination_dir = Path(
+                build_location_date_destination(output_path, location, dt)
+            )
         else:
-            organization_fallback = organization_strategy == "location"
+            organization_fallback = organization_strategy in {"location", "location-date"}
             destination_dir = Path(build_date_destination(output_path, dt))
         destination_file = destination_dir / build_default_filename(dt, image_path)
         operations.append(

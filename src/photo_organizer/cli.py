@@ -360,6 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
   photo-organizer organize ./Photos --output ./OrganizedPhotos --copy
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --by location-date
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
 """,
     )
@@ -378,9 +379,9 @@ def build_parser() -> argparse.ArgumentParser:
     execution_group = organize_parser.add_argument_group("Execution")
     execution_group.add_argument(
         "--by",
-        choices=["date", "location"],
+        choices=["date", "location", "location-date"],
         default="date",
-        help="Organization strategy. Use 'location' for country/state/city folders.",
+        help="Organization strategy: date, location, or location-date.",
     )
     execution_group.add_argument(
         "--dry-run",
@@ -510,9 +511,9 @@ def main(argv: list[str] | None = None) -> int:
                 "organize --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
-        if args.by == "location" and args.reverse_geocode is False:
+        if args.by in {"location", "location-date"} and args.reverse_geocode is False:
             parser.error(
-                "organize --by location requires reverse geocoding. "
+                f"organize --by {args.by} requires reverse geocoding. "
                 "Remove --no-reverse-geocode or use --by date."
             )
 
@@ -520,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         reverse_geocode = (
             args.reverse_geocode
             if args.reverse_geocode is not None
-            else args.by == "location"
+            else args.by in {"location", "location-date"}
         )
         logger.info(
             "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",

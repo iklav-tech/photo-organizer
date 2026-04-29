@@ -45,6 +45,19 @@ def build_location_destination(
     )
 
 
+def build_location_date_destination(
+    base_dir: str | PurePath,
+    location: LocationLike,
+    dt: datetime,
+) -> PurePath:
+    """Build destination directory using country/state/city/YYYY/MM structure."""
+    return (
+        build_location_destination(base_dir, location)
+        / dt.strftime("%Y")
+        / dt.strftime("%m")
+    )
+
+
 def build_date_destination_for_file(
     base_dir: str | PurePath, file_path: str | Path
 ) -> PurePath:

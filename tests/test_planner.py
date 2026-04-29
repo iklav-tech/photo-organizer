@@ -58,3 +58,16 @@ def test_build_location_destination_sanitizes_folder_names() -> None:
     result = planner.build_location_destination("organized", location)
 
     assert result == Path("organized") / "Brasil" / "Rio-Minas" / "Sao Tome--"
+
+
+def test_build_location_date_destination_uses_location_and_year_month() -> None:
+    location = SimpleNamespace(
+        country="Brasil",
+        state="RJ",
+        city="Paraty",
+    )
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    result = planner.build_location_date_destination("organized", location, dt)
+
+    assert result == Path("organized") / "Brasil" / "RJ" / "Paraty" / "2024" / "08"
