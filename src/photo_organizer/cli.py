@@ -63,6 +63,31 @@ def _report_item_from_operation_log(line: str) -> dict[str, str]:
     }
 
 
+def _report_raw_value(value: object) -> str:
+    if value == "":
+        return ""
+    try:
+        return json.dumps(value, sort_keys=True)
+    except TypeError:
+        return str(value)
+
+
+def _provenance_report_fields(prefix: str, provenance) -> dict[str, str]:
+    if provenance is None:
+        return {
+            f"{prefix}_source": "",
+            f"{prefix}_field": "",
+            f"{prefix}_confidence": "",
+            f"{prefix}_raw_value": "",
+        }
+    return {
+        f"{prefix}_source": provenance.source,
+        f"{prefix}_field": provenance.field,
+        f"{prefix}_confidence": provenance.confidence,
+        f"{prefix}_raw_value": _report_raw_value(provenance.raw_value),
+    }
+
+
 def _write_execution_report(
     report_path: str | Path,
     operation_logs: list[str],
@@ -98,9 +123,18 @@ def _write_execution_report(
         str(operation.source): operation
         for operation in planned_operations or []
     }
-    if include_location_fields:
-        for operation in operations:
-            planned_operation = planned_operation_by_source.get(operation["source"])
+    for operation in operations:
+        planned_operation = planned_operation_by_source.get(operation["source"])
+        operation.update(
+            _provenance_report_fields(
+                "date",
+                planned_operation.date_provenance
+                if planned_operation is not None
+                else None,
+            )
+        )
+
+        if include_location_fields:
             location = location_by_source.get(operation["source"])
             operation["location_status"] = location_status_by_source.get(
                 operation["source"],
@@ -121,6 +155,20 @@ def _write_execution_report(
             operation["city"] = location.city if location is not None else ""
             operation["state"] = location.state if location is not None else ""
             operation["country"] = location.country if location is not None else ""
+            operation.update(
+                _provenance_report_fields(
+                    "gps",
+                    coordinates.provenance if coordinates is not None else None,
+                )
+            )
+            operation.update(
+                _provenance_report_fields(
+                    "location",
+                    planned_operation.location_provenance
+                    if planned_operation is not None
+                    else None,
+                )
+            )
 
     if path.suffix.lower() == ".csv":
         fieldnames = [
@@ -129,6 +177,10 @@ def _write_execution_report(
             "action",
             "status",
             "observations",
+            "date_source",
+            "date_field",
+            "date_confidence",
+            "date_raw_value",
         ]
         if include_location_fields:
             fieldnames.extend(
@@ -140,6 +192,14 @@ def _write_execution_report(
                     "city",
                     "state",
                     "country",
+                    "gps_source",
+                    "gps_field",
+                    "gps_confidence",
+                    "gps_raw_value",
+                    "location_source",
+                    "location_field",
+                    "location_confidence",
+                    "location_raw_value",
                 ]
             )
 

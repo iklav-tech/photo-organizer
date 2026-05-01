@@ -13,6 +13,7 @@ from photo_organizer.geocoding import (
 )
 from photo_organizer.metadata import (
     GPSCoordinates,
+    MetadataProvenance,
     extract_gps_coordinates,
     resolve_best_available_datetime,
 )
@@ -75,8 +76,10 @@ class FileOperation:
     destination: Path
     mode: str
     date_fallback: bool = False
+    date_provenance: MetadataProvenance | None = None
     coordinates: GPSCoordinates | None = None
     location: ReverseGeocodedLocation | None = None
+    location_provenance: MetadataProvenance | None = None
     location_status: str = "disabled"
     organization_fallback: bool = False
 
@@ -115,6 +118,7 @@ def plan_organization_operations(
         dt = resolved_dt.value
         coordinates = None
         location = None
+        location_provenance = None
         location_status = "disabled"
         should_reverse_geocode = reverse_geocode or organization_strategy in {
             "city-state-month",
@@ -130,12 +134,23 @@ def plan_organization_operations(
                     location = reverse_geocode_coordinates(coordinates)
                 if location is not None:
                     location_status = "resolved"
+                    location_provenance = MetadataProvenance(
+                        source="Reverse geocoding",
+                        field="GPSLatitudeDecimal,GPSLongitudeDecimal",
+                        confidence="medium",
+                        raw_value={
+                            "latitude": coordinates.latitude,
+                            "longitude": coordinates.longitude,
+                        },
+                    )
                     logger.info(
-                        "Location resolved from GPS: source=%s city=%s state=%s country=%s",
+                        "Location resolved: source=%s city=%s state=%s country=%s provenance=%s confidence=%s",
                         image_path,
                         location.city,
                         location.state,
                         location.country,
+                        location_provenance.label,
+                        location_provenance.confidence,
                     )
             except Exception as exc:
                 location_status = "error"
@@ -201,8 +216,10 @@ def plan_organization_operations(
                 destination=destination_file,
                 mode=mode,
                 date_fallback=resolved_dt.used_fallback,
+                date_provenance=resolved_dt.provenance,
                 coordinates=coordinates,
                 location=location,
+                location_provenance=location_provenance,
                 location_status=location_status,
                 organization_fallback=organization_fallback,
             )

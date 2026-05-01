@@ -191,6 +191,29 @@ filesystem `mtime` as a heuristic. Location organization currently uses EXIF
 GPS coordinates and reverse geocoding; XMP, IPTC-IIM and PNG metadata entries
 are reserved by policy for future extractors.
 
+### Metadata provenance model
+
+Resolved metadata values carry provenance so reports, logs and debug output can
+explain why a value was selected. The internal provenance model stores:
+
+- `source`: metadata source, such as `EXIF`, `XMP`, `IPTC-IIM`, `PNG`,
+  `filesystem` or `Reverse geocoding`;
+- `field`: source field, such as `DateTimeOriginal`, `GPSInfo` or `mtime`;
+- `confidence`: `high`, `medium` or `low`;
+- `raw_value`: original value used before normalization.
+
+Examples:
+
+- `EXIF:DateTimeOriginal` with high confidence for the capture date;
+- `EXIF:GPSInfo` with high confidence for GPS coordinates;
+- `Reverse geocoding:GPSLatitudeDecimal,GPSLongitudeDecimal` with medium
+  confidence for city/state/country derived from coordinates;
+- `filesystem:mtime` with low confidence when no embedded date is available.
+
+This makes it possible to answer questions such as "why was this date chosen?"
+or "why was this location selected?" from the planned operation and audit
+report data.
+
 ### Naming and planning
 
 - default naming format: `YYYY-MM-DD_HH-MM-SS.ext`;
@@ -622,14 +645,14 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value
 ```
 
 When reverse geocoding is enabled, execution reports also include location
 fields:
 
 ```text
-location_status,organization_fallback,latitude,longitude,city,state,country
+location_status,organization_fallback,latitude,longitude,city,state,country,gps_source,gps_field,gps_confidence,gps_raw_value,location_source,location_field,location_confidence,location_raw_value
 ```
 
 ## Duplicate report format

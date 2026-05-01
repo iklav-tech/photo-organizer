@@ -10,7 +10,7 @@ from datetime import datetime
 from photo_organizer.cli import main
 from photo_organizer.executor import FileOperation
 from photo_organizer.geocoding import ReverseGeocodedLocation
-from photo_organizer.metadata import GPSCoordinates
+from photo_organizer.metadata import GPSCoordinates, MetadataProvenance
 
 
 def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
@@ -823,6 +823,10 @@ def test_organize_writes_valid_structured_execution_report(
             "action": "copy",
             "status": "success",
             "observations": "",
+            "date_source": "filesystem",
+            "date_field": "mtime",
+            "date_confidence": "low",
+            "date_raw_value": json.dumps(expected_ts),
         }
     ]
 
@@ -871,6 +875,10 @@ def test_organize_report_includes_error_status_and_observation(
             "action": "copy",
             "status": "error",
             "observations": "permission denied",
+            "date_source": "",
+            "date_field": "",
+            "date_confidence": "",
+            "date_raw_value": "",
         }
     ]
 
@@ -884,11 +892,37 @@ def test_organize_report_includes_resolved_location(
             source=Path("input/good.jpg"),
             destination=Path("out/good.jpg"),
             mode="copy",
-            coordinates=GPSCoordinates(latitude=-23.5, longitude=-46.625),
+            date_provenance=MetadataProvenance(
+                source="EXIF",
+                field="DateTimeOriginal",
+                confidence="high",
+                raw_value="2024:08:15 14:32:09",
+            ),
+            coordinates=GPSCoordinates(
+                latitude=-23.5,
+                longitude=-46.625,
+                provenance=MetadataProvenance(
+                    source="EXIF",
+                    field="GPSInfo",
+                    confidence="high",
+                    raw_value={
+                        "GPSLatitudeRef": "S",
+                        "GPSLatitude": (23, 30, 0),
+                        "GPSLongitudeRef": "W",
+                        "GPSLongitude": (46, 37, 30),
+                    },
+                ),
+            ),
             location=ReverseGeocodedLocation(
                 city="Sao Paulo",
                 state="Sao Paulo",
                 country="Brazil",
+            ),
+            location_provenance=MetadataProvenance(
+                source="Reverse geocoding",
+                field="GPSLatitudeDecimal,GPSLongitudeDecimal",
+                confidence="medium",
+                raw_value={"latitude": -23.5, "longitude": -46.625},
             ),
         )
     ]
@@ -926,6 +960,21 @@ def test_organize_report_includes_resolved_location(
     assert report["operations"][0]["city"] == "Sao Paulo"
     assert report["operations"][0]["state"] == "Sao Paulo"
     assert report["operations"][0]["country"] == "Brazil"
+    assert report["operations"][0]["date_source"] == "EXIF"
+    assert report["operations"][0]["date_field"] == "DateTimeOriginal"
+    assert report["operations"][0]["date_confidence"] == "high"
+    assert report["operations"][0]["date_raw_value"] == json.dumps(
+        "2024:08:15 14:32:09"
+    )
+    assert report["operations"][0]["gps_source"] == "EXIF"
+    assert report["operations"][0]["gps_field"] == "GPSInfo"
+    assert report["operations"][0]["gps_confidence"] == "high"
+    assert report["operations"][0]["location_source"] == "Reverse geocoding"
+    assert (
+        report["operations"][0]["location_field"]
+        == "GPSLatitudeDecimal,GPSLongitudeDecimal"
+    )
+    assert report["operations"][0]["location_confidence"] == "medium"
 
 
 def test_organize_report_marks_missing_gps_when_reverse_geocoding_requested(
@@ -1028,6 +1077,10 @@ def test_organize_writes_valid_csv_execution_report(
             "action": "copy",
             "status": "success",
             "observations": "",
+            "date_source": "",
+            "date_field": "",
+            "date_confidence": "",
+            "date_raw_value": "",
         },
         {
             "source": "input/bad.jpg",
@@ -1035,5 +1088,9 @@ def test_organize_writes_valid_csv_execution_report(
             "action": "copy",
             "status": "error",
             "observations": "permission denied",
+            "date_source": "",
+            "date_field": "",
+            "date_confidence": "",
+            "date_raw_value": "",
         },
     ]

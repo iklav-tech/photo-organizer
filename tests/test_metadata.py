@@ -214,6 +214,18 @@ def test_extract_gps_coordinates_returns_decimal_coordinates(
     result = metadata.extract_gps_coordinates(file_path)
 
     assert result == metadata.GPSCoordinates(latitude=-12.258333333333333, longitude=45.5)
+    assert result is not None
+    assert result.provenance == metadata.MetadataProvenance(
+        source="EXIF",
+        field="GPSInfo",
+        confidence="high",
+        raw_value={
+            "GPSLatitudeRef": "S",
+            "GPSLatitude": (12, 15, 30),
+            "GPSLongitudeRef": "E",
+            "GPSLongitude": (45, 30, 0),
+        },
+    )
 
 
 def test_extract_gps_coordinates_returns_none_without_gps(
@@ -365,6 +377,14 @@ def test_get_best_available_datetime_prioritizes_datetimeoriginal(
     assert result == datetime(2024, 1, 2, 3, 4, 5)
     assert isinstance(result, datetime)
 
+    resolution = metadata.resolve_best_available_datetime(file_path)
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="EXIF",
+        field="DateTimeOriginal",
+        confidence="high",
+        raw_value="2024:01:02 03:04:05",
+    )
+
 
 def test_get_best_available_datetime_uses_createdate_as_second_option(
     tmp_path: Path, monkeypatch
@@ -384,6 +404,14 @@ def test_get_best_available_datetime_uses_createdate_as_second_option(
 
     assert result == datetime(2021, 6, 7, 8, 9, 10)
     assert isinstance(result, datetime)
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="EXIF",
+        field="CreateDate",
+        confidence="medium",
+        raw_value="2021:06:07 08:09:10",
+    )
 
 
 def test_get_best_available_datetime_falls_back_to_file_modification_time(
@@ -408,6 +436,14 @@ def test_get_best_available_datetime_falls_back_to_file_modification_time(
 
     assert result == datetime.fromtimestamp(timestamp)
     assert isinstance(result, datetime)
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="filesystem",
+        field="mtime",
+        confidence="low",
+        raw_value=timestamp,
+    )
 
 
 def test_get_best_available_datetime_logs_fallback_decision(

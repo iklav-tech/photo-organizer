@@ -17,7 +17,7 @@ Roles:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 MetadataFieldName = Literal["date_taken", "location", "title", "author", "description"]
 MetadataSourceRole = Literal["primary", "fallback", "heuristic"]
 MetadataSupportStatus = Literal["implemented", "planned"]
+MetadataConfidence = Literal["high", "medium", "low"]
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,21 @@ class MetadataPrecedenceRule:
     keys: tuple[str, ...]
     support: MetadataSupportStatus
     notes: str = ""
+
+
+@dataclass(frozen=True)
+class MetadataProvenance:
+    """Origin details for a resolved metadata value."""
+
+    source: str
+    field: str
+    confidence: MetadataConfidence
+    raw_value: Any
+
+    @property
+    def label(self) -> str:
+        """Return a concise source label such as EXIF:DateTimeOriginal."""
+        return f"{self.source}:{self.field}"
 
 
 METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
@@ -225,6 +241,7 @@ class DateTimeResolution:
 
     value: datetime
     used_fallback: bool
+    provenance: MetadataProvenance | None = None
 
 
 @dataclass(frozen=True)
@@ -233,6 +250,10 @@ class GPSCoordinates:
 
     latitude: float
     longitude: float
+    provenance: MetadataProvenance | None = dataclass_field(
+        default=None,
+        compare=False,
+    )
 
 
 def _parse_exif_datetime(value: Any) -> datetime | None:
@@ -345,7 +366,16 @@ def _extract_gps_coordinates_from_fields(fields: dict[str, Any]) -> GPSCoordinat
     if latitude is None or longitude is None:
         return None
 
-    return GPSCoordinates(latitude=latitude, longitude=longitude)
+    return GPSCoordinates(
+        latitude=latitude,
+        longitude=longitude,
+        provenance=MetadataProvenance(
+            source="EXIF",
+            field="GPSInfo",
+            confidence="high",
+            raw_value=gps_info,
+        ),
+    )
 
 
 def _read_exif_datetime_fields(path: Path) -> dict[str, Any]:
@@ -435,15 +465,49 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
     exif_fields = _read_exif_datetime_fields(file_path)
 
     for field_name in ("DateTimeOriginal", "CreateDate"):
-        parsed = _parse_exif_datetime(exif_fields.get(field_name))
+        raw_value = exif_fields.get(field_name)
+        parsed = _parse_exif_datetime(raw_value)
         if parsed is not None:
-            logger.info("Datetime resolved from %s for file=%s", field_name, file_path)
-            return DateTimeResolution(value=parsed, used_fallback=False)
+            confidence: MetadataConfidence = (
+                "high" if field_name == "DateTimeOriginal" else "medium"
+            )
+            provenance = MetadataProvenance(
+                source="EXIF",
+                field=field_name,
+                confidence=confidence,
+                raw_value=raw_value,
+            )
+            logger.info(
+                "Datetime resolved: file=%s source=%s field=%s confidence=%s",
+                file_path,
+                provenance.source,
+                provenance.field,
+                provenance.confidence,
+            )
+            return DateTimeResolution(
+                value=parsed,
+                used_fallback=False,
+                provenance=provenance,
+            )
 
-    logger.info("Datetime fallback to file modification time for file=%s", file_path)
+    mtime = file_path.stat().st_mtime
+    provenance = MetadataProvenance(
+        source="filesystem",
+        field="mtime",
+        confidence="low",
+        raw_value=mtime,
+    )
+    logger.info(
+        "Datetime fallback to file modification time for file=%s source=%s field=%s confidence=%s",
+        file_path,
+        provenance.source,
+        provenance.field,
+        provenance.confidence,
+    )
     return DateTimeResolution(
-        value=datetime.fromtimestamp(file_path.stat().st_mtime),
+        value=datetime.fromtimestamp(mtime),
         used_fallback=True,
+        provenance=provenance,
     )
 
 
