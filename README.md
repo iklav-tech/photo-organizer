@@ -6,11 +6,11 @@ Repository: https://github.com/iklav-tech/photo-organizer
 
 ## Changelog
 
-Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered v0.1.0, v0.2.0 and v0.3.0 scope.
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered v0.1.0, v0.2.0, v0.3.0 and v0.4.0 scope.
 
 ## Current status
 
-The project includes a tested v0.3.0 CLI workflow:
+The project includes a tested v0.4.0 CLI workflow:
 
 - CLI with `scan` and `organize` commands;
 - `dedupe` command for read-only duplicate discovery;
@@ -23,8 +23,12 @@ The project includes a tested v0.3.0 CLI workflow:
 - duplicate image grouping by content hash with original/duplicates output;
 - structured duplicate reports in JSON or CSV for later analysis;
 - date resolution with EXIF priority and fallback;
-- deterministic naming rules;
-- destination folder planning by date (`YYYY/MM/DD`);
+- GPS coordinate extraction from EXIF metadata;
+- optional reverse geocoding from GPS coordinates to city, state and country;
+- deterministic default naming rules;
+- configurable filename patterns through CLI or configuration files;
+- destination folder planning by date (`YYYY/MM/DD`), location, location plus
+  date, custom destination pattern, or city/state/month hybrid strategy;
 - explicit planning layer separated from execution;
 - automatic destination directory creation;
 - safe move behavior that removes the source only after a successful copy;
@@ -53,7 +57,7 @@ Portuguese summary: Organizador de fotos em Python via linha de comando, com ren
 
 ## About the project
 
-**photo-organizer** is a Python command-line tool designed to rename, copy, move, and organize photos automatically based on metadata such as date, time, and, in the future, location.
+**photo-organizer** is a Python command-line tool designed to rename, copy, move, and organize photos automatically based on metadata such as date, time and location.
 
 This project was created for study and hands-on Python practice, covering topics such as:
 
@@ -73,10 +77,11 @@ Example use cases:
 
 - rename files based on the photo date/time;
 - organize photos into folders by year, month, and day;
+- organize photos by city, state and month when GPS metadata is available;
+- customize generated filenames and destination paths;
 - avoid filename conflicts;
 - run in simulation mode before changing real files;
 - export an audit report of what happened;
-- eventually organize by location;
 - find duplicate images by content hash before organizing or cleaning a collection;
 - export duplicate reports for spreadsheet or automated analysis.
 
@@ -96,7 +101,8 @@ Example use cases:
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
-- clear argument errors for missing required parameters and invalid report extensions.
+- clear argument errors for missing required parameters, invalid report
+  extensions, invalid configuration and invalid filename patterns.
 
 ### Scan behavior
 
@@ -134,6 +140,9 @@ EXIF from that format.
   2. `CreateDate`
   3. file `mtime` fallback
 - normalized output as `datetime`.
+- GPS coordinates normalized to decimal degrees when available;
+- missing GPS data handled safely without interrupting the run;
+- reverse geocoding failures are treated as unresolved location data.
 
 ### Naming and planning
 
@@ -145,6 +154,10 @@ EXIF from that format.
 - collision handling with suffixes such as `_01`, `_02`, `_03`;
 - destination directory structure: `YYYY/MM/DD`;
 - optional configured destination format through `destination.pattern`;
+- built-in organization strategies for date, location, location plus date, and
+  city/state/month hybrid paths;
+- location strategies automatically request reverse geocoding and fall back to
+  date-based organization when GPS or location resolution is unavailable;
 - `pathlib`-based path generation for Linux/Windows compatibility.
 
 ### External configuration
@@ -165,7 +178,7 @@ behavior:
   mode: copy
   dry_run: true
   plan: false
-  reverse_geocode: false
+  reverse_geocode: true
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -258,7 +271,9 @@ photo-organizer/
       __init__.py
       __main__.py
       cli.py
+      config.py
       constants.py
+      geocoding.py
       scanner.py
       metadata.py
       hashing.py
@@ -269,6 +284,8 @@ photo-organizer/
   tests/
     test_import.py
     test_cli.py
+    test_config.py
+    test_geocoding.py
     test_scanner.py
     test_executor.py
     test_integration.py
@@ -281,11 +298,13 @@ photo-organizer/
 ## Module responsibilities
 
 - `cli.py`: command-line interface and command orchestration;
+- `config.py`: external JSON/YAML configuration loading and validation;
 - `scanner.py`: recursive file scanning and extension filtering;
-- `metadata.py`: EXIF extraction and best-date resolution;
+- `metadata.py`: EXIF extraction, GPS extraction and best-date resolution;
+- `geocoding.py`: reverse geocoding from GPS coordinates to city, state and country;
 - `hashing.py`: deterministic file/image hashes, safe digest comparison and duplicate grouping;
-- `naming.py`: deterministic filename generation;
-- `planner.py`: destination folder planning by date;
+- `naming.py`: deterministic and pattern-based filename generation;
+- `planner.py`: destination folder planning by date, location and custom patterns;
 - `executor.py`: operation planning and execution/simulation;
 - `logging_config.py`: logging setup and level control;
 - `constants.py`: centralized image format definitions, including EXIF capability flags.
@@ -304,11 +323,48 @@ Example generated filename:
 2024-08-15_14-32-09.jpg
 ```
 
+Custom filename pattern example:
+
+```bash
+photo-organizer organize ~/Photos --output ~/OrganizedPhotos --name-pattern "{date:%Y%m%d_%H%M%S}_{stem}{ext}"
+```
+
+For an original file named `IMG_1034.jpg` taken at `2024-08-15 14:32:09`,
+that pattern produces:
+
+```text
+20240815_143209_IMG_1034.jpg
+```
+
 Example folder organization:
 
 ```text
 Photos/2024/08/15/2024-08-15_14-32-09.jpg
 ```
+
+Example hybrid location and month organization:
+
+```text
+Photos/Paraty-RJ/2024-08/2024-08-15_14-32-09.jpg
+```
+
+Available filename fields:
+
+- `{date}`: resolved photo datetime, with optional datetime formatting such as
+  `{date:%Y%m%d_%H%M%S}`;
+- `{stem}`: original filename without extension;
+- `{ext}`: original extension, including the leading dot;
+- `{original}`: original filename with extension.
+
+Filename patterns cannot contain path separators. Unknown fields or invalid
+patterns return a clear CLI/configuration error before planning starts.
+
+Available destination fields for `destination.pattern`:
+
+- `{date}`: resolved photo datetime, with optional datetime formatting;
+- `{country}`: resolved country or `Unknown`;
+- `{state}`: resolved state or `Unknown`;
+- `{city}`: resolved city or `Unknown`.
 
 When a destination already exists, the organizer does not overwrite it by default. It appends the next available numeric suffix:
 
@@ -404,6 +460,34 @@ photo-organizer organize ~/Photos --output ~/OrganizedPhotos --by date
 photo-organizer organize ~/Photos --output ~/OrganizedPhotos --by city-state-month
 ```
 
+This strategy uses reverse geocoding and writes files under paths like
+`Paraty-RJ/2024-08`. If GPS is missing or the location cannot be resolved, it
+falls back to the default date path.
+
+### Example: custom filename pattern
+
+```bash
+photo-organizer organize ~/Photos --output ~/OrganizedPhotos --name-pattern "{date:%Y%m%d_%H%M%S}_{stem}{ext}"
+```
+
+### Example: external configuration file
+
+```bash
+photo-organizer organize ~/Photos --config organizer.yaml
+```
+
+```yaml
+output: ~/OrganizedPhotos
+naming:
+  pattern: "{date:%Y%m%d_%H%M%S}_{stem}{ext}"
+destination:
+  strategy: city-state-month
+behavior:
+  mode: copy
+  dry_run: true
+  reverse_geocode: true
+```
+
 ### Example: simulation mode
 
 ```bash
@@ -455,7 +539,7 @@ If the directory does not exist, the CLI returns a clear error message and non-z
 [INFO] Generated execution plan: operations=248 strategy=date
 [INFO] DRY-RUN enabled: no files will be changed
 [INFO] [DRY-RUN] MOVE /home/user/Photos/IMG_1034.jpg -> /home/user/OrganizedPhotos/2024/08/15/2024-08-15_14-32-09.jpg
-[INFO] Execution summary: mode=dry-run processed_files=248 ignored_files=12 error_files=0 fallback_files=31
+[INFO] Execution summary: mode=dry-run processed_files=248 ignored_files=12 error_files=0 fallback_files=31 location_files=0 gps_files=0 missing_gps_files=0 organization_fallback_files=0
 [INFO] Execution finished: organize processed_files=248
 ```
 
@@ -470,7 +554,11 @@ JSON reports include a summary and operation rows:
     "processed_files": 1,
     "ignored_files": 0,
     "error_files": 0,
-    "fallback_files": 1
+    "fallback_files": 1,
+    "location_files": 0,
+    "gps_files": 0,
+    "missing_gps_files": 0,
+    "organization_fallback_files": 0
   },
   "operations": [
     {
@@ -488,6 +576,13 @@ CSV reports use the following columns:
 
 ```text
 source,destination,action,status,observations
+```
+
+When reverse geocoding is enabled, execution reports also include location
+fields:
+
+```text
+location_status,organization_fallback,latitude,longitude,city,state,country
 ```
 
 ## Duplicate report format
@@ -527,7 +622,8 @@ group_id,hash,quantity,role,path
 
 ## Libraries
 
-The project uses mostly Python standard library plus Pillow for EXIF handling.
+The project uses mostly Python standard library, plus Pillow for EXIF handling
+and PyYAML for YAML configuration files.
 
 ### Standard library
 
@@ -540,13 +636,13 @@ The project uses mostly Python standard library plus Pillow for EXIF handling.
 - `logging`
 - `csv`
 - `json`
+- `urllib`
 
-### Possible external libraries
+### External libraries
 
 - `Pillow` for EXIF support;
-- `geopy` for geocoding;
-- `typer` for a more modern CLI;
-- `pytest` for testing.
+- `PyYAML` for YAML configuration support;
+- `pytest` for development testing.
 
 ## Best practices adopted
 
@@ -560,6 +656,9 @@ The project uses mostly Python standard library plus Pillow for EXIF handling.
 - non-overwriting destination conflict handling;
 - structured audit reports;
 - structured duplicate reports;
+- external configuration validation;
+- configurable naming and destination patterns;
+- GPS and reverse-geocoding workflows with fallback behavior;
 - deterministic chunked hashing for large files;
 - safe digest comparison;
 - test-ready code;
@@ -711,6 +810,62 @@ This section consolidates what was implemented after the v0.2.0 workflow.
 - tests use temporary files and directories;
 - CLI tests cover `dedupe`, duplicate reports and no-duplicate output.
 
+## Version v0.4.0 delivered scope
+
+This section consolidates the configuration, naming and location work delivered
+after the v0.3.0 workflow.
+
+### External configuration
+
+- `organize` accepts `--config PATH` for JSON, YAML and YML files;
+- configuration can define output directory, filename pattern, destination
+  pattern, strategy and behavior settings;
+- supported behavior settings include operation mode, dry-run, plan mode and
+  reverse geocoding;
+- configuration is validated before planning starts;
+- invalid file paths, unsupported extensions, invalid field types and invalid
+  strategy values produce clear errors.
+
+### Custom filename patterns
+
+- filenames can be customized with `naming.pattern` in config files;
+- filenames can also be customized directly with CLI `--name-pattern`;
+- CLI `--name-pattern` takes precedence over config `naming.pattern`;
+- supported filename fields are `{date}`, `{stem}`, `{ext}` and `{original}`;
+- invalid fields, empty patterns and path separators produce clear errors.
+
+### Destination patterns and strategies
+
+- destination paths can be customized with `destination.pattern`;
+- destination patterns support `{date}`, `{country}`, `{state}` and `{city}`;
+- built-in strategies include `date`, `location`, `location-date` and
+  `city-state-month`;
+- `city-state-month` creates paths like `Paraty-RJ/2024-08`;
+- location-based strategies automatically enable reverse geocoding unless the
+  user explicitly disables it, in which case the CLI returns a clear error.
+
+### GPS and location behavior
+
+- EXIF GPS latitude and longitude can be extracted and normalized to decimal
+  coordinates;
+- GPS absence is represented as missing location data instead of an execution
+  failure;
+- reverse geocoding resolves coordinates into city, state and country;
+- network/service failures during reverse geocoding are handled as unresolved
+  location data;
+- when a location strategy cannot resolve a location, organization falls back
+  to the default date-based path and marks `organization_fallback`.
+
+### Reports and tests
+
+- execution summaries include GPS, resolved location, missing GPS and
+  organization fallback counters;
+- location-aware reports include location status, fallback flag, coordinates,
+  city, state and country;
+- tests cover GPS coordinate extraction, missing GPS, reverse geocoding,
+  location fallback, custom filename patterns, external config and the
+  `city-state-month` strategy.
+
 ## Roadmap
 
 ### Version 0.1.0
@@ -723,20 +878,36 @@ This section consolidates what was implemented after the v0.2.0 workflow.
 - implemented and stabilized (see Version v0.3.0 delivered scope section).
 
 ### Version 0.4.0
-- support for more media types (including videos);
-- richer filtering (include/exclude and depth controls);
-- performance improvements for large collections.
+- implemented and stabilized (see Version v0.4.0 delivered scope section).
 
 ### Version 0.5.0
-- GPS/EXIF support;
-- location-based organization;
-- reverse geocoding;
-- external configuration;
+- support for more media types (including videos);
+- richer filtering (include/exclude and depth controls);
+- performance improvements for large collections;
 - richer report analytics.
+
+### Version 0.6.0
+- HEIC/HEIF support for iPhone and iPad photo collections;
+- investigate metadata extraction and decoding requirements for the HEIF
+  ecosystem, including Apple's `public.heic` type;
+- evaluate standard non-Apple decoding paths such as `libheif` and compatible
+  Python bindings;
+- define install and fallback behavior for environments without HEIF decoding
+  libraries.
+
+### Version 0.7.0
+- proprietary RAW format support;
+- evaluate manufacturer-specific formats such as Canon CR2/CR3, Nikon NEF,
+  Sony ARW and Panasonic RW2;
+- investigate ExifTool integration for broad metadata extraction across RAW
+  formats;
+- evaluate Adobe DNG as a more universal RAW interchange/conversion target;
+- define extension handling, metadata reliability and fallback behavior for
+  camera-specific RAW files.
 
 ## Project status
 
-In active development, with a stable tested v0.3.0 workflow for scan, organize
+In active development, with a stable tested v0.4.0 workflow for scan, organize
 and dedupe flows.
 
 ## Motivation
