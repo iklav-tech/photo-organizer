@@ -144,6 +144,53 @@ EXIF from that format.
 - missing GPS data handled safely without interrupting the run;
 - reverse geocoding failures are treated as unresolved location data.
 
+### Metadata precedence and compatibility matrix
+
+When multiple metadata sources can describe the same logical field, the
+organizer follows a single precedence policy. Each candidate is classified as:
+
+- **Primary**: preferred authoritative embedded metadata;
+- **Fallback**: accepted embedded metadata when primary data is unavailable;
+- **Heuristic**: derived or filesystem data used only when embedded metadata is
+  missing or unusable.
+
+Current support status:
+
+- **Implemented**: already read or used by the current code;
+- **Planned**: formal policy is defined, but extraction support is not yet
+  implemented.
+
+| Field | Priority | Source | Keys | Role | Status |
+| --- | ---: | --- | --- | --- | --- |
+| `date_taken` | 1 | EXIF | `DateTimeOriginal` | Primary | Implemented |
+| `date_taken` | 2 | EXIF | `CreateDate`, `DateTime`, `DateTimeDigitized` | Fallback | Implemented |
+| `date_taken` | 3 | XMP | `exif:DateTimeOriginal`, `xmp:CreateDate` | Fallback | Planned |
+| `date_taken` | 4 | IPTC-IIM | `DateCreated`, `TimeCreated` | Fallback | Planned |
+| `date_taken` | 5 | PNG metadata | `Creation Time`, `CreationTime` | Fallback | Planned |
+| `date_taken` | 6 | Filesystem | `mtime` | Heuristic | Implemented |
+| `location` | 1 | EXIF | `GPSInfo`, `GPSLatitude`, `GPSLongitude` | Primary | Implemented |
+| `location` | 2 | XMP | `exif:GPSLatitude`, `exif:GPSLongitude` | Fallback | Planned |
+| `location` | 3 | IPTC-IIM | `City`, `Province-State`, `Country-PrimaryLocationName` | Fallback | Planned |
+| `location` | 4 | Reverse geocoding | `GPSLatitudeDecimal`, `GPSLongitudeDecimal` | Heuristic | Implemented |
+| `title` | 1 | XMP | `dc:title`, `photoshop:Headline` | Primary | Planned |
+| `title` | 2 | IPTC-IIM | `ObjectName`, `Headline` | Fallback | Planned |
+| `title` | 3 | PNG metadata | `Title` | Fallback | Planned |
+| `title` | 4 | EXIF | `ImageDescription` | Fallback | Planned |
+| `author` | 1 | XMP | `dc:creator` | Primary | Planned |
+| `author` | 2 | IPTC-IIM | `By-line`, `Writer-Editor` | Fallback | Planned |
+| `author` | 3 | PNG metadata | `Author` | Fallback | Planned |
+| `author` | 4 | EXIF | `Artist`, `Copyright` | Fallback | Planned |
+| `description` | 1 | XMP | `dc:description` | Primary | Planned |
+| `description` | 2 | IPTC-IIM | `Caption-Abstract` | Fallback | Planned |
+| `description` | 3 | PNG metadata | `Description`, `Comment` | Fallback | Planned |
+| `description` | 4 | EXIF | `ImageDescription`, `UserComment` | Fallback | Planned |
+
+The current `date_taken` resolver implements the supported subset of this
+policy: EXIF `DateTimeOriginal`, then EXIF `CreateDate`/aliases, then
+filesystem `mtime` as a heuristic. Location organization currently uses EXIF
+GPS coordinates and reverse geocoding; XMP, IPTC-IIM and PNG metadata entries
+are reserved by policy for future extractors.
+
 ### Naming and planning
 
 - default naming format: `YYYY-MM-DD_HH-MM-SS.ext`;

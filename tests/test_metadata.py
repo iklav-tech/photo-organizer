@@ -7,6 +7,55 @@ import logging
 import photo_organizer.metadata as metadata
 
 
+def test_metadata_precedence_policy_covers_required_fields() -> None:
+    fields = {
+        rule.field
+        for rule in metadata.get_metadata_precedence_policy()
+    }
+
+    assert fields == {
+        "date_taken",
+        "location",
+        "title",
+        "author",
+        "description",
+    }
+
+
+def test_metadata_precedence_policy_declares_roles_and_support_status() -> None:
+    for field in ("date_taken", "location", "title", "author", "description"):
+        rules = metadata.get_metadata_precedence_policy(field)
+
+        assert rules
+        assert rules[0].role == "primary"
+        assert all(rule.role in {"primary", "fallback", "heuristic"} for rule in rules)
+        assert all(rule.support in {"implemented", "planned"} for rule in rules)
+
+
+def test_date_taken_policy_orders_primary_fallback_and_heuristic_sources() -> None:
+    rules = metadata.get_metadata_precedence_policy("date_taken")
+
+    assert [(rule.role, rule.source, rule.keys) for rule in rules] == [
+        ("primary", "EXIF", ("DateTimeOriginal",)),
+        ("fallback", "EXIF", ("CreateDate", "DateTime", "DateTimeDigitized")),
+        ("fallback", "XMP", ("exif:DateTimeOriginal", "xmp:CreateDate")),
+        ("fallback", "IPTC-IIM", ("DateCreated", "TimeCreated")),
+        ("fallback", "PNG metadata", ("Creation Time", "CreationTime")),
+        ("heuristic", "Filesystem", ("mtime",)),
+    ]
+
+
+def test_location_policy_distinguishes_gps_source_and_reverse_geocoding() -> None:
+    rules = metadata.get_metadata_precedence_policy("location")
+
+    assert [(rule.role, rule.source) for rule in rules] == [
+        ("primary", "EXIF"),
+        ("fallback", "XMP"),
+        ("fallback", "IPTC-IIM"),
+        ("heuristic", "Reverse geocoding"),
+    ]
+
+
 def test_extract_exif_metadata_reads_compatible_jpeg_exif(
     tmp_path: Path, monkeypatch
 ) -> None:

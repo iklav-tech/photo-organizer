@@ -1,4 +1,19 @@
-"""Metadata helpers for photo dates."""
+"""Metadata helpers for photo dates.
+
+Metadata conflict policy
+------------------------
+
+The organizer resolves metadata conflicts through the explicit
+``METADATA_PRECEDENCE_POLICY`` matrix below. Each candidate declares the logical
+field it can populate, the metadata source, the source role and whether the
+current reader already implements it.
+
+Roles:
+- ``primary``: preferred authoritative embedded metadata for that field.
+- ``fallback``: accepted embedded metadata when primary data is unavailable.
+- ``heuristic``: derived or filesystem data used only when embedded metadata is
+  absent or unusable.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +21,202 @@ from dataclasses import dataclass
 from datetime import datetime
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS
 
 
 logger = logging.getLogger(__name__)
+
+
+MetadataFieldName = Literal["date_taken", "location", "title", "author", "description"]
+MetadataSourceRole = Literal["primary", "fallback", "heuristic"]
+MetadataSupportStatus = Literal["implemented", "planned"]
+
+
+@dataclass(frozen=True)
+class MetadataPrecedenceRule:
+    """One ordered metadata candidate for resolving a logical field."""
+
+    field: MetadataFieldName
+    role: MetadataSourceRole
+    source: str
+    keys: tuple[str, ...]
+    support: MetadataSupportStatus
+    notes: str = ""
+
+
+METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="primary",
+        source="EXIF",
+        keys=("DateTimeOriginal",),
+        support="implemented",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="fallback",
+        source="EXIF",
+        keys=("CreateDate", "DateTime", "DateTimeDigitized"),
+        support="implemented",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="fallback",
+        source="XMP",
+        keys=("exif:DateTimeOriginal", "xmp:CreateDate"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="fallback",
+        source="IPTC-IIM",
+        keys=("DateCreated", "TimeCreated"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="fallback",
+        source="PNG metadata",
+        keys=("Creation Time", "CreationTime"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="heuristic",
+        source="Filesystem",
+        keys=("mtime",),
+        support="implemented",
+        notes="Used only when embedded date metadata is missing or invalid.",
+    ),
+    MetadataPrecedenceRule(
+        field="location",
+        role="primary",
+        source="EXIF",
+        keys=("GPSInfo", "GPSLatitude", "GPSLongitude"),
+        support="implemented",
+    ),
+    MetadataPrecedenceRule(
+        field="location",
+        role="fallback",
+        source="XMP",
+        keys=("exif:GPSLatitude", "exif:GPSLongitude"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="location",
+        role="fallback",
+        source="IPTC-IIM",
+        keys=("City", "Province-State", "Country-PrimaryLocationName"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="location",
+        role="heuristic",
+        source="Reverse geocoding",
+        keys=("GPSLatitudeDecimal", "GPSLongitudeDecimal"),
+        support="implemented",
+        notes="Derives city/state/country from resolved GPS coordinates.",
+    ),
+    MetadataPrecedenceRule(
+        field="title",
+        role="primary",
+        source="XMP",
+        keys=("dc:title", "photoshop:Headline"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="title",
+        role="fallback",
+        source="IPTC-IIM",
+        keys=("ObjectName", "Headline"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="title",
+        role="fallback",
+        source="PNG metadata",
+        keys=("Title",),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="title",
+        role="fallback",
+        source="EXIF",
+        keys=("ImageDescription",),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="author",
+        role="primary",
+        source="XMP",
+        keys=("dc:creator",),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="author",
+        role="fallback",
+        source="IPTC-IIM",
+        keys=("By-line", "Writer-Editor"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="author",
+        role="fallback",
+        source="PNG metadata",
+        keys=("Author",),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="author",
+        role="fallback",
+        source="EXIF",
+        keys=("Artist", "Copyright"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="description",
+        role="primary",
+        source="XMP",
+        keys=("dc:description",),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="description",
+        role="fallback",
+        source="IPTC-IIM",
+        keys=("Caption-Abstract",),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="description",
+        role="fallback",
+        source="PNG metadata",
+        keys=("Description", "Comment"),
+        support="planned",
+    ),
+    MetadataPrecedenceRule(
+        field="description",
+        role="fallback",
+        source="EXIF",
+        keys=("ImageDescription", "UserComment"),
+        support="planned",
+    ),
+)
+
+
+def get_metadata_precedence_policy(
+    field: MetadataFieldName | None = None,
+) -> tuple[MetadataPrecedenceRule, ...]:
+    """Return the ordered metadata precedence policy.
+
+    When ``field`` is provided, only rules for that logical field are returned,
+    preserving priority order.
+    """
+    if field is None:
+        return METADATA_PRECEDENCE_POLICY
+    return tuple(rule for rule in METADATA_PRECEDENCE_POLICY if rule.field == field)
 
 
 @dataclass(frozen=True)
@@ -220,10 +425,11 @@ def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:
 def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
     """Return the best available datetime plus fallback metadata.
 
-    Priority order:
-    1. EXIF DateTimeOriginal
-    2. EXIF CreateDate
-    3. File modification time (mtime)
+    Implements the currently supported `date_taken` subset of
+    `METADATA_PRECEDENCE_POLICY`:
+    1. EXIF DateTimeOriginal (primary)
+    2. EXIF CreateDate/DateTime/DateTimeDigitized (fallback)
+    3. Filesystem modification time (heuristic)
     """
     file_path = Path(path)
     exif_fields = _read_exif_datetime_fields(file_path)
