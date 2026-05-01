@@ -9,6 +9,16 @@ from photo_organizer.metadata import GPSCoordinates
 from photo_organizer.metadata import DateTimeResolution
 
 
+def _iptc_dataset(record: int, dataset: int, value: str) -> bytes:
+    raw_value = value.encode("utf-8")
+    return (
+        b"\x1c"
+        + bytes([record, dataset])
+        + len(raw_value).to_bytes(2, "big")
+        + raw_value
+    )
+
+
 def test_apply_operations_dry_run_move_does_not_modify_files(tmp_path: Path) -> None:
     source = tmp_path / "input.jpg"
     source.write_text("image-data")
@@ -474,6 +484,56 @@ def test_plan_organization_operations_city_state_month_falls_back_without_locati
     )
     assert operations[0].location_status == "missing-gps"
     assert operations[0].organization_fallback is True
+
+
+def test_plan_organization_operations_uses_iptc_location_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "legacy.jpg"
+    image.write_bytes(
+        _iptc_dataset(2, 90, "Paraty")
+        + _iptc_dataset(2, 95, "RJ")
+        + _iptc_dataset(2, 101, "Brasil")
+    )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+    )
+
+    assert operations[0].location == ReverseGeocodedLocation(
+        city="Paraty",
+        state="RJ",
+        country="Brasil",
+    )
+    assert operations[0].location_status == "resolved"
+    assert operations[0].location_provenance is not None
+    assert operations[0].location_provenance.source == "IPTC-IIM"
+    assert operations[0].location_provenance.field == "2:90,2:95,2:101"
+    assert operations[0].destination == (
+        output_dir / "Paraty-RJ" / "2024-08" / "2024-08-15_14-32-09.jpg"
+    )
 
 
 def test_plan_organization_operations_does_not_read_gps_when_geocoding_disabled(

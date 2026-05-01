@@ -14,6 +14,7 @@ from photo_organizer.geocoding import (
 from photo_organizer.metadata import (
     GPSCoordinates,
     MetadataProvenance,
+    extract_iptc_iim_location,
     extract_gps_coordinates,
     resolve_best_available_datetime,
 )
@@ -152,6 +153,25 @@ def plan_organization_operations(
                         location_provenance.label,
                         location_provenance.confidence,
                     )
+                if location is None:
+                    iptc_location = extract_iptc_iim_location(image_path)
+                    if iptc_location is not None:
+                        location_fields, location_provenance = iptc_location
+                        location = ReverseGeocodedLocation(
+                            city=location_fields.get("city"),
+                            state=location_fields.get("state"),
+                            country=location_fields.get("country"),
+                        )
+                        location_status = "resolved"
+                        logger.info(
+                            "Location resolved: source=%s city=%s state=%s country=%s provenance=%s confidence=%s",
+                            image_path,
+                            location.city,
+                            location.state,
+                            location.country,
+                            location_provenance.label,
+                            location_provenance.confidence,
+                        )
             except Exception as exc:
                 location_status = "error"
                 logger.warning(

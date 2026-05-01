@@ -91,7 +91,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="IPTC-IIM",
         keys=("DateCreated", "TimeCreated"),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="date_taken",
@@ -127,7 +127,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="IPTC-IIM",
         keys=("City", "Province-State", "Country-PrimaryLocationName"),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="location",
@@ -149,7 +149,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="IPTC-IIM",
         keys=("ObjectName", "Headline"),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="title",
@@ -177,7 +177,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="IPTC-IIM",
         keys=("By-line", "Writer-Editor"),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="author",
@@ -205,7 +205,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="IPTC-IIM",
         keys=("Caption-Abstract",),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="description",
@@ -284,6 +284,20 @@ XMP_RELEVANT_FIELDS = {
 }
 
 
+IPTC_IIM_DATASETS = {
+    (2, 5): "ObjectName",
+    (2, 55): "DateCreated",
+    (2, 60): "TimeCreated",
+    (2, 80): "By-line",
+    (2, 90): "City",
+    (2, 95): "Province-State",
+    (2, 101): "Country-PrimaryLocationName",
+    (2, 105): "Headline",
+    (2, 120): "Caption-Abstract",
+    (2, 122): "Writer-Editor",
+}
+
+
 def _parse_exif_datetime(value: Any) -> datetime | None:
     """Parse common EXIF datetime string formats into a datetime."""
     if value is None:
@@ -319,6 +333,31 @@ def _parse_exif_datetime(value: Any) -> datetime | None:
         pass
 
     return None
+
+
+def _parse_iptc_datetime(date_value: Any, time_value: Any = None) -> datetime | None:
+    """Parse IPTC-IIM DateCreated and optional TimeCreated fields."""
+    if isinstance(date_value, bytes):
+        date_value = date_value.decode("utf-8", errors="ignore")
+    if not isinstance(date_value, str):
+        return None
+
+    date_text = date_value.strip()
+    if not re.fullmatch(r"\d{8}", date_text):
+        return None
+
+    time_text = "000000"
+    if isinstance(time_value, bytes):
+        time_value = time_value.decode("utf-8", errors="ignore")
+    if isinstance(time_value, str) and time_value.strip():
+        match = re.match(r"^(\d{2})(\d{2})(\d{2})", time_value.strip())
+        if match:
+            time_text = "".join(match.groups())
+
+    try:
+        return datetime.strptime(f"{date_text}{time_text}", "%Y%m%d%H%M%S")
+    except ValueError:
+        return None
 
 
 def _rational_to_float(value: Any) -> float | None:
@@ -408,6 +447,83 @@ def _qualified_xmp_name(name: str) -> str:
         prefix = XMP_NAMESPACE_PREFIXES.get(namespace, namespace)
         return f"{prefix}:{local_name}"
     return name
+
+
+def _decode_iptc_value(value: bytes) -> str:
+    for encoding in ("utf-8", "latin-1"):
+        try:
+            return value.decode(encoding).strip("\x00").strip()
+        except UnicodeDecodeError:
+            continue
+    return value.decode("utf-8", errors="replace").strip("\x00").strip()
+
+
+def _read_iptc_dataset_length(data: bytes, offset: int) -> tuple[int, int] | None:
+    if offset + 2 > len(data):
+        return None
+
+    raw_length = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2
+    if raw_length & 0x8000:
+        length_byte_count = raw_length & 0x7FFF
+        if length_byte_count <= 0 or length_byte_count > 4:
+            return None
+        if offset + length_byte_count > len(data):
+            return None
+        length = int.from_bytes(data[offset : offset + length_byte_count], "big")
+        offset += length_byte_count
+        return length, offset
+
+    return raw_length, offset
+
+
+def extract_iptc_iim_metadata(path: str | Path) -> dict[str, Any]:
+    """Extract mapped IPTC-IIM datasets from any file containing IIM blocks.
+
+    Unknown datasets are ignored. Malformed blocks stop the local scan without
+    raising so legacy metadata never interrupts processing.
+    """
+    file_path = Path(path)
+    try:
+        data = file_path.read_bytes()
+    except OSError as exc:
+        logger.warning("Failed to read IPTC-IIM for file=%s error=%s", file_path, exc)
+        return {}
+
+    fields: dict[str, Any] = {}
+    offset = 0
+    while True:
+        marker_offset = data.find(b"\x1c", offset)
+        if marker_offset < 0:
+            break
+        if marker_offset + 5 > len(data):
+            break
+
+        record = data[marker_offset + 1]
+        dataset = data[marker_offset + 2]
+        length_info = _read_iptc_dataset_length(data, marker_offset + 3)
+        if length_info is None:
+            offset = marker_offset + 1
+            continue
+
+        value_length, value_offset = length_info
+        value_end = value_offset + value_length
+        if value_end > len(data):
+            offset = marker_offset + 1
+            continue
+
+        field_name = IPTC_IIM_DATASETS.get((record, dataset))
+        if field_name is not None:
+            value = _decode_iptc_value(data[value_offset:value_end])
+            if value:
+                fields[field_name] = value
+                fields.setdefault("IPTCIIMFieldSources", {})[
+                    field_name
+                ] = f"{record}:{dataset}"
+
+        offset = value_end
+
+    return fields
 
 
 def _extract_xmp_namespace_declarations(packet: str) -> dict[str, str]:
@@ -675,6 +791,34 @@ def _extract_xmp_gps_coordinates_from_fields(
     )
 
 
+def extract_iptc_iim_location(path: str | Path) -> tuple[dict[str, str], MetadataProvenance] | None:
+    """Return IPTC-IIM city/state/country fields with provenance when present."""
+    fields = extract_iptc_iim_metadata(path)
+    location = {
+        "city": fields.get("City"),
+        "state": fields.get("Province-State"),
+        "country": fields.get("Country-PrimaryLocationName"),
+    }
+    if all(value is None for value in location.values()):
+        return None
+
+    raw_value = {
+        key: value
+        for key, value in {
+            "City": fields.get("City"),
+            "Province-State": fields.get("Province-State"),
+            "Country-PrimaryLocationName": fields.get("Country-PrimaryLocationName"),
+        }.items()
+        if value is not None
+    }
+    return location, MetadataProvenance(
+        source="IPTC-IIM",
+        field="2:90,2:95,2:101",
+        confidence="medium",
+        raw_value=raw_value,
+    )
+
+
 def _read_exif_datetime_fields(path: Path) -> dict[str, Any]:
     """Read EXIF datetime-like fields from a file."""
     fields = extract_exif_metadata(path)
@@ -819,6 +963,35 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
                 used_fallback=False,
                 provenance=provenance,
             )
+
+    iptc_fields = extract_iptc_iim_metadata(file_path)
+    raw_date = iptc_fields.get("DateCreated")
+    parsed = _parse_iptc_datetime(raw_date, iptc_fields.get("TimeCreated"))
+    if parsed is not None:
+        raw_value = {
+            "DateCreated": raw_date,
+            "TimeCreated": iptc_fields.get("TimeCreated"),
+        }
+        provenance = MetadataProvenance(
+            source="IPTC-IIM",
+            field="2:55,2:60",
+            confidence="medium",
+            raw_value={
+                key: value for key, value in raw_value.items() if value is not None
+            },
+        )
+        logger.info(
+            "Datetime resolved: file=%s source=%s field=%s confidence=%s",
+            file_path,
+            provenance.source,
+            provenance.field,
+            provenance.confidence,
+        )
+        return DateTimeResolution(
+            value=parsed,
+            used_fallback=False,
+            provenance=provenance,
+        )
 
     mtime = file_path.stat().st_mtime
     provenance = MetadataProvenance(

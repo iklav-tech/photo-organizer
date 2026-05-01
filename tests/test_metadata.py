@@ -7,6 +7,16 @@ import logging
 import photo_organizer.metadata as metadata
 
 
+def _iptc_dataset(record: int, dataset: int, value: str) -> bytes:
+    raw_value = value.encode("utf-8")
+    return (
+        b"\x1c"
+        + bytes([record, dataset])
+        + len(raw_value).to_bytes(2, "big")
+        + raw_value
+    )
+
+
 def test_metadata_precedence_policy_covers_required_fields() -> None:
     fields = {
         rule.field
@@ -121,6 +131,75 @@ def test_extract_xmp_metadata_reads_relevant_fields_and_namespaces(
     assert result["XMPNamespaces"]["xmp"] == "http://ns.adobe.com/xap/1.0/"
     assert result["XMPNamespaces"]["exif"] == "http://ns.adobe.com/exif/1.0/"
     assert result["XMPNamespaces"]["photoshop"] == "http://ns.adobe.com/photoshop/1.0/"
+
+
+def test_extract_iptc_iim_metadata_reads_mapped_legacy_fields(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "legacy.jpg"
+    file_path.write_bytes(
+        b"prefix"
+        + _iptc_dataset(2, 55, "20240815")
+        + _iptc_dataset(2, 60, "143209")
+        + _iptc_dataset(2, 90, "Paraty")
+        + _iptc_dataset(2, 95, "RJ")
+        + _iptc_dataset(2, 101, "Brasil")
+        + _iptc_dataset(2, 5, "Trip")
+        + _iptc_dataset(2, 80, "Ana")
+        + _iptc_dataset(2, 120, "Beach day")
+        + b"suffix"
+    )
+
+    result = metadata.extract_iptc_iim_metadata(file_path)
+
+    assert result["DateCreated"] == "20240815"
+    assert result["TimeCreated"] == "143209"
+    assert result["City"] == "Paraty"
+    assert result["Province-State"] == "RJ"
+    assert result["Country-PrimaryLocationName"] == "Brasil"
+    assert result["ObjectName"] == "Trip"
+    assert result["By-line"] == "Ana"
+    assert result["Caption-Abstract"] == "Beach day"
+    assert result["IPTCIIMFieldSources"]["DateCreated"] == "2:55"
+
+
+def test_extract_iptc_iim_metadata_ignores_unmapped_fields(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "legacy.jpg"
+    file_path.write_bytes(
+        _iptc_dataset(2, 55, "20240815")
+        + _iptc_dataset(2, 999 % 256, "ignored")
+    )
+
+    result = metadata.extract_iptc_iim_metadata(file_path)
+
+    assert result["DateCreated"] == "20240815"
+    assert "ignored" not in result.values()
+
+
+def test_get_best_available_datetime_uses_iptc_when_exif_and_xmp_are_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "legacy.jpg"
+    file_path.write_bytes(
+        _iptc_dataset(2, 55, "20240815")
+        + _iptc_dataset(2, 60, "143209")
+    )
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.used_fallback is False
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="IPTC-IIM",
+        field="2:55,2:60",
+        confidence="medium",
+        raw_value={"DateCreated": "20240815", "TimeCreated": "143209"},
+    )
 
 
 def test_extract_xmp_metadata_handles_xml_parse_errors_safely(

@@ -144,6 +144,8 @@ EXIF from that format.
 - embedded XMP packets parsed for date and GPS fields when present;
 - same-basename `.xmp` sidecar files parsed for date and GPS fields when
   present;
+- legacy IPTC-IIM datasets parsed for date, time, city, state, country, title,
+  author and description when present;
 - missing GPS data handled safely without interrupting the run;
 - reverse geocoding failures are treated as unresolved location data.
 
@@ -168,33 +170,34 @@ Current support status:
 | `date_taken` | 1 | EXIF | `DateTimeOriginal` | Primary | Implemented |
 | `date_taken` | 2 | EXIF | `CreateDate`, `DateTime`, `DateTimeDigitized` | Fallback | Implemented |
 | `date_taken` | 3 | XMP | `exif:DateTimeOriginal`, `xmp:CreateDate` | Fallback | Implemented |
-| `date_taken` | 4 | IPTC-IIM | `DateCreated`, `TimeCreated` | Fallback | Planned |
+| `date_taken` | 4 | IPTC-IIM | `DateCreated`, `TimeCreated` | Fallback | Implemented |
 | `date_taken` | 5 | PNG metadata | `Creation Time`, `CreationTime` | Fallback | Planned |
 | `date_taken` | 6 | Filesystem | `mtime` | Heuristic | Implemented |
 | `location` | 1 | EXIF | `GPSInfo`, `GPSLatitude`, `GPSLongitude` | Primary | Implemented |
 | `location` | 2 | XMP | `exif:GPSLatitude`, `exif:GPSLongitude` | Fallback | Implemented |
-| `location` | 3 | IPTC-IIM | `City`, `Province-State`, `Country-PrimaryLocationName` | Fallback | Planned |
+| `location` | 3 | IPTC-IIM | `City`, `Province-State`, `Country-PrimaryLocationName` | Fallback | Implemented |
 | `location` | 4 | Reverse geocoding | `GPSLatitudeDecimal`, `GPSLongitudeDecimal` | Heuristic | Implemented |
 | `title` | 1 | XMP | `dc:title`, `photoshop:Headline` | Primary | Planned |
-| `title` | 2 | IPTC-IIM | `ObjectName`, `Headline` | Fallback | Planned |
+| `title` | 2 | IPTC-IIM | `ObjectName`, `Headline` | Fallback | Implemented |
 | `title` | 3 | PNG metadata | `Title` | Fallback | Planned |
 | `title` | 4 | EXIF | `ImageDescription` | Fallback | Planned |
 | `author` | 1 | XMP | `dc:creator` | Primary | Planned |
-| `author` | 2 | IPTC-IIM | `By-line`, `Writer-Editor` | Fallback | Planned |
+| `author` | 2 | IPTC-IIM | `By-line`, `Writer-Editor` | Fallback | Implemented |
 | `author` | 3 | PNG metadata | `Author` | Fallback | Planned |
 | `author` | 4 | EXIF | `Artist`, `Copyright` | Fallback | Planned |
 | `description` | 1 | XMP | `dc:description` | Primary | Planned |
-| `description` | 2 | IPTC-IIM | `Caption-Abstract` | Fallback | Planned |
+| `description` | 2 | IPTC-IIM | `Caption-Abstract` | Fallback | Implemented |
 | `description` | 3 | PNG metadata | `Description`, `Comment` | Fallback | Planned |
 | `description` | 4 | EXIF | `ImageDescription`, `UserComment` | Fallback | Planned |
 
 The current `date_taken` resolver implements the supported subset of this
 policy: EXIF `DateTimeOriginal`, EXIF `CreateDate`/aliases, XMP date fields,
-then filesystem `mtime` as a heuristic. XMP can come from embedded metadata or
-from a same-basename sidecar file such as `IMG_001.xmp`; within the XMP tier,
-sidecar values override embedded XMP values. Location organization currently
-uses EXIF GPS coordinates, XMP GPS coordinates and reverse geocoding; IPTC-IIM
-and PNG metadata entries are reserved by policy for future extractors.
+IPTC-IIM `DateCreated`/`TimeCreated`, then filesystem `mtime` as a heuristic.
+XMP can come from embedded metadata or from a same-basename sidecar file such as
+`IMG_001.xmp`; within the XMP tier, sidecar values override embedded XMP
+values. Location organization currently uses EXIF GPS coordinates, XMP GPS
+coordinates, IPTC-IIM city/state/country fields and reverse geocoding; PNG
+metadata entries are reserved by policy for future extractors.
 
 ### Metadata provenance model
 
@@ -213,6 +216,8 @@ Examples:
 - `EXIF:GPSInfo` with high confidence for GPS coordinates;
 - `XMP sidecar:xmp:CreateDate` with medium confidence when `image.xmp`
   provides the selected date;
+- `IPTC-IIM:2:55,2:60` with medium confidence when legacy IIM date/time fields
+  provide the selected date;
 - `Reverse geocoding:GPSLatitudeDecimal,GPSLongitudeDecimal` with medium
   confidence for city/state/country derived from coordinates;
 - `filesystem:mtime` with low confidence when no embedded date is available.
