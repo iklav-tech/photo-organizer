@@ -74,6 +74,25 @@ def test_load_organization_config_rejects_invalid_mode(tmp_path: Path) -> None:
         load_organization_config(config_path)
 
 
+def test_load_organization_config_accepts_city_state_month_strategy(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "destination": {"strategy": "city-state-month"},
+                "behavior": {"mode": "copy"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.organization_strategy == "city-state-month"
+
+
 def test_load_organization_config_rejects_unknown_pattern_field(
     tmp_path: Path,
 ) -> None:

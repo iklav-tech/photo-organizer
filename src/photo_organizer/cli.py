@@ -364,6 +364,7 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos --copy
   photo-organizer organize ./Photos --output ./OrganizedPhotos --name-pattern "{date:%Y%m%d}_{stem}{ext}"
   photo-organizer organize ./Photos --config organizer.yaml
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --by city-state-month
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by location-date
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
 """,
@@ -388,9 +389,12 @@ def build_parser() -> argparse.ArgumentParser:
     execution_group = organize_parser.add_argument_group("Execution")
     execution_group.add_argument(
         "--by",
-        choices=["date", "location", "location-date"],
+        choices=["date", "location", "location-date", "city-state-month"],
         default=None,
-        help="Organization strategy: date, location, or location-date.",
+        help=(
+            "Organization strategy: date, location, location-date, or "
+            "city-state-month."
+        ),
     )
     execution_group.add_argument(
         "--dry-run",
@@ -553,7 +557,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.reverse_geocode is not None
             else config.reverse_geocode
             if config is not None and config.reverse_geocode is not None
-            else strategy in {"location", "location-date"}
+            else strategy in {"location", "location-date", "city-state-month"}
         )
         naming_pattern = (
             args.name_pattern
@@ -576,7 +580,10 @@ def main(argv: list[str] | None = None) -> int:
                 "organize --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
-        if strategy in {"location", "location-date"} and reverse_geocode is False:
+        if (
+            strategy in {"location", "location-date", "city-state-month"}
+            and reverse_geocode is False
+        ):
             parser.error(
                 f"organize --by {strategy} requires reverse geocoding. "
                 "Remove --no-reverse-geocode or use --by date."

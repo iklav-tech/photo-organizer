@@ -113,6 +113,20 @@ def build_location_date_destination(
     )
 
 
+def build_city_state_month_destination(
+    base_dir: str | PurePath,
+    location: LocationLike,
+    dt: datetime,
+) -> PurePath:
+    """Build destination directory using City-State/YYYY-MM structure."""
+    base_path: PurePath = Path(base_dir) if isinstance(base_dir, str) else base_dir
+    city_state = (
+        f"{_clean_location_part(location.city)}-"
+        f"{_clean_location_part(location.state)}"
+    )
+    return base_path / city_state / dt.strftime("%Y-%m")
+
+
 def build_date_destination_for_file(
     base_dir: str | PurePath, file_path: str | Path
 ) -> PurePath:

@@ -18,6 +18,7 @@ from photo_organizer.metadata import (
 )
 from photo_organizer.naming import build_default_filename, build_pattern_filename
 from photo_organizer.planner import (
+    build_city_state_month_destination,
     build_date_destination,
     build_location_date_destination,
     build_location_destination,
@@ -116,6 +117,7 @@ def plan_organization_operations(
         location = None
         location_status = "disabled"
         should_reverse_geocode = reverse_geocode or organization_strategy in {
+            "city-state-month",
             "location",
             "location-date",
         }
@@ -155,7 +157,11 @@ def plan_organization_operations(
                     )
                 )
                 organization_fallback = (
-                    organization_strategy in {"location", "location-date"}
+                    organization_strategy in {
+                        "city-state-month",
+                        "location",
+                        "location-date",
+                    }
                     and location is None
                 )
             elif organization_strategy == "location" and location is not None:
@@ -164,8 +170,13 @@ def plan_organization_operations(
                 destination_dir = Path(
                     build_location_date_destination(output_path, location, dt)
                 )
+            elif organization_strategy == "city-state-month" and location is not None:
+                destination_dir = Path(
+                    build_city_state_month_destination(output_path, location, dt)
+                )
             else:
                 organization_fallback = organization_strategy in {
+                    "city-state-month",
                     "location",
                     "location-date",
                 }

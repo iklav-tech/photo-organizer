@@ -93,6 +93,7 @@ Example use cases:
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
 - `photo-organizer organize SOURCE --config organizer.yaml`
 - `photo-organizer organize SOURCE --output Organized --name-pattern "{date:%Y%m%d}_{stem}{ext}"`
+- `photo-organizer organize SOURCE --output Organized --by city-state-month`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters and invalid report extensions.
@@ -159,8 +160,7 @@ output: ./OrganizedPhotos
 naming:
   pattern: "{date:%Y%m%d_%H%M%S}_{stem}{ext}"
 destination:
-  pattern: "{date:%Y}/{date:%m}"
-  strategy: date
+  strategy: city-state-month
 behavior:
   mode: copy
   dry_run: true
@@ -176,7 +176,7 @@ The same structure is accepted as JSON. Supported fields:
 - `destination.pattern`: directory pattern with `{date}`, `{country}`,
   `{state}` and `{city}`;
 - `destination.strategy` or `behavior.organization_strategy`: `date`,
-  `location` or `location-date`;
+  `location`, `location-date` or `city-state-month`;
 - `behavior.mode`: `copy` or `move`;
 - `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans.
 
@@ -191,6 +191,18 @@ fields are:
 
 Filename patterns cannot contain path separators. Invalid fields produce a
 clear CLI error before planning starts.
+
+Organization strategies:
+
+- `date`: writes to `YYYY/MM/DD`;
+- `location`: writes to `Country/State/City`;
+- `location-date`: writes to `Country/State/City/YYYY/MM`;
+- `city-state-month`: writes to `City-State/YYYY-MM`, for example
+  `Paraty-RJ/2024-08`.
+
+Location-based strategies enable reverse geocoding automatically. If GPS data
+is missing or location resolution fails, organization falls back to the default
+date path.
 
 ### Plan and execution separation
 
@@ -384,6 +396,12 @@ photo-organizer dedupe ~/Photos --report duplicates.csv
 
 ```bash
 photo-organizer organize ~/Photos --output ~/OrganizedPhotos --by date
+```
+
+### Example: organizing by city, state and month
+
+```bash
+photo-organizer organize ~/Photos --output ~/OrganizedPhotos --by city-state-month
 ```
 
 ### Example: simulation mode

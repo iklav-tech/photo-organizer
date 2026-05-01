@@ -190,12 +190,14 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
     if mode is not None and mode not in {"copy", "move"}:
         raise ConfigurationError("behavior.mode must be 'copy' or 'move'")
     if organization_strategy is not None and organization_strategy not in {
+        "city-state-month",
         "date",
         "location",
         "location-date",
     }:
         raise ConfigurationError(
-            "organization strategy must be 'date', 'location' or 'location-date'"
+            "organization strategy must be 'date', 'location', 'location-date' "
+            "or 'city-state-month'"
         )
     if naming_pattern is not None:
         try:

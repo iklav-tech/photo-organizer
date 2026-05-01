@@ -60,6 +60,7 @@ def test_organize_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--output" in captured.out
     assert "--name-pattern" in captured.out
     assert "{date}" in captured.out
+    assert "city-state-month" in captured.out
     assert "Paths:" in captured.out
     assert "Audit report:" in captured.out
     assert "Examples:" in captured.out
@@ -350,6 +351,32 @@ def test_organize_location_date_strategy_enables_reverse_geocoding(monkeypatch) 
     assert captured["organization_strategy"] == "location-date"
 
 
+def test_organize_city_state_month_strategy_enables_reverse_geocoding(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--by",
+        "city-state-month",
+    ])
+
+    assert result == 0
+    assert captured["reverse_geocode"] is True
+    assert captured["organization_strategy"] == "city-state-month"
+
+
 def test_organize_location_strategy_rejects_disabled_geocoding(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -386,6 +413,25 @@ def test_organize_location_date_strategy_rejects_disabled_geocoding(
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert "--by location-date requires reverse geocoding" in captured.err
+
+
+def test_organize_city_state_month_strategy_rejects_disabled_geocoding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--by",
+            "city-state-month",
+            "--no-reverse-geocode",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "--by city-state-month requires reverse geocoding" in captured.err
 
 
 def test_scan_logs_start_end_and_count(monkeypatch, caplog) -> None:

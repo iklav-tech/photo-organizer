@@ -5,7 +5,9 @@ import json
 import os
 from pathlib import Path
 
+from photo_organizer.geocoding import ReverseGeocodedLocation
 from photo_organizer.cli import main
+from photo_organizer.metadata import GPSCoordinates
 
 
 def _write_photo(path: Path, content: str, dt: datetime) -> None:
@@ -124,6 +126,50 @@ def test_organize_pipeline_uses_cli_name_pattern(tmp_path: Path) -> None:
     assert source.exists()
     assert expected_destination.exists()
     assert expected_destination.read_text() == "cli-pattern-data"
+
+
+def test_organize_pipeline_uses_city_state_month_strategy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    source = source_dir / "IMG_6.jpg"
+    photo_dt = datetime(2024, 8, 15, 14, 32, 9)
+    expected_destination = output_dir / "Paraty-RJ" / "2024-08" / (
+        "2024-08-15_14-32-09.jpg"
+    )
+    coordinates = GPSCoordinates(latitude=-23.2, longitude=-44.7)
+    location = ReverseGeocodedLocation(
+        city="Paraty",
+        state="RJ",
+        country="Brasil",
+    )
+
+    _write_photo(source, "city-state-month-data", photo_dt)
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: coordinates,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.reverse_geocode_coordinates",
+        lambda value: location if value == coordinates else None,
+    )
+
+    result = main([
+        "organize",
+        str(source_dir),
+        "--output",
+        str(output_dir),
+        "--copy",
+        "--by",
+        "city-state-month",
+    ])
+
+    assert result == 0
+    assert source.exists()
+    assert expected_destination.exists()
+    assert expected_destination.read_text() == "city-state-month-data"
 
 
 def test_organize_dry_run_pipeline_does_not_create_directories_or_move_files(
