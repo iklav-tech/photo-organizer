@@ -16,11 +16,12 @@ from photo_organizer.metadata import (
     extract_gps_coordinates,
     resolve_best_available_datetime,
 )
-from photo_organizer.naming import build_default_filename
+from photo_organizer.naming import build_default_filename, build_pattern_filename
 from photo_organizer.planner import (
     build_date_destination,
     build_location_date_destination,
     build_location_destination,
+    build_pattern_destination,
 )
 from photo_organizer.scanner import find_image_files
 
@@ -85,6 +86,8 @@ def plan_organization_operations(
     mode: str = "move",
     reverse_geocode: bool = False,
     organization_strategy: str = "date",
+    naming_pattern: str | None = None,
+    destination_pattern: str | None = None,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
     source_path = Path(source_dir)
@@ -141,16 +144,46 @@ def plan_organization_operations(
                 )
 
         organization_fallback = False
-        if organization_strategy == "location" and location is not None:
-            destination_dir = Path(build_location_destination(output_path, location))
-        elif organization_strategy == "location-date" and location is not None:
-            destination_dir = Path(
-                build_location_date_destination(output_path, location, dt)
+        try:
+            if destination_pattern is not None:
+                destination_dir = Path(
+                    build_pattern_destination(
+                        output_path,
+                        dt,
+                        destination_pattern,
+                        location,
+                    )
+                )
+                organization_fallback = (
+                    organization_strategy in {"location", "location-date"}
+                    and location is None
+                )
+            elif organization_strategy == "location" and location is not None:
+                destination_dir = Path(build_location_destination(output_path, location))
+            elif organization_strategy == "location-date" and location is not None:
+                destination_dir = Path(
+                    build_location_date_destination(output_path, location, dt)
+                )
+            else:
+                organization_fallback = organization_strategy in {
+                    "location",
+                    "location-date",
+                }
+                destination_dir = Path(build_date_destination(output_path, dt))
+            filename = (
+                build_pattern_filename(dt, image_path, naming_pattern)
+                if naming_pattern is not None
+                else build_default_filename(dt, image_path)
             )
-        else:
-            organization_fallback = organization_strategy in {"location", "location-date"}
-            destination_dir = Path(build_date_destination(output_path, dt))
-        destination_file = destination_dir / build_default_filename(dt, image_path)
+        except Exception as exc:
+            logger.error(
+                "Failed to plan file operation: source=%s error=%s",
+                image_path,
+                exc,
+            )
+            continue
+
+        destination_file = destination_dir / filename
         operations.append(
             FileOperation(
                 source=image_path,

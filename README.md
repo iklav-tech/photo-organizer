@@ -34,6 +34,8 @@ The project includes a tested v0.3.0 CLI workflow:
 - structured execution summaries;
 - resilient per-file error handling for invalid files and malformed metadata;
 - optional audit report export in JSON or CSV with `--report`;
+- external JSON/YAML organization config with custom naming, destination and
+  behavior rules;
 - improved CLI help with examples and grouped arguments;
 - structured logging with configurable log level;
 - friendly error messages for invalid/missing source directory.
@@ -89,6 +91,7 @@ Example use cases:
 - `photo-organizer organize --help`
 - `photo-organizer dedupe SOURCE --report duplicates.json`
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
+- `photo-organizer organize SOURCE --config organizer.yaml`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters and invalid report extensions.
@@ -133,11 +136,47 @@ EXIF from that format.
 ### Naming and planning
 
 - default naming format: `YYYY-MM-DD_HH-MM-SS.ext`;
+- optional configured naming format through `naming.pattern`;
 - original extension preserved;
 - deterministic name generation;
 - collision handling with suffixes such as `_01`, `_02`, `_03`;
 - destination directory structure: `YYYY/MM/DD`;
+- optional configured destination format through `destination.pattern`;
 - `pathlib`-based path generation for Linux/Windows compatibility.
+
+### External configuration
+
+The `organize` command can read JSON, YAML or YML configuration files with
+`--config PATH`. CLI arguments explicitly passed by the user take precedence
+over equivalent config values.
+
+Example YAML:
+
+```yaml
+output: ./OrganizedPhotos
+naming:
+  pattern: "{date:%Y%m%d_%H%M%S}_{stem}{ext}"
+destination:
+  pattern: "{date:%Y}/{date:%m}"
+  strategy: date
+behavior:
+  mode: copy
+  dry_run: true
+  plan: false
+  reverse_geocode: false
+```
+
+The same structure is accepted as JSON. Supported fields:
+
+- `output`: destination root directory;
+- `naming.pattern`: filename pattern with `{date}`, `{stem}`, `{ext}` and
+  `{original}`;
+- `destination.pattern`: directory pattern with `{date}`, `{country}`,
+  `{state}` and `{city}`;
+- `destination.strategy` or `behavior.organization_strategy`: `date`,
+  `location` or `location-date`;
+- `behavior.mode`: `copy` or `move`;
+- `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans.
 
 ### Plan and execution separation
 

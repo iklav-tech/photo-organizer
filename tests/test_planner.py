@@ -71,3 +71,39 @@ def test_build_location_date_destination_uses_location_and_year_month() -> None:
     result = planner.build_location_date_destination("organized", location, dt)
 
     assert result == Path("organized") / "Brasil" / "RJ" / "Paraty" / "2024" / "08"
+
+
+def test_build_pattern_destination_uses_configured_date_and_location_parts() -> None:
+    location = SimpleNamespace(
+        country="Brasil",
+        state="Sao Paulo",
+        city="Sao Paulo",
+    )
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    result = planner.build_pattern_destination(
+        "organized",
+        dt,
+        "{country}/{date:%Y}/{date:%m}",
+        location,
+    )
+
+    assert result == Path("organized") / "Brasil" / "2024" / "08"
+
+
+def test_build_pattern_destination_sanitizes_rendered_parts() -> None:
+    location = SimpleNamespace(
+        country="Brasil",
+        state="Rio/Minas",
+        city="  Sao  Tome:*  ",
+    )
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    result = planner.build_pattern_destination(
+        "organized",
+        dt,
+        "{state}/{city}",
+        location,
+    )
+
+    assert result == Path("organized") / "Rio-Minas" / "Sao Tome--"

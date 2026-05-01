@@ -9,7 +9,7 @@ description = "CLI tool to organize photos by metadata and date."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "photo-organizer contributors" }]
-dependencies = ["Pillow>=10.0"]
+dependencies = ["Pillow>=10.0", "PyYAML>=6.0"]
 
 [project.urls]
 Repository = "https://github.com/iklav-tech/photo-organizer"

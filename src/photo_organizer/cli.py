@@ -10,6 +10,7 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
+from photo_organizer.config import ConfigurationError, load_organization_config
 from photo_organizer.executor import (
     FileOperation,
     apply_operations,
@@ -360,6 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
   photo-organizer organize ./Photos --output ./OrganizedPhotos --copy
+  photo-organizer organize ./Photos --config organizer.yaml
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by location-date
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
 """,
@@ -375,12 +377,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="Directory where organized photos will be written.",
     )
+    path_group.add_argument(
+        "--config",
+        metavar="PATH",
+        help="Read organization rules from a .json, .yaml or .yml file.",
+    )
 
     execution_group = organize_parser.add_argument_group("Execution")
     execution_group.add_argument(
         "--by",
         choices=["date", "location", "location-date"],
-        default="date",
+        default=None,
         help="Organization strategy: date, location, or location-date.",
     )
     execution_group.add_argument(
@@ -501,7 +508,49 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "organize":
-        if not args.output:
+        try:
+            config = load_organization_config(args.config) if args.config else None
+        except ConfigurationError as exc:
+            parser.error(f"invalid organize configuration: {exc}")
+
+        output = args.output or (config.output if config is not None else None)
+        strategy = (
+            args.by
+            or (config.organization_strategy if config is not None else None)
+            or "date"
+        )
+        mode = (
+            "copy"
+            if args.copy
+            else "move"
+            if args.move
+            else (
+                config.mode
+                if config is not None and config.mode is not None
+                else "move"
+            )
+        )
+        dry_run = args.dry_run or (
+            config.dry_run
+            if config is not None and config.dry_run is not None
+            else False
+        )
+        plan_only = args.plan or (
+            config.plan if config is not None and config.plan is not None else False
+        )
+        reverse_geocode = (
+            args.reverse_geocode
+            if args.reverse_geocode is not None
+            else config.reverse_geocode
+            if config is not None and config.reverse_geocode is not None
+            else strategy in {"location", "location-date"}
+        )
+        naming_pattern = config.naming_pattern if config is not None else None
+        destination_pattern = (
+            config.destination_pattern if config is not None else None
+        )
+
+        if not output:
             parser.error(
                 "organize requires --output DIR. Example: "
                 "photo-organizer organize ./Photos --output ./OrganizedPhotos"
@@ -511,34 +560,30 @@ def main(argv: list[str] | None = None) -> int:
                 "organize --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
-        if args.by in {"location", "location-date"} and args.reverse_geocode is False:
+        if strategy in {"location", "location-date"} and reverse_geocode is False:
             parser.error(
-                f"organize --by {args.by} requires reverse geocoding. "
+                f"organize --by {strategy} requires reverse geocoding. "
                 "Remove --no-reverse-geocode or use --by date."
             )
 
-        mode = "copy" if args.copy else "move"
-        reverse_geocode = (
-            args.reverse_geocode
-            if args.reverse_geocode is not None
-            else args.by in {"location", "location-date"}
-        )
         logger.info(
             "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
             args.source,
-            args.output,
+            output,
             mode,
-            args.dry_run,
-            args.plan,
+            dry_run,
+            plan_only,
             reverse_geocode,
         )
         try:
             operations = plan_organization_operations(
                 args.source,
-                args.output,
+                output,
                 mode=mode,
                 reverse_geocode=reverse_geocode,
-                organization_strategy=args.by,
+                organization_strategy=strategy,
+                naming_pattern=naming_pattern,
+                destination_pattern=destination_pattern,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
@@ -553,7 +598,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.info(
             "Generated execution plan: operations=%d strategy=%s",
             len(operations),
-            args.by,
+            strategy,
         )
         for operation in operations:
             logger.debug(
@@ -563,7 +608,7 @@ def main(argv: list[str] | None = None) -> int:
                 operation.destination,
             )
 
-        if args.plan:
+        if plan_only:
             logger.info("Plan-only mode enabled: no files will be changed")
             summary: dict[str, int | str] = {
                 "mode": "plan",
@@ -606,10 +651,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
-        if args.dry_run:
+        if dry_run:
             logger.info("DRY-RUN enabled: no files will be changed")
 
-        logs = apply_operations(operations, dry_run=args.dry_run)
+        logs = apply_operations(operations, dry_run=dry_run)
         for line in logs:
             if line.startswith("[ERROR]"):
                 logger.error(line)
@@ -618,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
 
         error_files = sum(1 for line in logs if line.startswith("[ERROR]"))
         processed_files = len(logs) - error_files
-        summary_mode = "dry-run" if args.dry_run else "execute"
+        summary_mode = "dry-run" if dry_run else "execute"
         fallback_files = sum(1 for operation in operations if operation.date_fallback)
         location_files = sum(
             1 for operation in operations if operation.location is not None

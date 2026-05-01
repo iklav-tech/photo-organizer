@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from photo_organizer.naming import build_default_filename
+from photo_organizer.naming import build_default_filename, build_pattern_filename
 
 
 def test_build_default_filename_matches_expected_format() -> None:
@@ -38,3 +38,22 @@ def test_build_default_filename_is_deterministic() -> None:
     second = build_default_filename(dt, original)
 
     assert first == second
+
+
+def test_build_pattern_filename_uses_configured_placeholders() -> None:
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    result = build_pattern_filename(
+        dt,
+        "IMG_1034.jpg",
+        "{date:%Y%m%d-%H%M%S}_{stem}{ext}",
+    )
+
+    assert result == "20240815-143209_IMG_1034.jpg"
+
+
+def test_build_pattern_filename_rejects_path_separators() -> None:
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    with pytest.raises(ValueError, match="path separators"):
+        build_pattern_filename(dt, "IMG_1034.jpg", "{date:%Y}/{original}")

@@ -74,6 +74,60 @@ def test_organize_requires_output(capsys: pytest.CaptureFixture[str]) -> None:
     assert "photo-organizer organize ./Photos --output ./OrganizedPhotos" in captured.err
 
 
+def test_organize_accepts_output_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "naming": {"pattern": "{date:%Y%m%d}_{stem}{ext}"},
+                "destination": {"pattern": "{date:%Y}/{date:%m}"},
+                "behavior": {"mode": "copy", "dry_run": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*args, **kwargs):
+        captured["args"] = args
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured["args"][1] == str(tmp_path / "organized")
+    assert captured["mode"] == "copy"
+    assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
+    assert captured["destination_pattern"] == "{date:%Y}/{date:%m}"
+
+
+def test_organize_rejects_invalid_config(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"mode": "delete"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["organize", "./photos", "--config", str(config_path)])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "invalid organize configuration" in captured.err
+    assert "behavior.mode" in captured.err
+
+
 def test_scan_requires_source(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main(["scan"])

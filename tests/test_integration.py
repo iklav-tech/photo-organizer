@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 
@@ -69,6 +70,35 @@ def test_organize_move_pipeline_creates_directories_and_removes_sources(
     assert expected_destination.exists()
     assert expected_destination.read_text() == "move-data"
     assert expected_destination.parent.is_dir()
+
+
+def test_organize_pipeline_uses_external_json_config(tmp_path: Path) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    config_path = tmp_path / "organizer.json"
+    source = source_dir / "IMG_4.jpg"
+    photo_dt = datetime(2024, 8, 15, 14, 32, 9)
+    expected_destination = output_dir / "2024" / "08" / "20240815_IMG_4.jpg"
+
+    _write_photo(source, "config-data", photo_dt)
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(output_dir),
+                "naming": {"pattern": "{date:%Y%m%d}_{stem}{ext}"},
+                "destination": {"pattern": "{date:%Y}/{date:%m}"},
+                "behavior": {"mode": "copy"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = main(["organize", str(source_dir), "--config", str(config_path)])
+
+    assert result == 0
+    assert source.exists()
+    assert expected_destination.exists()
+    assert expected_destination.read_text() == "config-data"
 
 
 def test_organize_dry_run_pipeline_does_not_create_directories_or_move_files(
