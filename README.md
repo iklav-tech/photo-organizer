@@ -92,6 +92,7 @@ Example use cases:
 - `photo-organizer dedupe SOURCE --report duplicates.json`
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
 - `photo-organizer organize SOURCE --config organizer.yaml`
+- `photo-organizer organize SOURCE --output Organized --name-pattern "{date:%Y%m%d}_{stem}{ext}"`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters and invalid report extensions.
@@ -136,7 +137,8 @@ EXIF from that format.
 ### Naming and planning
 
 - default naming format: `YYYY-MM-DD_HH-MM-SS.ext`;
-- optional configured naming format through `naming.pattern`;
+- optional configured naming format through `naming.pattern` or CLI
+  `--name-pattern`;
 - original extension preserved;
 - deterministic name generation;
 - collision handling with suffixes such as `_01`, `_02`, `_03`;
@@ -177,6 +179,18 @@ The same structure is accepted as JSON. Supported fields:
   `location` or `location-date`;
 - `behavior.mode`: `copy` or `move`;
 - `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans.
+
+Filename patterns use Python datetime formatting for `{date:...}`. Supported
+fields are:
+
+- `{date}`: resolved photo datetime, optionally with a format such as
+  `{date:%Y%m%d_%H%M%S}`;
+- `{stem}`: original filename without extension;
+- `{ext}`: original extension, including the leading dot;
+- `{original}`: original filename with extension.
+
+Filename patterns cannot contain path separators. Invalid fields produce a
+clear CLI error before planning starts.
 
 ### Plan and execution separation
 

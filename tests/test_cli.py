@@ -58,6 +58,8 @@ def test_organize_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "--output" in captured.out
+    assert "--name-pattern" in captured.out
+    assert "{date}" in captured.out
     assert "Paths:" in captured.out
     assert "Audit report:" in captured.out
     assert "Examples:" in captured.out
@@ -107,6 +109,85 @@ def test_organize_accepts_output_from_config(
     assert captured["mode"] == "copy"
     assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
     assert captured["destination_pattern"] == "{date:%Y}/{date:%m}"
+
+
+def test_organize_accepts_name_pattern_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--name-pattern",
+        "{date:%Y%m%d}_{stem}{ext}",
+    ])
+
+    assert result == 0
+    assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
+
+
+def test_organize_name_pattern_cli_overrides_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": "./organized",
+                "naming": {"pattern": "{date:%Y}_{stem}{ext}"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--config",
+        str(config_path),
+        "--name-pattern",
+        "{date:%Y%m%d}_{original}",
+    ])
+
+    assert result == 0
+    assert captured["naming_pattern"] == "{date:%Y%m%d}_{original}"
+
+
+def test_organize_rejects_invalid_name_pattern_from_cli(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--name-pattern",
+            "{unknown}{ext}",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "invalid --name-pattern" in captured.err
+    assert "Unknown pattern field 'unknown'" in captured.err
+    assert "Allowed: date, ext, original, stem" in captured.err
 
 
 def test_organize_rejects_invalid_config(

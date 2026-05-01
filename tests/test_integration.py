@@ -101,6 +101,31 @@ def test_organize_pipeline_uses_external_json_config(tmp_path: Path) -> None:
     assert expected_destination.read_text() == "config-data"
 
 
+def test_organize_pipeline_uses_cli_name_pattern(tmp_path: Path) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    source = source_dir / "IMG_5.jpg"
+    photo_dt = datetime(2024, 8, 15, 14, 32, 9)
+    expected_destination = output_dir / "2024" / "08" / "15" / "20240815_IMG_5.jpg"
+
+    _write_photo(source, "cli-pattern-data", photo_dt)
+
+    result = main([
+        "organize",
+        str(source_dir),
+        "--output",
+        str(output_dir),
+        "--copy",
+        "--name-pattern",
+        "{date:%Y%m%d}_{stem}{ext}",
+    ])
+
+    assert result == 0
+    assert source.exists()
+    assert expected_destination.exists()
+    assert expected_destination.read_text() == "cli-pattern-data"
+
+
 def test_organize_dry_run_pipeline_does_not_create_directories_or_move_files(
     tmp_path: Path,
 ) -> None:

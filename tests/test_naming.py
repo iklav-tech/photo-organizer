@@ -57,3 +57,10 @@ def test_build_pattern_filename_rejects_path_separators() -> None:
 
     with pytest.raises(ValueError, match="path separators"):
         build_pattern_filename(dt, "IMG_1034.jpg", "{date:%Y}/{original}")
+
+
+def test_build_pattern_filename_rejects_empty_pattern() -> None:
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    with pytest.raises(ValueError, match="non-empty filename"):
+        build_pattern_filename(dt, "IMG_1034.jpg", "")

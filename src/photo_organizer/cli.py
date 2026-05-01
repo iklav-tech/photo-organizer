@@ -18,6 +18,7 @@ from photo_organizer.executor import (
 )
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
+from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.scanner import find_image_files, is_supported_image_file
 
 
@@ -361,6 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
   photo-organizer organize ./Photos --output ./OrganizedPhotos --copy
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --name-pattern "{date:%Y%m%d}_{stem}{ext}"
   photo-organizer organize ./Photos --config organizer.yaml
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by location-date
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
@@ -399,6 +401,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--plan",
         action="store_true",
         help="Show planned operations and exit without executing.",
+    )
+    execution_group.add_argument(
+        "--name-pattern",
+        metavar="PATTERN",
+        help=(
+            "Filename pattern. Supported fields: {date}, {stem}, {ext}, "
+            "{original}. Example: '{date:%%Y%%m%%d}_{stem}{ext}'."
+        ),
     )
     geocoding_group = execution_group.add_mutually_exclusive_group()
     geocoding_group.add_argument(
@@ -545,7 +555,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.reverse_geocode is not None
             else strategy in {"location", "location-date"}
         )
-        naming_pattern = config.naming_pattern if config is not None else None
+        naming_pattern = (
+            args.name_pattern
+            if args.name_pattern is not None
+            else config.naming_pattern
+            if config is not None
+            else None
+        )
         destination_pattern = (
             config.destination_pattern if config is not None else None
         )
@@ -565,6 +581,11 @@ def main(argv: list[str] | None = None) -> int:
                 f"organize --by {strategy} requires reverse geocoding. "
                 "Remove --no-reverse-geocode or use --by date."
             )
+        if naming_pattern is not None:
+            try:
+                validate_filename_pattern(naming_pattern)
+            except ValueError as exc:
+                parser.error(f"invalid --name-pattern: {exc}")
 
         logger.info(
             "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",

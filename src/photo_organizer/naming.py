@@ -12,7 +12,11 @@ _ALLOWED_FILENAME_FIELDS = {"date", "stem", "ext", "original"}
 
 def _validate_pattern_fields(pattern: str, allowed_fields: set[str]) -> None:
     formatter = string.Formatter()
-    for _, field_name, _, _ in formatter.parse(pattern):
+    for literal_text, field_name, format_spec, _ in formatter.parse(pattern):
+        if "/" in literal_text or "\\" in literal_text:
+            raise ValueError("Filename pattern must not contain path separators")
+        if "/" in format_spec or "\\" in format_spec:
+            raise ValueError("Filename pattern must not contain path separators")
         if field_name is None:
             continue
         root_name = field_name.split(".", maxsplit=1)[0].split("[", maxsplit=1)[0]
@@ -23,6 +27,8 @@ def _validate_pattern_fields(pattern: str, allowed_fields: set[str]) -> None:
 
 def validate_filename_pattern(pattern: str) -> None:
     """Validate fields accepted by filename patterns."""
+    if not pattern or pattern in {".", ".."}:
+        raise ValueError("Filename pattern must be a non-empty filename")
     _validate_pattern_fields(pattern, _ALLOWED_FILENAME_FIELDS)
 
 
