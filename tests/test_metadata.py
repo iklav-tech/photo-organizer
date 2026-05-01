@@ -91,6 +91,116 @@ def test_extract_exif_metadata_reads_compatible_jpeg_exif(
     assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
 
 
+def test_extract_xmp_metadata_reads_relevant_fields_and_namespaces(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_bytes(
+        b"prefix"
+        b"""<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmlns:exif="http://ns.adobe.com/exif/1.0/"
+      xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09"
+      exif:GPSLatitude="23,30.000S"
+      exif:GPSLongitude="46,37.500W"
+      photoshop:City="Sao Paulo" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+        b"suffix"
+    )
+
+    result = metadata.extract_xmp_metadata(file_path)
+
+    assert result["xmp:CreateDate"] == "2024-08-15T14:32:09"
+    assert result["exif:GPSLatitude"] == "23,30.000S"
+    assert result["exif:GPSLongitude"] == "46,37.500W"
+    assert result["photoshop:City"] == "Sao Paulo"
+    assert result["XMPNamespaces"]["xmp"] == "http://ns.adobe.com/xap/1.0/"
+    assert result["XMPNamespaces"]["exif"] == "http://ns.adobe.com/exif/1.0/"
+    assert result["XMPNamespaces"]["photoshop"] == "http://ns.adobe.com/photoshop/1.0/"
+
+
+def test_extract_xmp_metadata_handles_xml_parse_errors_safely(
+    tmp_path: Path,
+    caplog,
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_bytes(
+        b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF></x:xmpmeta>'
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = metadata.extract_xmp_metadata(file_path)
+
+    assert result == {}
+    assert "Failed to parse XMP" in caplog.text
+
+
+def test_get_best_available_datetime_uses_xmp_when_exif_is_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_bytes(
+        b"""<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.used_fallback is False
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="XMP",
+        field="xmp:CreateDate",
+        confidence="medium",
+        raw_value="2024-08-15T14:32:09",
+    )
+
+
+def test_extract_gps_coordinates_uses_xmp_when_exif_gps_is_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_bytes(
+        b"""<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:exif="http://ns.adobe.com/exif/1.0/"
+      exif:GPSLatitude="23,30.000S"
+      exif:GPSLongitude="46,37.500W" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+    monkeypatch.setattr(metadata, "extract_exif_metadata", lambda _path: {})
+
+    result = metadata.extract_gps_coordinates(file_path)
+
+    assert result == metadata.GPSCoordinates(latitude=-23.5, longitude=-46.625)
+    assert result is not None
+    assert result.provenance == metadata.MetadataProvenance(
+        source="XMP",
+        field="exif:GPSLatitude,exif:GPSLongitude",
+        confidence="medium",
+        raw_value={
+            "exif:GPSLatitude": "23,30.000S",
+            "exif:GPSLongitude": "46,37.500W",
+            "exif:GPSLatitudeRef": None,
+            "exif:GPSLongitudeRef": None,
+        },
+    )
+
+
 def test_extract_exif_metadata_reads_gps_coordinates_as_decimal(
     tmp_path: Path, monkeypatch
 ) -> None:

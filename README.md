@@ -141,6 +141,7 @@ EXIF from that format.
   3. file `mtime` fallback
 - normalized output as `datetime`.
 - GPS coordinates normalized to decimal degrees when available;
+- embedded XMP packets parsed for date and GPS fields when present;
 - missing GPS data handled safely without interrupting the run;
 - reverse geocoding failures are treated as unresolved location data.
 
@@ -164,12 +165,12 @@ Current support status:
 | --- | ---: | --- | --- | --- | --- |
 | `date_taken` | 1 | EXIF | `DateTimeOriginal` | Primary | Implemented |
 | `date_taken` | 2 | EXIF | `CreateDate`, `DateTime`, `DateTimeDigitized` | Fallback | Implemented |
-| `date_taken` | 3 | XMP | `exif:DateTimeOriginal`, `xmp:CreateDate` | Fallback | Planned |
+| `date_taken` | 3 | XMP | `exif:DateTimeOriginal`, `xmp:CreateDate` | Fallback | Implemented |
 | `date_taken` | 4 | IPTC-IIM | `DateCreated`, `TimeCreated` | Fallback | Planned |
 | `date_taken` | 5 | PNG metadata | `Creation Time`, `CreationTime` | Fallback | Planned |
 | `date_taken` | 6 | Filesystem | `mtime` | Heuristic | Implemented |
 | `location` | 1 | EXIF | `GPSInfo`, `GPSLatitude`, `GPSLongitude` | Primary | Implemented |
-| `location` | 2 | XMP | `exif:GPSLatitude`, `exif:GPSLongitude` | Fallback | Planned |
+| `location` | 2 | XMP | `exif:GPSLatitude`, `exif:GPSLongitude` | Fallback | Implemented |
 | `location` | 3 | IPTC-IIM | `City`, `Province-State`, `Country-PrimaryLocationName` | Fallback | Planned |
 | `location` | 4 | Reverse geocoding | `GPSLatitudeDecimal`, `GPSLongitudeDecimal` | Heuristic | Implemented |
 | `title` | 1 | XMP | `dc:title`, `photoshop:Headline` | Primary | Planned |
@@ -186,10 +187,10 @@ Current support status:
 | `description` | 4 | EXIF | `ImageDescription`, `UserComment` | Fallback | Planned |
 
 The current `date_taken` resolver implements the supported subset of this
-policy: EXIF `DateTimeOriginal`, then EXIF `CreateDate`/aliases, then
-filesystem `mtime` as a heuristic. Location organization currently uses EXIF
-GPS coordinates and reverse geocoding; XMP, IPTC-IIM and PNG metadata entries
-are reserved by policy for future extractors.
+policy: EXIF `DateTimeOriginal`, EXIF `CreateDate`/aliases, embedded XMP date
+fields, then filesystem `mtime` as a heuristic. Location organization currently
+uses EXIF GPS coordinates, XMP GPS coordinates and reverse geocoding; IPTC-IIM
+and PNG metadata entries are reserved by policy for future extractors.
 
 ### Metadata provenance model
 

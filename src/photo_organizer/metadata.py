@@ -21,7 +21,9 @@ from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
 import logging
 from pathlib import Path
+import re
 from typing import Any, Literal
+import xml.etree.ElementTree as ET
 
 from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS
 
@@ -82,7 +84,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="XMP",
         keys=("exif:DateTimeOriginal", "xmp:CreateDate"),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="date_taken",
@@ -118,7 +120,7 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
         role="fallback",
         source="XMP",
         keys=("exif:GPSLatitude", "exif:GPSLongitude"),
-        support="planned",
+        support="implemented",
     ),
     MetadataPrecedenceRule(
         field="location",
@@ -256,6 +258,32 @@ class GPSCoordinates:
     )
 
 
+XMP_NAMESPACE_PREFIXES = {
+    "http://ns.adobe.com/xap/1.0/": "xmp",
+    "http://ns.adobe.com/exif/1.0/": "exif",
+    "http://purl.org/dc/elements/1.1/": "dc",
+    "http://ns.adobe.com/photoshop/1.0/": "photoshop",
+    "http://www.w3.org/1999/02/22-rdf-syntax-ns#": "rdf",
+}
+
+XMP_RELEVANT_FIELDS = {
+    "xmp:CreateDate",
+    "xmp:ModifyDate",
+    "exif:DateTimeOriginal",
+    "exif:GPSLatitude",
+    "exif:GPSLongitude",
+    "exif:GPSLatitudeRef",
+    "exif:GPSLongitudeRef",
+    "dc:title",
+    "dc:creator",
+    "dc:description",
+    "photoshop:DateCreated",
+    "photoshop:City",
+    "photoshop:State",
+    "photoshop:Country",
+}
+
+
 def _parse_exif_datetime(value: Any) -> datetime | None:
     """Parse common EXIF datetime string formats into a datetime."""
     if value is None:
@@ -274,12 +302,21 @@ def _parse_exif_datetime(value: Any) -> datetime | None:
     formats = (
         "%Y:%m:%d %H:%M:%S",
         "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
     )
     for candidate_format in formats:
         try:
             return datetime.strptime(text, candidate_format)
         except ValueError:
             continue
+
+    try:
+        iso_text = text.removesuffix("Z") + ("+00:00" if text.endswith("Z") else "")
+        parsed = datetime.fromisoformat(iso_text)
+        return parsed.replace(tzinfo=None)
+    except ValueError:
+        pass
 
     return None
 
@@ -316,6 +353,139 @@ def _gps_dms_to_decimal(value: Any, ref: Any) -> float | None:
         decimal *= -1
 
     return decimal
+
+
+def _xmp_gps_to_decimal(value: Any, ref: Any = None) -> float | None:
+    """Convert common XMP GPS values to signed decimal degrees."""
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        decimal = float(value)
+        text_ref = str(ref or "").strip().upper()
+        return -abs(decimal) if text_ref in {"S", "W"} else decimal
+
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+
+    trailing_ref = ""
+    if text[-1:].upper() in {"N", "S", "E", "W"}:
+        trailing_ref = text[-1:].upper()
+        text = text[:-1].strip()
+    text_ref = trailing_ref or str(ref or "").strip().upper()
+
+    try:
+        decimal = float(text)
+    except ValueError:
+        parts = [part for part in re.split(r"[,\s]+", text) if part]
+        if not parts:
+            return None
+        numeric_parts: list[float] = []
+        for part in parts[:3]:
+            try:
+                numeric_parts.append(float(part))
+            except ValueError:
+                return None
+        degrees = numeric_parts[0]
+        minutes = numeric_parts[1] if len(numeric_parts) > 1 else 0.0
+        seconds = numeric_parts[2] if len(numeric_parts) > 2 else 0.0
+        decimal = abs(degrees) + minutes / 60 + seconds / 3600
+
+    if text_ref in {"S", "W"}:
+        decimal = -abs(decimal)
+    return decimal
+
+
+def _qualified_xmp_name(name: str) -> str:
+    if name.startswith("{"):
+        namespace, _, local_name = name[1:].partition("}")
+        prefix = XMP_NAMESPACE_PREFIXES.get(namespace, namespace)
+        return f"{prefix}:{local_name}"
+    return name
+
+
+def _extract_xmp_namespace_declarations(packet: str) -> dict[str, str]:
+    namespaces: dict[str, str] = {}
+    for match in re.finditer(r'\sxmlns:([^=\s]+)=["\']([^"\']+)["\']', packet):
+        prefix, uri = match.groups()
+        namespaces[prefix] = uri
+    return namespaces
+
+
+def _extract_xmp_packets(data: bytes) -> list[str]:
+    packets: list[str] = []
+    decoded = data.decode("utf-8", errors="ignore")
+    for match in re.finditer(
+        r"<x:xmpmeta\b.*?</x:xmpmeta>",
+        decoded,
+        flags=re.DOTALL,
+    ):
+        packets.append(match.group(0))
+    return packets
+
+
+def _xmp_text_value(element: ET.Element) -> str:
+    texts = [
+        text.strip()
+        for text in element.itertext()
+        if text is not None and text.strip()
+    ]
+    return " ".join(texts)
+
+
+def _parse_xmp_packet(packet: str) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    namespaces = _extract_xmp_namespace_declarations(packet)
+    if namespaces:
+        fields["XMPNamespaces"] = namespaces
+
+    root = ET.fromstring(packet)
+    for element in root.iter():
+        for raw_name, value in element.attrib.items():
+            field_name = _qualified_xmp_name(raw_name)
+            if field_name in XMP_RELEVANT_FIELDS and value:
+                fields[field_name] = value
+
+        field_name = _qualified_xmp_name(element.tag)
+        if field_name in XMP_RELEVANT_FIELDS:
+            value = _xmp_text_value(element)
+            if value:
+                fields[field_name] = value
+
+    return fields
+
+
+def extract_xmp_metadata(path: str | Path) -> dict[str, Any]:
+    """Extract relevant embedded XMP fields from an image file.
+
+    XML/XMP parse failures are logged and return an empty dict so metadata
+    issues never abort the organization flow.
+    """
+    file_path = Path(path)
+    try:
+        data = file_path.read_bytes()
+    except OSError as exc:
+        logger.warning("Failed to read XMP for file=%s error=%s", file_path, exc)
+        return {}
+
+    packets = _extract_xmp_packets(data)
+    if not packets:
+        return {}
+
+    fields: dict[str, Any] = {}
+    for packet in packets:
+        try:
+            fields.update(_parse_xmp_packet(packet))
+        except ET.ParseError as exc:
+            logger.warning("Failed to parse XMP for file=%s error=%s", file_path, exc)
+            continue
+    return fields
 
 
 def _normalize_gps_info(gps_info: Any, gps_tags: dict[int, str]) -> dict[str, Any]:
@@ -374,6 +544,40 @@ def _extract_gps_coordinates_from_fields(fields: dict[str, Any]) -> GPSCoordinat
             field="GPSInfo",
             confidence="high",
             raw_value=gps_info,
+        ),
+    )
+
+
+def _extract_xmp_gps_coordinates_from_fields(
+    fields: dict[str, Any],
+) -> GPSCoordinates | None:
+    """Read decimal GPS coordinates from normalized XMP fields."""
+    latitude_raw = fields.get("exif:GPSLatitude")
+    longitude_raw = fields.get("exif:GPSLongitude")
+    latitude = _xmp_gps_to_decimal(
+        latitude_raw,
+        fields.get("exif:GPSLatitudeRef"),
+    )
+    longitude = _xmp_gps_to_decimal(
+        longitude_raw,
+        fields.get("exif:GPSLongitudeRef"),
+    )
+    if latitude is None or longitude is None:
+        return None
+
+    return GPSCoordinates(
+        latitude=latitude,
+        longitude=longitude,
+        provenance=MetadataProvenance(
+            source="XMP",
+            field="exif:GPSLatitude,exif:GPSLongitude",
+            confidence="medium",
+            raw_value={
+                "exif:GPSLatitude": latitude_raw,
+                "exif:GPSLongitude": longitude_raw,
+                "exif:GPSLatitudeRef": fields.get("exif:GPSLatitudeRef"),
+                "exif:GPSLongitudeRef": fields.get("exif:GPSLongitudeRef"),
+            },
         ),
     )
 
@@ -449,7 +653,10 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
 
 def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:
     """Extract GPS coordinates in decimal degrees when available."""
-    return _extract_gps_coordinates_from_fields(extract_exif_metadata(path))
+    exif_coordinates = _extract_gps_coordinates_from_fields(extract_exif_metadata(path))
+    if exif_coordinates is not None:
+        return exif_coordinates
+    return _extract_xmp_gps_coordinates_from_fields(extract_xmp_metadata(path))
 
 
 def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
@@ -475,6 +682,30 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
                 source="EXIF",
                 field=field_name,
                 confidence=confidence,
+                raw_value=raw_value,
+            )
+            logger.info(
+                "Datetime resolved: file=%s source=%s field=%s confidence=%s",
+                file_path,
+                provenance.source,
+                provenance.field,
+                provenance.confidence,
+            )
+            return DateTimeResolution(
+                value=parsed,
+                used_fallback=False,
+                provenance=provenance,
+            )
+
+    xmp_fields = extract_xmp_metadata(file_path)
+    for field_name in ("exif:DateTimeOriginal", "xmp:CreateDate"):
+        raw_value = xmp_fields.get(field_name)
+        parsed = _parse_exif_datetime(raw_value)
+        if parsed is not None:
+            provenance = MetadataProvenance(
+                source="XMP",
+                field=field_name,
+                confidence="medium",
                 raw_value=raw_value,
             )
             logger.info(
