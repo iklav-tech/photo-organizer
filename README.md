@@ -142,6 +142,8 @@ EXIF from that format.
 - normalized output as `datetime`.
 - GPS coordinates normalized to decimal degrees when available;
 - embedded XMP packets parsed for date and GPS fields when present;
+- same-basename `.xmp` sidecar files parsed for date and GPS fields when
+  present;
 - missing GPS data handled safely without interrupting the run;
 - reverse geocoding failures are treated as unresolved location data.
 
@@ -187,8 +189,10 @@ Current support status:
 | `description` | 4 | EXIF | `ImageDescription`, `UserComment` | Fallback | Planned |
 
 The current `date_taken` resolver implements the supported subset of this
-policy: EXIF `DateTimeOriginal`, EXIF `CreateDate`/aliases, embedded XMP date
-fields, then filesystem `mtime` as a heuristic. Location organization currently
+policy: EXIF `DateTimeOriginal`, EXIF `CreateDate`/aliases, XMP date fields,
+then filesystem `mtime` as a heuristic. XMP can come from embedded metadata or
+from a same-basename sidecar file such as `IMG_001.xmp`; within the XMP tier,
+sidecar values override embedded XMP values. Location organization currently
 uses EXIF GPS coordinates, XMP GPS coordinates and reverse geocoding; IPTC-IIM
 and PNG metadata entries are reserved by policy for future extractors.
 
@@ -207,6 +211,8 @@ Examples:
 
 - `EXIF:DateTimeOriginal` with high confidence for the capture date;
 - `EXIF:GPSInfo` with high confidence for GPS coordinates;
+- `XMP sidecar:xmp:CreateDate` with medium confidence when `image.xmp`
+  provides the selected date;
 - `Reverse geocoding:GPSLatitudeDecimal,GPSLongitudeDecimal` with medium
   confidence for city/state/country derived from coordinates;
 - `filesystem:mtime` with low confidence when no embedded date is available.

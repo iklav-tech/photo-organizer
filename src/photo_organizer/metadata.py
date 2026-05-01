@@ -461,7 +461,44 @@ def _parse_xmp_packet(packet: str) -> dict[str, Any]:
     return fields
 
 
-def extract_xmp_metadata(path: str | Path) -> dict[str, Any]:
+def _extract_xmp_metadata_from_bytes(
+    data: bytes,
+    file_path: Path,
+    source_kind: str,
+) -> dict[str, Any]:
+    packets = _extract_xmp_packets(data)
+    if not packets:
+        return {}
+
+    fields: dict[str, Any] = {}
+    field_sources: dict[str, str] = {}
+    for packet in packets:
+        try:
+            parsed_fields = _parse_xmp_packet(packet)
+        except ET.ParseError as exc:
+            logger.warning("Failed to parse XMP for file=%s error=%s", file_path, exc)
+            continue
+
+        for key, value in parsed_fields.items():
+            fields[key] = value
+            if key != "XMPNamespaces":
+                field_sources[key] = source_kind
+
+    if field_sources:
+        fields["XMPFieldSources"] = field_sources
+    return fields
+
+
+def find_xmp_sidecar_path(path: str | Path) -> Path | None:
+    """Return the same-basename .xmp sidecar path when it exists."""
+    file_path = Path(path)
+    sidecar_path = file_path.with_suffix(".xmp")
+    if sidecar_path.is_file():
+        return sidecar_path
+    return None
+
+
+def extract_embedded_xmp_metadata(path: str | Path) -> dict[str, Any]:
     """Extract relevant embedded XMP fields from an image file.
 
     XML/XMP parse failures are logged and return an empty dict so metadata
@@ -474,18 +511,58 @@ def extract_xmp_metadata(path: str | Path) -> dict[str, Any]:
         logger.warning("Failed to read XMP for file=%s error=%s", file_path, exc)
         return {}
 
-    packets = _extract_xmp_packets(data)
-    if not packets:
+    return _extract_xmp_metadata_from_bytes(data, file_path, "embedded")
+
+
+def extract_xmp_sidecar_metadata(path: str | Path) -> dict[str, Any]:
+    """Extract relevant XMP fields from a same-basename .xmp sidecar file."""
+    sidecar_path = find_xmp_sidecar_path(path)
+    if sidecar_path is None:
         return {}
 
-    fields: dict[str, Any] = {}
-    for packet in packets:
-        try:
-            fields.update(_parse_xmp_packet(packet))
-        except ET.ParseError as exc:
-            logger.warning("Failed to parse XMP for file=%s error=%s", file_path, exc)
-            continue
+    try:
+        data = sidecar_path.read_bytes()
+    except OSError as exc:
+        logger.warning("Failed to read XMP sidecar for file=%s error=%s", sidecar_path, exc)
+        return {}
+
+    fields = _extract_xmp_metadata_from_bytes(data, sidecar_path, "sidecar")
+    if fields:
+        fields["XMPSidecarPath"] = str(sidecar_path)
     return fields
+
+
+def extract_xmp_metadata(path: str | Path) -> dict[str, Any]:
+    """Extract relevant embedded and sidecar XMP fields.
+
+    Sidecar XMP uses the same basename as the image with a `.xmp` extension.
+    Within the XMP source tier, sidecar values override embedded values because
+    they usually represent later external metadata edits. EXIF still has higher
+    priority than XMP according to `METADATA_PRECEDENCE_POLICY`.
+    """
+    embedded_fields = extract_embedded_xmp_metadata(path)
+    sidecar_fields = extract_xmp_sidecar_metadata(path)
+
+    if not embedded_fields:
+        return sidecar_fields
+    if not sidecar_fields:
+        return embedded_fields
+
+    merged_fields = dict(embedded_fields)
+    embedded_sources = dict(embedded_fields.get("XMPFieldSources", {}))
+    sidecar_sources = dict(sidecar_fields.get("XMPFieldSources", {}))
+    for key, value in sidecar_fields.items():
+        if key == "XMPFieldSources":
+            continue
+        if key == "XMPNamespaces" and key in merged_fields:
+            merged_fields[key] = {**merged_fields[key], **value}
+            continue
+        merged_fields[key] = value
+
+    merged_sources = {**embedded_sources, **sidecar_sources}
+    if merged_sources:
+        merged_fields["XMPFieldSources"] = merged_sources
+    return merged_fields
 
 
 def _normalize_gps_info(gps_info: Any, gps_tags: dict[int, str]) -> dict[str, Any]:
@@ -554,6 +631,22 @@ def _extract_xmp_gps_coordinates_from_fields(
     """Read decimal GPS coordinates from normalized XMP fields."""
     latitude_raw = fields.get("exif:GPSLatitude")
     longitude_raw = fields.get("exif:GPSLongitude")
+    field_sources = fields.get("XMPFieldSources", {})
+    latitude_source = (
+        field_sources.get("exif:GPSLatitude")
+        if isinstance(field_sources, dict)
+        else None
+    )
+    longitude_source = (
+        field_sources.get("exif:GPSLongitude")
+        if isinstance(field_sources, dict)
+        else None
+    )
+    source = (
+        "XMP sidecar"
+        if "sidecar" in {latitude_source, longitude_source}
+        else "XMP"
+    )
     latitude = _xmp_gps_to_decimal(
         latitude_raw,
         fields.get("exif:GPSLatitudeRef"),
@@ -569,7 +662,7 @@ def _extract_xmp_gps_coordinates_from_fields(
         latitude=latitude,
         longitude=longitude,
         provenance=MetadataProvenance(
-            source="XMP",
+            source=source,
             field="exif:GPSLatitude,exif:GPSLongitude",
             confidence="medium",
             raw_value={
@@ -702,8 +795,14 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
         raw_value = xmp_fields.get(field_name)
         parsed = _parse_exif_datetime(raw_value)
         if parsed is not None:
+            field_sources = xmp_fields.get("XMPFieldSources", {})
+            source_kind = (
+                field_sources.get(field_name)
+                if isinstance(field_sources, dict)
+                else None
+            )
             provenance = MetadataProvenance(
-                source="XMP",
+                source="XMP sidecar" if source_kind == "sidecar" else "XMP",
                 field=field_name,
                 confidence="medium",
                 raw_value=raw_value,

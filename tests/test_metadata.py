@@ -139,6 +139,66 @@ def test_extract_xmp_metadata_handles_xml_parse_errors_safely(
     assert "Failed to parse XMP" in caplog.text
 
 
+def test_find_xmp_sidecar_path_uses_same_basename(tmp_path: Path) -> None:
+    image_path = tmp_path / "image.jpg"
+    sidecar_path = tmp_path / "image.xmp"
+    image_path.write_text("image")
+    sidecar_path.write_text("xmp")
+
+    assert metadata.find_xmp_sidecar_path(image_path) == sidecar_path
+
+
+def test_extract_xmp_metadata_reads_same_basename_sidecar(tmp_path: Path) -> None:
+    image_path = tmp_path / "image.jpg"
+    sidecar_path = tmp_path / "image.xmp"
+    image_path.write_text("image")
+    sidecar_path.write_text(
+        """<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+
+    result = metadata.extract_xmp_metadata(image_path)
+
+    assert result["xmp:CreateDate"] == "2024-08-15T14:32:09"
+    assert result["XMPSidecarPath"] == str(sidecar_path)
+    assert result["XMPFieldSources"]["xmp:CreateDate"] == "sidecar"
+
+
+def test_sidecar_xmp_overrides_embedded_xmp_within_xmp_tier(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "image.jpg"
+    sidecar_path = tmp_path / "image.xmp"
+    image_path.write_bytes(
+        b"""<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:CreateDate="2020-01-02T03:04:05" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+    sidecar_path.write_text(
+        """<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+
+    result = metadata.extract_xmp_metadata(image_path)
+
+    assert result["xmp:CreateDate"] == "2024-08-15T14:32:09"
+    assert result["XMPFieldSources"]["xmp:CreateDate"] == "sidecar"
+
+
 def test_get_best_available_datetime_uses_xmp_when_exif_is_missing(
     tmp_path: Path,
     monkeypatch,
@@ -161,6 +221,35 @@ def test_get_best_available_datetime_uses_xmp_when_exif_is_missing(
     assert resolution.used_fallback is False
     assert resolution.provenance == metadata.MetadataProvenance(
         source="XMP",
+        field="xmp:CreateDate",
+        confidence="medium",
+        raw_value="2024-08-15T14:32:09",
+    )
+
+
+def test_get_best_available_datetime_records_sidecar_xmp_provenance(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    image_path = tmp_path / "image.jpg"
+    sidecar_path = tmp_path / "image.xmp"
+    image_path.write_text("image")
+    sidecar_path.write_text(
+        """<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(image_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="XMP sidecar",
         field="xmp:CreateDate",
         confidence="medium",
         raw_value="2024-08-15T14:32:09",
@@ -199,6 +288,34 @@ def test_extract_gps_coordinates_uses_xmp_when_exif_gps_is_missing(
             "exif:GPSLongitudeRef": None,
         },
     )
+
+
+def test_extract_gps_coordinates_records_sidecar_xmp_provenance(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    image_path = tmp_path / "image.jpg"
+    sidecar_path = tmp_path / "image.xmp"
+    image_path.write_text("image")
+    sidecar_path.write_text(
+        """<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:exif="http://ns.adobe.com/exif/1.0/"
+      exif:GPSLatitude="23,30.000S"
+      exif:GPSLongitude="46,37.500W" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+    monkeypatch.setattr(metadata, "extract_exif_metadata", lambda _path: {})
+
+    result = metadata.extract_gps_coordinates(image_path)
+
+    assert result == metadata.GPSCoordinates(latitude=-23.5, longitude=-46.625)
+    assert result is not None
+    assert result.provenance is not None
+    assert result.provenance.source == "XMP sidecar"
+    assert result.provenance.field == "exif:GPSLatitude,exif:GPSLongitude"
 
 
 def test_extract_exif_metadata_reads_gps_coordinates_as_decimal(
