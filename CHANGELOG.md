@@ -4,6 +4,132 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and follows semantic versioning.
 
+## [0.4.0] - 2026-05-01
+
+### Added
+
+- External organization configuration files for `organize`:
+  - JSON (`.json`)
+  - YAML (`.yaml`)
+  - YML (`.yml`)
+- `--config PATH` CLI option for loading organization rules.
+- Configuration support for:
+  - output directory
+  - filename pattern
+  - destination pattern
+  - organization strategy
+  - operation mode
+  - dry-run mode
+  - plan mode
+  - reverse geocoding behavior
+- Minimal configuration validation with clear errors for:
+  - missing config files
+  - unsupported config extensions
+  - invalid JSON/YAML structure
+  - invalid field types
+  - invalid mode values
+  - invalid organization strategies
+  - invalid filename and destination pattern fields
+- Custom filename pattern support through config `naming.pattern`.
+- Custom filename pattern support through CLI `--name-pattern`.
+- Supported filename pattern fields:
+  - `{date}`
+  - `{stem}`
+  - `{ext}`
+  - `{original}`
+- Destination pattern support through config `destination.pattern`.
+- Supported destination pattern fields:
+  - `{date}`
+  - `{country}`
+  - `{state}`
+  - `{city}`
+- GPS coordinate extraction from EXIF metadata as decimal latitude/longitude.
+- Reverse geocoding helper for resolving GPS coordinates into:
+  - city
+  - state
+  - country
+- Location-aware organization strategies:
+  - `location`
+  - `location-date`
+- Hybrid city/state/month organization strategy:
+  - `city-state-month`
+  - example path: `Paraty-RJ/2024-08`
+- Location status tracking in planned operations:
+  - `disabled`
+  - `missing-gps`
+  - `unresolved`
+  - `resolved`
+  - `error`
+- Organization fallback tracking when a location strategy cannot resolve a location.
+- Execution summary counters for:
+  - resolved location files
+  - files with GPS coordinates
+  - files missing GPS
+  - organization fallback files
+- Location-aware audit report fields when reverse geocoding is enabled:
+  - location status
+  - organization fallback flag
+  - latitude
+  - longitude
+  - city
+  - state
+  - country
+- Tests for:
+  - GPS coordinate extraction
+  - absence of GPS metadata
+  - reverse geocoding behavior
+  - location fallback behavior
+  - external configuration loading and validation
+  - custom filename patterns
+  - custom destination patterns
+  - `city-state-month` strategy
+
+### Changed
+
+- `organize --help` now documents:
+  - `--config`
+  - `--name-pattern`
+  - `city-state-month`
+  - supported organization strategies
+- CLI-provided values now take precedence over equivalent config values where applicable.
+- `--name-pattern` overrides config `naming.pattern`.
+- Location-based strategies automatically enable reverse geocoding unless the user explicitly disables it.
+- README updated to document the v0.4.0 workflow, configuration files, naming patterns, destination patterns, GPS/location behavior, fallback behavior and roadmap updates.
+- Project structure and module responsibility documentation now includes `config.py`, `geocoding.py`, `test_config.py` and `test_geocoding.py`.
+- Roadmap updated to mark v0.4.0 as implemented and add planned v0.6.0 HEIC/HEIF and v0.7.0 proprietary RAW work.
+- PyYAML added as a project dependency for YAML configuration support.
+
+### Fixed
+
+- Invalid filename patterns now fail before planning instead of being discovered per file.
+- Filename patterns with path separators are rejected clearly.
+- Unknown filename and destination pattern fields now return clear validation errors.
+- Location organization strategies now fall back to date-based organization when GPS is missing or reverse geocoding cannot resolve a location.
+- Reverse geocoding network/service failures are handled as unresolved location data instead of aborting organization.
+
+### Behavior guarantees in v0.4.0
+
+- Default naming remains `YYYY-MM-DD_HH-MM-SS.ext` when no custom pattern is configured.
+- Original file extensions remain preserved unless the user explicitly changes the pattern.
+- CLI `--name-pattern` has precedence over config `naming.pattern`.
+- Configured organization behavior is validated before execution.
+- `date`, `location`, `location-date` and `city-state-month` are supported organization strategies.
+- `city-state-month` produces a stable `City-State/YYYY-MM` destination directory.
+- Missing GPS data does not fail the organization run.
+- Unresolved location data does not fail the organization run.
+- Location fallback is visible in operation metadata, summaries and location-aware reports.
+
+### Validation
+
+- Local automated tests passing for v0.4.0 scope (`pytest`, 135 tests).
+- Tests cover JSON and YAML config loading.
+- Tests cover invalid config and invalid pattern errors.
+- Tests cover CLI/config precedence for custom filename patterns.
+- Tests cover GPS coordinate extraction and missing GPS behavior.
+- Tests cover reverse geocoding resolution and failure handling.
+- Tests cover date fallback for location-based organization.
+- Tests cover `city-state-month` planning and end-to-end organization.
+
 ## [0.3.0] - 2026-04-28
 
 ### Added
