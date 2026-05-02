@@ -667,7 +667,7 @@ def test_extract_gps_coordinates_returns_none_without_gps(
 
 
 def test_extract_exif_metadata_returns_empty_when_no_exif(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, caplog
 ) -> None:
     file_path = tmp_path / "image.jpg"
     file_path.write_text("x")
@@ -691,9 +691,12 @@ def test_extract_exif_metadata_returns_empty_when_no_exif(
 
     monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
 
-    result = metadata.extract_exif_metadata(file_path)
+    with caplog.at_level(logging.DEBUG):
+        result = metadata.extract_exif_metadata(file_path)
 
     assert result == {}
+    assert "EXIF metadata absent" in caplog.text
+    assert "Fatal EXIF read error" not in caplog.text
 
 
 def test_extract_exif_metadata_skips_formats_without_real_exif_support(
@@ -778,8 +781,92 @@ def test_extract_exif_metadata_handles_malformed_exif_safely(
         result = metadata.extract_exif_metadata(file_path)
 
     assert result == {}
-    assert "Failed to parse EXIF" in caplog.text
+    assert "Failed to enumerate EXIF IFD" in caplog.text
     assert "malformed exif" in caplog.text
+
+
+def test_extract_exif_metadata_recovers_known_tags_when_ifd_enumeration_fails(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+
+    class PartialExif:
+        def __bool__(self):
+            return True
+
+        def items(self):
+            raise ValueError("broken directory")
+
+        def get(self, key):
+            values = {
+                36867: "2024:01:02 03:04:05",
+                306: "2020:01:01 00:00:00",
+            }
+            return values.get(key)
+
+    class FakeImage:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return PartialExif()
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(
+        TAGS={36867: "DateTimeOriginal", 306: "DateTime"}
+    )
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    with caplog.at_level(logging.WARNING):
+        result = metadata.extract_exif_metadata(file_path)
+
+    assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
+    assert result["DateTime"] == "2020:01:01 00:00:00"
+    assert "Partial EXIF metadata recovered" in caplog.text
+    assert "Fatal EXIF read error" not in caplog.text
+
+
+def test_extract_exif_metadata_reads_tiff_container_tags_without_full_exif(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "legacy.tif"
+    file_path.write_text("x")
+
+    class FakeImage:
+        tag_v2 = {
+            306: "2021:06:07 08:09:10",
+        }
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return {}
+
+    fake_image_module = types.SimpleNamespace(open=lambda _path: FakeImage())
+    fake_exif_tags_module = types.SimpleNamespace(TAGS={306: "DateTime"})
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["DateTime"] == "2021:06:07 08:09:10"
 
 
 def test_get_best_available_datetime_prioritizes_datetimeoriginal(

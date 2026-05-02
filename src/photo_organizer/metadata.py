@@ -34,6 +34,15 @@ logger = logging.getLogger(__name__)
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_TEXT_CHUNK_TYPES = {"iTXt", "tEXt", "zTXt"}
+FALLBACK_EXIF_TAGS = {
+    270: "ImageDescription",
+    306: "DateTime",
+    315: "Artist",
+    33432: "Copyright",
+    34853: "GPSInfo",
+    36867: "DateTimeOriginal",
+    36868: "DateTimeDigitized",
+}
 
 
 MetadataFieldName = Literal["date_taken", "location", "title", "author", "description"]
@@ -907,6 +916,62 @@ def _read_gps_ifd(exif_data: Any, gps_key: int) -> Any:
         return None
 
 
+def _read_exif_value(exif_data: Any, key: int) -> Any:
+    """Read one EXIF value without assuming the whole IFD is healthy."""
+    try:
+        if hasattr(exif_data, "get"):
+            return exif_data.get(key)
+        return exif_data[key]
+    except Exception as exc:
+        logger.debug("EXIF tag unavailable: tag=%s error=%s", key, exc)
+        return None
+
+
+def _iter_exif_items(
+    exif_data: Any,
+    tag_names: dict[int, str],
+) -> tuple[list[tuple[int, Any]], bool]:
+    """Return EXIF items, falling back to known tags when enumeration fails."""
+    if not exif_data:
+        return [], False
+
+    if hasattr(exif_data, "items"):
+        try:
+            return list(exif_data.items()), False
+        except Exception as exc:
+            logger.warning("Failed to enumerate EXIF IFD; trying known tags: error=%s", exc)
+
+    items: list[tuple[int, Any]] = []
+    for key in tag_names:
+        value = _read_exif_value(exif_data, key)
+        if value is not None:
+            items.append((key, value))
+
+    return items, True
+
+
+def _read_pillow_exif_data(image: Any) -> tuple[Any, bool]:
+    """Read EXIF/IFD data from Pillow, including TIFF tag_v2 fallback."""
+    try:
+        exif_data = image.getexif()
+    except Exception as exc:
+        logger.warning("Failed to read EXIF IFD from image: error=%s", exc)
+        exif_data = None
+
+    if exif_data:
+        return exif_data, False
+
+    tag_v2 = getattr(image, "tag_v2", None)
+    if tag_v2:
+        return tag_v2, True
+
+    tag = getattr(image, "tag", None)
+    if tag:
+        return tag, True
+
+    return exif_data, False
+
+
 def _extract_gps_coordinates_from_fields(fields: dict[str, Any]) -> GPSCoordinates | None:
     """Read decimal GPS coordinates from normalized EXIF fields."""
     gps_info = fields.get("GPSInfo")
@@ -1050,30 +1115,39 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
 
     try:
         with Image.open(file_path) as image:
-            exif_data = image.getexif()
+            exif_data, used_container_fallback = _read_pillow_exif_data(image)
     except Exception as exc:
-        logger.warning("Failed to read EXIF for file=%s error=%s", file_path, exc)
+        logger.warning("Fatal EXIF read error for file=%s error=%s", file_path, exc)
         return {}
 
     if not exif_data:
-        return {}
-
-    try:
-        exif_items = exif_data.items()
-    except Exception as exc:
-        logger.warning("Failed to parse EXIF for file=%s error=%s", file_path, exc)
+        logger.debug("EXIF metadata absent for file=%s", file_path)
         return {}
 
     fields: dict[str, Any] = {}
+    exif_tags = {**FALLBACK_EXIF_TAGS, **getattr(ExifTags, "TAGS", {})}
     gps_tags = getattr(ExifTags, "GPSTAGS", {})
+    exif_items, used_tag_fallback = _iter_exif_items(exif_data, exif_tags)
+    if not exif_items:
+        logger.debug("EXIF metadata absent for file=%s", file_path)
+        return {}
+    if used_container_fallback:
+        logger.debug("EXIF read using container tag fallback for file=%s", file_path)
+    if used_tag_fallback:
+        logger.warning(
+            "Partial EXIF metadata recovered after inconsistent IFD for file=%s",
+            file_path,
+        )
+
     for key, value in exif_items:
-        tag_name = ExifTags.TAGS.get(key)
+        tag_name = exif_tags.get(key)
         if isinstance(tag_name, str):
             if tag_name == "GPSInfo":
                 value = _normalize_gps_info(value, gps_tags)
                 if not value:
                     value = _normalize_gps_info(_read_gps_ifd(exif_data, key), gps_tags)
-            fields[tag_name] = value
+            if value not in (None, {}, ""):
+                fields[tag_name] = value
 
     gps_coordinates = _extract_gps_coordinates_from_fields(fields)
     if gps_coordinates is not None:

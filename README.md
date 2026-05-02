@@ -135,6 +135,8 @@ EXIF from that format.
 - safe handling when EXIF is missing;
 - safe handling of EXIF read exceptions;
 - safe handling of malformed EXIF data without interrupting the whole run;
+- partially inconsistent JPEG/TIFF IFDs are recovered from known tags when
+  possible, while truly absent EXIF is logged separately from fatal read errors;
 - primary date resolution priority:
   1. `DateTimeOriginal`
   2. `CreateDate`
