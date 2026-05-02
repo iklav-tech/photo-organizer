@@ -1,5 +1,7 @@
+import binascii
 from datetime import datetime
 from pathlib import Path
+import zlib
 import sys
 import types
 import logging
@@ -15,6 +17,24 @@ def _iptc_dataset(record: int, dataset: int, value: str) -> bytes:
         + len(raw_value).to_bytes(2, "big")
         + raw_value
     )
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    crc = binascii.crc32(chunk_type + data) & 0xFFFFFFFF
+    return len(data).to_bytes(4, "big") + chunk_type + data + crc.to_bytes(4, "big")
+
+
+def _minimal_png_with_chunks(*chunks: tuple[bytes, bytes]) -> bytes:
+    png = b"\x89PNG\r\n\x1a\n"
+    png += _png_chunk(
+        b"IHDR",
+        b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00",
+    )
+    for chunk_type, data in chunks:
+        png += _png_chunk(chunk_type, data)
+    png += _png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+    png += _png_chunk(b"IEND", b"")
+    return png
 
 
 def test_metadata_precedence_policy_covers_required_fields() -> None:
@@ -50,7 +70,7 @@ def test_date_taken_policy_orders_primary_fallback_and_heuristic_sources() -> No
         ("fallback", "EXIF", ("CreateDate", "DateTime", "DateTimeDigitized")),
         ("fallback", "XMP", ("exif:DateTimeOriginal", "xmp:CreateDate")),
         ("fallback", "IPTC-IIM", ("DateCreated", "TimeCreated")),
-        ("fallback", "PNG metadata", ("Creation Time", "CreationTime")),
+        ("fallback", "PNG metadata", ("Creation Time", "CreationTime", "tIME")),
         ("heuristic", "Filesystem", ("mtime",)),
     ]
 
@@ -99,6 +119,105 @@ def test_extract_exif_metadata_reads_compatible_jpeg_exif(
     result = metadata.extract_exif_metadata(file_path)
 
     assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
+
+
+def test_extract_exif_metadata_reads_png_exif_chunk(tmp_path: Path) -> None:
+    from PIL import Image
+
+    file_path = tmp_path / "image.png"
+    exif = Image.Exif()
+    exif[36867] = "2024:01:02 03:04:05"
+    Image.new("RGB", (1, 1)).save(file_path, exif=exif)
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
+
+
+def test_extract_png_metadata_reads_itxt_utf8_xmp_and_legacy_text(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.png"
+    xmp_packet = """<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    itxt = (
+        b"XML:com.adobe.xmp\x00"
+        b"\x01\x00"
+        b"pt-BR\x00"
+        + "Pacote XMP".encode("utf-8")
+        + b"\x00"
+        + zlib.compress(xmp_packet.encode("utf-8"))
+    )
+    text = b"Title\x00Viagem"
+    ztxt = b"Author\x00\x00" + zlib.compress("João".encode("latin-1"))
+    file_path.write_bytes(
+        _minimal_png_with_chunks((b"iTXt", itxt), (b"tEXt", text), (b"zTXt", ztxt))
+    )
+
+    png_fields = metadata.extract_png_metadata(file_path)
+    xmp_fields = metadata.extract_xmp_metadata(file_path)
+
+    assert "XML:com.adobe.xmp" in png_fields
+    assert png_fields["Title"] == "Viagem"
+    assert png_fields["Author"] == "João"
+    assert png_fields["PNGFieldSources"]["XML:com.adobe.xmp"] == "iTXt"
+    assert xmp_fields["xmp:CreateDate"] == "2024-08-15T14:32:09"
+    assert xmp_fields["XMPFieldSources"]["xmp:CreateDate"] == "embedded"
+
+
+def test_get_best_available_datetime_uses_png_creation_time_before_time_chunk(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "image.png"
+    creation_time = b"Creation Time\x002024:08:15 14:32:09"
+    time_chunk = b"\x07\xe5\x01\x02\x03\x04\x05"
+    file_path.write_bytes(
+        _minimal_png_with_chunks((b"tEXt", creation_time), (b"tIME", time_chunk))
+    )
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.used_fallback is False
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="PNG metadata",
+        field="Creation Time",
+        confidence="medium",
+        raw_value="2024:08:15 14:32:09",
+    )
+
+
+def test_get_best_available_datetime_uses_png_time_only_as_secondary_fallback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "image.png"
+    file_path.write_bytes(
+        _minimal_png_with_chunks((b"tIME", b"\x07\xe5\x01\x02\x03\x04\x05"))
+    )
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2021, 1, 2, 3, 4, 5)
+    assert resolution.used_fallback is True
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="PNG metadata",
+        field="tIME",
+        confidence="low",
+        raw_value="2021:01:02 03:04:05",
+    )
 
 
 def test_extract_xmp_metadata_reads_relevant_fields_and_namespaces(

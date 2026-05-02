@@ -18,7 +18,7 @@ class ImageFormat:
 # aligned from a single configuration point.
 IMAGE_FORMATS = (
     ImageFormat("JPEG", frozenset({".jpg", ".jpeg"}), supports_exif=True),
-    ImageFormat("PNG", frozenset({".png"})),
+    ImageFormat("PNG", frozenset({".png"}), supports_exif=True),
     ImageFormat("TIFF", frozenset({".tif", ".tiff"}), supports_exif=True),
     ImageFormat("WEBP", frozenset({".webp"})),
     ImageFormat("BMP", frozenset({".bmp"})),

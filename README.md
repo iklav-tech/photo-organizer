@@ -17,7 +17,7 @@ The project includes a tested v0.4.0 CLI workflow:
 - image scanning with recursive search;
 - centralized and easily extensible supported image format list;
 - case-insensitive extension matching;
-- EXIF extraction for compatible JPEG/TIFF images;
+- EXIF extraction for compatible JPEG, PNG and TIFF images;
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
 - duplicate image grouping by content hash with original/duplicates output;
@@ -129,9 +129,9 @@ EXIF from that format.
 
 ### Metadata behavior
 
-- EXIF extraction for compatible JPEG and TIFF images;
-- formats without real EXIF support in the current reader, such as PNG, WEBP
-  and BMP, safely skip EXIF extraction and use file `mtime` fallback;
+- EXIF extraction for compatible JPEG, PNG `eXIf` and TIFF images;
+- formats without real EXIF support in the current reader, such as WEBP and
+  BMP, safely skip EXIF extraction and use file `mtime` fallback;
 - safe handling when EXIF is missing;
 - safe handling of EXIF read exceptions;
 - safe handling of malformed EXIF data without interrupting the whole run;
@@ -142,6 +142,11 @@ EXIF from that format.
 - normalized output as `datetime`.
 - GPS coordinates normalized to decimal degrees when available;
 - embedded XMP packets parsed for date and GPS fields when present;
+- PNG `iTXt` chunks parsed as UTF-8 text, including XMP packets stored in
+  `XML:com.adobe.xmp`;
+- PNG legacy `tEXt` and `zTXt` chunks parsed for textual metadata;
+- PNG `tIME` image modification timestamps are used only as a low-confidence
+  secondary fallback, never as the original capture date;
 - same-basename `.xmp` sidecar files parsed for date and GPS fields when
   present;
 - legacy IPTC-IIM datasets parsed for date, time, city, state, country, title,
@@ -171,7 +176,7 @@ Current support status:
 | `date_taken` | 2 | EXIF | `CreateDate`, `DateTime`, `DateTimeDigitized` | Fallback | Implemented |
 | `date_taken` | 3 | XMP | `exif:DateTimeOriginal`, `xmp:CreateDate` | Fallback | Implemented |
 | `date_taken` | 4 | IPTC-IIM | `DateCreated`, `TimeCreated` | Fallback | Implemented |
-| `date_taken` | 5 | PNG metadata | `Creation Time`, `CreationTime` | Fallback | Planned |
+| `date_taken` | 5 | PNG metadata | `Creation Time`, `CreationTime`, `tIME` | Fallback | Implemented |
 | `date_taken` | 6 | Filesystem | `mtime` | Heuristic | Implemented |
 | `location` | 1 | EXIF | `GPSInfo`, `GPSLatitude`, `GPSLongitude` | Primary | Implemented |
 | `location` | 2 | XMP | `exif:GPSLatitude`, `exif:GPSLongitude` | Fallback | Implemented |
@@ -192,12 +197,15 @@ Current support status:
 
 The current `date_taken` resolver implements the supported subset of this
 policy: EXIF `DateTimeOriginal`, EXIF `CreateDate`/aliases, XMP date fields,
-IPTC-IIM `DateCreated`/`TimeCreated`, then filesystem `mtime` as a heuristic.
+IPTC-IIM `DateCreated`/`TimeCreated`, PNG `Creation Time`/`CreationTime`,
+PNG `tIME` as a secondary low-confidence modification-time fallback, then
+filesystem `mtime` as a heuristic.
 XMP can come from embedded metadata or from a same-basename sidecar file such as
 `IMG_001.xmp`; within the XMP tier, sidecar values override embedded XMP
 values. Location organization currently uses EXIF GPS coordinates, XMP GPS
-coordinates, IPTC-IIM city/state/country fields and reverse geocoding; PNG
-metadata entries are reserved by policy for future extractors.
+coordinates, IPTC-IIM city/state/country fields and reverse geocoding. PNG text
+metadata currently contributes date and embedded XMP fields; title, author and
+description PNG policy entries remain reserved for future user-facing fields.
 
 ### Metadata provenance model
 
@@ -768,13 +776,16 @@ This section consolidates what was implemented in v0.1.0 according to completed 
 
 ### Metadata and date resolution
 
-- EXIF extraction for compatible JPEG files;
+- EXIF extraction for compatible JPEG, PNG and TIFF files;
 - safe behavior when EXIF is missing;
 - safe handling of EXIF read exceptions;
 - date resolution order:
   1. `DateTimeOriginal`
   2. `CreateDate`
-  3. `mtime` fallback
+  3. XMP and IPTC-IIM date fields
+  4. PNG `Creation Time`/`CreationTime`
+  5. PNG `tIME` as a secondary fallback
+  6. `mtime` fallback
 
 ### Naming and destination planning
 
