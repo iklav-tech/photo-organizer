@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from photo_organizer.correction_manifest import validate_correction_priority
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.planner import validate_destination_pattern
 from photo_organizer.metadata import validate_reconciliation_policy
@@ -31,6 +32,8 @@ class OrganizationConfig:
     reconciliation_policy: str | None = None
     date_heuristics: bool | None = None
     location_inference: bool | None = None
+    correction_manifest: str | None = None
+    correction_priority: str | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -199,6 +202,16 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "location_inference",
         "behavior.location_inference",
     )
+    correction_manifest = _optional_string(
+        behavior,
+        "correction_manifest",
+        "behavior.correction_manifest",
+    )
+    correction_priority = _optional_string(
+        behavior,
+        "correction_priority",
+        "behavior.correction_priority",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -225,6 +238,13 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
             raise ConfigurationError(
                 f"Invalid behavior.reconciliation_policy: {exc}"
             ) from exc
+    if correction_priority is not None:
+        try:
+            validate_correction_priority(correction_priority)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"Invalid behavior.correction_priority: {exc}"
+            ) from exc
     if naming_pattern is not None:
         try:
             validate_filename_pattern(naming_pattern)
@@ -248,4 +268,6 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         reconciliation_policy=reconciliation_policy,
         date_heuristics=date_heuristics,
         location_inference=location_inference,
+        correction_manifest=correction_manifest,
+        correction_priority=correction_priority,
     )

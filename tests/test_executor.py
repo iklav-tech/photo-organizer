@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 import os
 
+from photo_organizer.correction_manifest import CorrectionManifest, CorrectionRule
 from photo_organizer.executor import FileOperation, apply_operations, plan_organization_operations
 from photo_organizer.geocoding import ReverseGeocodedLocation
 from photo_organizer.metadata import GPSCoordinates
@@ -688,6 +689,69 @@ def test_plan_organization_operations_infers_location_from_manifest_without_gps(
     assert operations[0].location_status == "inferred"
     assert operations[0].location_provenance is not None
     assert operations[0].location_provenance.source == "External manifest"
+
+
+def test_plan_organization_operations_applies_batch_correction_manifest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "legacy_001.jpg"
+    image.write_text("a")
+    manifest_path = tmp_path / "corrections.json"
+    correction_manifest = CorrectionManifest(
+        path=manifest_path,
+        rules=(
+            CorrectionRule(
+                selector="legacy_*.jpg",
+                selector_type="glob",
+                date_value="1969-07-20T20:17:00",
+                city="Houston",
+                state="TX",
+                country="USA",
+                event_name="Moon landing",
+                priority="highest",
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+    monkeypatch.setattr("photo_organizer.metadata.extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(
+        "photo_organizer.metadata.extract_iptc_iim_metadata",
+        lambda _path: {},
+    )
+    monkeypatch.setattr("photo_organizer.metadata.extract_png_metadata", lambda _path: {})
+    monkeypatch.setattr(
+        "photo_organizer.metadata._read_exif_datetime_fields",
+        lambda _path: {},
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+        correction_manifest=correction_manifest,
+    )
+
+    assert operations[0].destination == (
+        output_dir / "Houston-TX" / "1969-07" / "1969-07-20_20-17-00.jpg"
+    )
+    assert operations[0].location_status == "inferred"
+    assert operations[0].location_provenance is not None
+    assert operations[0].location_provenance.source == "Correction manifest"
+    assert operations[0].date_provenance is not None
+    assert operations[0].date_provenance.source == "Correction manifest"
+    assert operations[0].correction_manifest is not None
+    assert operations[0].correction_manifest.event_name == "Moon landing"
 
 
 def test_plan_organization_operations_infers_location_from_folder_without_gps(

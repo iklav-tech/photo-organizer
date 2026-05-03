@@ -25,6 +25,8 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "reconciliation_policy": "newest",
                     "date_heuristics": False,
                     "location_inference": False,
+                    "correction_manifest": "corrections.csv",
+                    "correction_priority": "metadata",
                 },
             }
         ),
@@ -44,6 +46,8 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.reconciliation_policy == "newest"
     assert config.date_heuristics is False
     assert config.location_inference is False
+    assert config.correction_manifest == "corrections.csv"
+    assert config.correction_priority == "metadata"
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
@@ -90,6 +94,19 @@ def test_load_organization_config_rejects_invalid_reconciliation_policy(
     )
 
     with pytest.raises(ConfigurationError, match="reconciliation_policy"):
+        load_organization_config(config_path)
+
+
+def test_load_organization_config_rejects_invalid_correction_priority(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"correction_priority": "random"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="correction_priority"):
         load_organization_config(config_path)
 
 

@@ -28,6 +28,7 @@ import xml.etree.ElementTree as ET
 import zlib
 
 from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS, IMAGE_FILE_EXTENSIONS
+from photo_organizer.correction_manifest import CorrectionApplication
 from photo_organizer.text_normalization import normalize_text
 
 
@@ -1488,6 +1489,98 @@ def _heuristic_datetime_candidates(path: Path) -> list[MetadataCandidate]:
     return candidates
 
 
+def _parse_clock_offset(value: str | None) -> int | None:
+    if value is None:
+        return None
+    text = value.strip()
+    match = re.fullmatch(r"([+-]?)(\d{1,2})(?::?(\d{2}))?", text)
+    if match is None:
+        return None
+    sign_text, hour_text, minute_text = match.groups()
+    sign = -1 if sign_text == "-" else 1
+    hours = int(hour_text)
+    minutes = int(minute_text or "0")
+    if hours > 23 or minutes > 59:
+        return None
+    return sign * ((hours * 60 + minutes) * 60)
+
+
+def _correction_precedence(priority: str) -> int:
+    return {
+        "highest": -10,
+        "metadata": 2,
+        "heuristic": 5,
+    }.get(priority, -10)
+
+
+def _correction_datetime_candidates(
+    correction: CorrectionApplication | None,
+    base_candidates: list[MetadataCandidate],
+) -> list[MetadataCandidate]:
+    if correction is None:
+        return []
+
+    candidates: list[MetadataCandidate] = []
+    precedence = _correction_precedence(correction.priority)
+    field_name = ",".join(correction.selectors) or correction.source_path.name
+    raw_base = {
+        "manifest": str(correction.source_path),
+        "selectors": correction.selectors,
+        "timezone": correction.timezone,
+    }
+
+    if correction.date_value is not None:
+        parsed = _parse_exif_datetime(correction.date_value)
+        if parsed is None:
+            text_parsed = _parse_datetime_from_text_pattern(correction.date_value)
+            parsed = text_parsed[0] if text_parsed is not None else None
+        if parsed is not None:
+            candidates.append(MetadataCandidate(
+                value=parsed,
+                provenance=MetadataProvenance(
+                    source="Correction manifest",
+                    field=field_name,
+                    confidence="high",
+                    raw_value={**raw_base, "date": correction.date_value},
+                ),
+                role="primary" if correction.priority == "highest" else "fallback",
+                precedence=precedence,
+                used_fallback=False,
+                date_kind="captured",
+            ))
+
+    offset_seconds = _parse_clock_offset(correction.clock_offset)
+    if offset_seconds is not None and base_candidates:
+        base_decision = reconcile_metadata_candidates(
+            "date_taken",
+            base_candidates,
+            "precedence",
+        )
+        adjusted_value = datetime.fromtimestamp(
+            base_decision.selected.value.timestamp() + offset_seconds
+        )
+        candidates.append(MetadataCandidate(
+            value=adjusted_value,
+            provenance=MetadataProvenance(
+                source="Correction manifest",
+                field=field_name,
+                confidence="high",
+                raw_value={
+                    **raw_base,
+                    "clock_offset": correction.clock_offset,
+                    "base_source": base_decision.selected.provenance.label,
+                    "base_value": base_decision.selected.value.isoformat(),
+                },
+            ),
+            role="primary" if correction.priority == "highest" else "fallback",
+            precedence=precedence,
+            used_fallback=False,
+            date_kind="captured",
+        ))
+
+    return candidates
+
+
 def extract_iptc_iim_location(path: str | Path) -> tuple[dict[str, str], MetadataProvenance] | None:
     """Return IPTC-IIM city/state/country fields with provenance when present."""
     fields = extract_iptc_iim_metadata(path)
@@ -1801,6 +1894,7 @@ def resolve_best_available_datetime(
     path: str | Path,
     reconciliation_policy: ReconciliationPolicy = "precedence",
     date_heuristics: bool = DATE_HEURISTICS_DEFAULT,
+    correction: CorrectionApplication | None = None,
 ) -> DateTimeResolution:
     """Return the best available datetime plus fallback metadata.
 
@@ -1893,6 +1987,8 @@ def resolve_best_available_datetime(
             used_fallback=True,
             date_kind="inferred",
         ))
+
+    candidates.extend(_correction_datetime_candidates(correction, candidates))
 
     if date_heuristics and (not candidates or reconciliation_policy == "filesystem"):
         candidates.extend(_heuristic_datetime_candidates(file_path))

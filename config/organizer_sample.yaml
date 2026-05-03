@@ -12,3 +12,5 @@ behavior:
   reconciliation_policy: precedence
   date_heuristics: true
   location_inference: true
+  correction_manifest: corrections.yaml
+  correction_priority: highest

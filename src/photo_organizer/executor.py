@@ -7,6 +7,12 @@ import logging
 from pathlib import Path
 import shutil
 
+from photo_organizer.correction_manifest import (
+    CorrectionApplication,
+    CorrectionManifest,
+    CorrectionPriority,
+    correction_for_file,
+)
 from photo_organizer.geocoding import (
     ReverseGeocodedLocation,
     reverse_geocode_coordinates,
@@ -96,6 +102,7 @@ class FileOperation:
     location_status: str = "disabled"
     organization_fallback: bool = False
     text_normalization_observations: tuple[str, ...] = ()
+    correction_manifest: CorrectionApplication | None = None
 
 
 def plan_organization_operations(
@@ -109,6 +116,8 @@ def plan_organization_operations(
     reconciliation_policy: ReconciliationPolicy = "precedence",
     date_heuristics: bool = True,
     location_inference: bool = True,
+    correction_manifest: CorrectionManifest | None = None,
+    correction_priority: CorrectionPriority | None = None,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
@@ -123,12 +132,19 @@ def plan_organization_operations(
 
     operations: list[FileOperation] = []
     for image_path in find_image_files(source_path, recursive=True):
+        correction = correction_for_file(
+            correction_manifest,
+            image_path,
+            source_path,
+            correction_priority,
+        )
         try:
             try:
                 resolved_dt = resolve_best_available_datetime(
                     image_path,
                     reconciliation_policy=reconciliation_policy,
                     date_heuristics=date_heuristics,
+                    correction=correction,
                 )
             except TypeError:
                 resolved_dt = resolve_best_available_datetime(image_path)
@@ -180,7 +196,22 @@ def plan_organization_operations(
                         location_provenance.confidence,
                     )
                 if location is None and location_inference:
-                    inferred_location = infer_textual_location(image_path)
+                    inferred_location = None
+                    if correction is not None and correction.location is not None:
+                        inferred_location = (
+                            correction.location,
+                            MetadataProvenance(
+                                source="Correction manifest",
+                                field=",".join(correction.selectors),
+                                confidence="high",
+                                raw_value={
+                                    "manifest": str(correction.source_path),
+                                    "location": correction.location,
+                                },
+                            ),
+                        )
+                    if inferred_location is None:
+                        inferred_location = infer_textual_location(image_path)
                     if inferred_location is not None:
                         location_fields, location_provenance = inferred_location
                         location = ReverseGeocodedLocation(
@@ -327,6 +358,7 @@ def plan_organization_operations(
                 location_status=location_status,
                 organization_fallback=organization_fallback,
                 text_normalization_observations=tuple(text_normalization_observations),
+                correction_manifest=correction,
             )
         )
 

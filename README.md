@@ -232,6 +232,17 @@ never populate GPS coordinate fields. Users who do not want location inference
 can use `--no-location-inference` or `behavior.location_inference: false`; in
 that mode location-based strategies organize under `UnknownLocation`.
 
+Batch correction manifests can provide manual overrides for old collections
+through `--correction-manifest PATH` or `behavior.correction_manifest`. The
+manifest may be CSV, JSON, YAML or YML and can target files by exact path,
+folder, glob or filename pattern. Supported override fields include date,
+timezone, camera clock offset, city/state/country and event name. Date and clock
+offset overrides enter the date reconciliation engine as `Correction manifest`
+candidates; priority can be configured with
+`--correction-priority highest|metadata|heuristic` or
+`behavior.correction_priority`. Reports include the manifest path, matched
+selectors, event name and `Correction manifest` provenance.
+
 ### Metadata provenance model
 
 Resolved metadata values carry provenance so reports, logs and debug output can
@@ -297,6 +308,8 @@ behavior:
   reconciliation_policy: precedence
   date_heuristics: true
   location_inference: true
+  correction_manifest: corrections.yaml
+  correction_priority: highest
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -315,7 +328,28 @@ The same structure is accepted as JSON. Supported fields:
 - `behavior.date_heuristics`: boolean to enable or disable inferred date
   recovery;
 - `behavior.location_inference`: boolean to enable or disable non-GPS location
-  inference.
+  inference;
+- `behavior.correction_manifest`: CSV, JSON, YAML or YML correction manifest;
+- `behavior.correction_priority`: `highest`, `metadata` or `heuristic`.
+
+Example correction manifest:
+
+```yaml
+priority: highest
+rules:
+  - glob: "old-camera/*.jpg"
+    date: "1969-07-20T20:17:00"
+    timezone: "-03:00"
+    clock_offset: "+00:05"
+    city: "Houston"
+    state: "TX"
+    country: "USA"
+    event: "Moon landing archive"
+  - folder: "scans"
+    city: "Paraty"
+    state: "RJ"
+    country: "Brasil"
+```
 
 Filename patterns use Python datetime formatting for `{date:...}`. Supported
 fields are:
@@ -613,6 +647,8 @@ behavior:
   reconciliation_policy: precedence
   date_heuristics: true
   location_inference: true
+  correction_manifest: corrections.yaml
+  correction_priority: highest
 ```
 
 ### Example: simulation mode

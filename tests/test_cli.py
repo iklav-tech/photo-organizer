@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 
 from photo_organizer.cli import main
+from photo_organizer.correction_manifest import CorrectionApplication
 from photo_organizer.executor import FileOperation
 from photo_organizer.geocoding import ReverseGeocodedLocation
 from photo_organizer.metadata import (
@@ -214,6 +215,40 @@ def test_organize_accepts_location_inference_toggle_from_cli(monkeypatch) -> Non
 
     assert result == 0
     assert captured["location_inference"] is False
+
+
+def test_organize_accepts_correction_manifest_from_cli(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    manifest_path = tmp_path / "corrections.json"
+    manifest_path.write_text(
+        json.dumps({"rules": [{"glob": "*.jpg", "date": "1969-07-20T20:17:00"}]}),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--correction-manifest",
+        str(manifest_path),
+        "--correction-priority",
+        "metadata",
+    ])
+
+    assert result == 0
+    assert captured["correction_manifest"].path == manifest_path
+    assert captured["correction_priority"] == "metadata"
 
 
 def test_organize_name_pattern_cli_overrides_config(
@@ -909,6 +944,7 @@ def test_organize_writes_valid_structured_execution_report(
             "date_confidence": "low",
             "date_raw_value": json.dumps(expected_ts),
             "date_kind": "inferred",
+            "event_name": "",
         }
     ]
 
@@ -962,6 +998,7 @@ def test_organize_report_includes_error_status_and_observation(
             "date_confidence": "",
             "date_raw_value": "",
             "date_kind": "captured",
+            "event_name": "",
         }
     ]
 
@@ -1284,6 +1321,62 @@ def test_organize_report_marks_inferred_location_without_gps(
     assert report["operations"][0]["location_source"] == "External manifest"
 
 
+def test_organize_report_marks_correction_manifest_source(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "execution.json"
+    manifest_path = tmp_path / "corrections.json"
+    planned = [
+        FileOperation(
+            source=Path("input/legacy.jpg"),
+            destination=Path("out/legacy.jpg"),
+            mode="copy",
+            date_provenance=MetadataProvenance(
+                source="Correction manifest",
+                field="file:legacy.jpg",
+                confidence="high",
+                raw_value={"date": "1969-07-20T20:17:00"},
+            ),
+            correction_manifest=CorrectionApplication(
+                source_path=manifest_path,
+                selectors=("file:legacy.jpg",),
+                date_value="1969-07-20T20:17:00",
+                event_name="Moon landing",
+                priority="highest",
+            ),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/legacy.jpg -> out/legacy.jpg",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    operation = report["operations"][0]
+    assert operation["date_source"] == "Correction manifest"
+    assert operation["event_name"] == "Moon landing"
+    assert "correction manifest:" in operation["observations"]
+    assert str(manifest_path) in operation["observations"]
+
+
 def test_organize_writes_valid_csv_execution_report(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1341,6 +1434,7 @@ def test_organize_writes_valid_csv_execution_report(
             "date_confidence": "",
             "date_raw_value": "",
             "date_kind": "captured",
+            "event_name": "",
         },
         {
             "source": "input/bad.jpg",
@@ -1353,5 +1447,6 @@ def test_organize_writes_valid_csv_execution_report(
             "date_confidence": "",
             "date_raw_value": "",
             "date_kind": "captured",
+            "event_name": "",
         },
     ]

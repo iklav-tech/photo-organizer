@@ -11,6 +11,11 @@ from pathlib import Path
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.config import ConfigurationError, load_organization_config
+from photo_organizer.correction_manifest import (
+    CORRECTION_PRIORITY_CHOICES,
+    CorrectionManifestError,
+    load_correction_manifest,
+)
 from photo_organizer.executor import (
     FileOperation,
     apply_operations,
@@ -155,6 +160,20 @@ def _write_execution_report(
                 if operation["observations"]
                 else reconciliation_note
             )
+        if planned_operation is not None and planned_operation.correction_manifest is not None:
+            correction = planned_operation.correction_manifest
+            correction_note = (
+                "correction manifest: "
+                f"path={correction.source_path}; "
+                f"selectors={', '.join(correction.selectors)}"
+            )
+            if correction.event_name:
+                correction_note += f"; event={correction.event_name}"
+            operation["observations"] = (
+                f"{operation['observations']}; {correction_note}"
+                if operation["observations"]
+                else correction_note
+            )
         operation.update(
             _provenance_report_fields(
                 "date",
@@ -165,6 +184,13 @@ def _write_execution_report(
         )
         operation["date_kind"] = (
             planned_operation.date_kind if planned_operation is not None else ""
+        )
+        operation["event_name"] = (
+            planned_operation.correction_manifest.event_name
+            if planned_operation is not None
+            and planned_operation.correction_manifest is not None
+            and planned_operation.correction_manifest.event_name is not None
+            else ""
         )
 
         if include_location_fields:
@@ -220,6 +246,7 @@ def _write_execution_report(
             "date_confidence",
             "date_raw_value",
             "date_kind",
+            "event_name",
         ]
         if include_location_fields:
             fieldnames.extend(
@@ -485,6 +512,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Read organization rules from a .json, .yaml or .yml file.",
     )
+    path_group.add_argument(
+        "--correction-manifest",
+        metavar="PATH",
+        help="Read batch correction overrides from a .csv, .json, .yaml or .yml file.",
+    )
 
     execution_group = organize_parser.add_argument_group("Execution")
     execution_group.add_argument(
@@ -521,6 +553,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Metadata conflict policy for dates: precedence, newest, oldest, "
             "or filesystem (default: precedence)."
+        ),
+    )
+    execution_group.add_argument(
+        "--correction-priority",
+        choices=CORRECTION_PRIORITY_CHOICES,
+        default=None,
+        help=(
+            "Priority for correction manifest date overrides: highest, metadata "
+            "or heuristic (default: manifest/default highest)."
         ),
     )
     heuristics_group = execution_group.add_mutually_exclusive_group()
@@ -664,6 +705,29 @@ def main(argv: list[str] | None = None) -> int:
         except ConfigurationError as exc:
             parser.error(f"invalid organize configuration: {exc}")
 
+        correction_manifest_path = (
+            args.correction_manifest
+            if args.correction_manifest is not None
+            else config.correction_manifest
+            if config is not None and config.correction_manifest is not None
+            else None
+        )
+        correction_priority = (
+            args.correction_priority
+            if args.correction_priority is not None
+            else config.correction_priority
+            if config is not None and config.correction_priority is not None
+            else None
+        )
+        try:
+            correction_manifest = (
+                load_correction_manifest(correction_manifest_path)
+                if correction_manifest_path is not None
+                else None
+            )
+        except (CorrectionManifestError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"invalid correction manifest: {exc}")
+
         output = args.output or (config.output if config is not None else None)
         strategy = (
             args.by
@@ -773,6 +837,8 @@ def main(argv: list[str] | None = None) -> int:
                 reconciliation_policy=reconciliation_policy,
                 date_heuristics=date_heuristics,
                 location_inference=location_inference,
+                correction_manifest=correction_manifest,
+                correction_priority=correction_priority,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:

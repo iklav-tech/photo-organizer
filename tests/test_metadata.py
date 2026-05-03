@@ -8,6 +8,7 @@ import logging
 
 import pytest
 
+from photo_organizer.correction_manifest import CorrectionApplication
 import photo_organizer.metadata as metadata
 
 
@@ -1107,6 +1108,72 @@ def test_datetime_reconciliation_can_prefer_newest_value(
     assert resolution.reconciliation.reason == (
         "selected newest parsed value, using precedence as tie-breaker"
     )
+
+
+def test_correction_manifest_date_override_enters_reconciliation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "_read_exif_datetime_fields",
+        lambda _path: {"DateTimeOriginal": "2020:01:02 03:04:05"},
+    )
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+    correction = CorrectionApplication(
+        source_path=tmp_path / "corrections.json",
+        selectors=("file:image.jpg",),
+        date_value="1969-07-20T20:17:00",
+        priority="highest",
+    )
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        correction=correction,
+    )
+
+    assert resolution.value == datetime(1969, 7, 20, 20, 17, 0)
+    assert resolution.provenance is not None
+    assert resolution.provenance.source == "Correction manifest"
+    assert resolution.reconciliation is not None
+    assert any(
+        candidate.provenance.source == "EXIF"
+        for candidate in resolution.reconciliation.candidates
+    )
+
+
+def test_correction_manifest_clock_offset_builds_adjusted_candidate(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "_read_exif_datetime_fields",
+        lambda _path: {"DateTimeOriginal": "2020:01:02 03:04:05"},
+    )
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+    correction = CorrectionApplication(
+        source_path=tmp_path / "corrections.csv",
+        selectors=("glob:*.jpg",),
+        clock_offset="+01:30",
+        priority="highest",
+    )
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        correction=correction,
+    )
+
+    assert resolution.value == datetime(2020, 1, 2, 4, 34, 5)
+    assert resolution.provenance is not None
+    assert resolution.provenance.source == "Correction manifest"
+    assert resolution.provenance.raw_value["clock_offset"] == "+01:30"
 
 
 def test_get_best_available_datetime_uses_createdate_as_second_option(
