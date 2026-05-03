@@ -589,12 +589,232 @@ def test_plan_organization_operations_uses_iptc_location_without_gps(
         state="RJ",
         country="Brasil",
     )
-    assert operations[0].location_status == "resolved"
+    assert operations[0].location_status == "inferred"
+    assert operations[0].location_kind == "inferred"
     assert operations[0].location_provenance is not None
     assert operations[0].location_provenance.source == "IPTC-IIM"
     assert operations[0].location_provenance.field == "2:90,2:95,2:101"
     assert operations[0].destination == (
         output_dir / "Paraty-RJ" / "2024-08" / "2024-08-15_14-32-09.jpg"
+    )
+
+
+def test_plan_organization_operations_infers_xmp_textual_location_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "xmp.jpg"
+    image.write_bytes(
+        b"""<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+      photoshop:City="Paraty"
+      photoshop:State="RJ"
+      photoshop:Country="Brasil" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+    )
+
+    assert operations[0].coordinates is None
+    assert operations[0].location_status == "inferred"
+    assert operations[0].location_kind == "inferred"
+    assert operations[0].location_provenance is not None
+    assert operations[0].location_provenance.source == "XMP"
+    assert operations[0].destination == (
+        output_dir / "Paraty-RJ" / "2024-08" / "2024-08-15_14-32-09.jpg"
+    )
+
+
+def test_plan_organization_operations_infers_location_from_manifest_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "manifest.jpg"
+    image.write_text("a")
+    image.with_suffix(".location.json").write_text(
+        '{"location": {"city": "Paraty", "state": "RJ", "country": "Brasil"}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+    )
+
+    assert operations[0].location_status == "inferred"
+    assert operations[0].location_provenance is not None
+    assert operations[0].location_provenance.source == "External manifest"
+
+
+def test_plan_organization_operations_infers_location_from_folder_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "Paraty-RJ"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.jpg"
+    image.write_text("a")
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+    )
+
+    assert operations[0].location == ReverseGeocodedLocation(
+        city="Paraty",
+        state="RJ",
+        country=None,
+    )
+    assert operations[0].location_status == "inferred"
+    assert operations[0].location_provenance is not None
+    assert operations[0].location_provenance.source == "Folder"
+
+
+def test_plan_organization_operations_infers_location_from_batch_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    sibling = source_dir / "sibling.jpg"
+    sibling.write_text("sibling")
+    sibling.with_suffix(".location.json").write_text(
+        '{"city": "Paraty", "state": "RJ", "country": "Brasil"}',
+        encoding="utf-8",
+    )
+    image = source_dir / "a.jpg"
+    image.write_text("a")
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+    )
+
+    assert operations[0].coordinates is None
+    assert operations[0].location_status == "inferred"
+    assert operations[0].location_provenance is not None
+    assert operations[0].location_provenance.source == "Batch"
+
+
+def test_plan_organization_operations_uses_unknown_location_when_inference_disabled(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.jpg"
+    image.write_bytes(
+        _iptc_dataset(2, 90, "Paraty")
+        + _iptc_dataset(2, 95, "RJ")
+        + _iptc_dataset(2, 101, "Brasil")
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: None,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        organization_strategy="city-state-month",
+        location_inference=False,
+    )
+
+    assert operations[0].coordinates is None
+    assert operations[0].location_status == "unknown-location"
+    assert operations[0].location_kind == "unknown"
+    assert operations[0].destination == (
+        output_dir / "UnknownLocation" / "2024-08" / "2024-08-15_14-32-09.jpg"
     )
 
 

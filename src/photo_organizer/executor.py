@@ -16,8 +16,8 @@ from photo_organizer.metadata import (
     MetadataProvenance,
     ReconciliationDecision,
     ReconciliationPolicy,
-    extract_iptc_iim_location,
     extract_gps_coordinates,
+    infer_textual_location,
     resolve_best_available_datetime,
     validate_reconciliation_policy,
 )
@@ -92,6 +92,7 @@ class FileOperation:
     coordinates: GPSCoordinates | None = None
     location: ReverseGeocodedLocation | None = None
     location_provenance: MetadataProvenance | None = None
+    location_kind: str = "none"
     location_status: str = "disabled"
     organization_fallback: bool = False
     text_normalization_observations: tuple[str, ...] = ()
@@ -107,6 +108,7 @@ def plan_organization_operations(
     destination_pattern: str | None = None,
     reconciliation_policy: ReconciliationPolicy = "precedence",
     date_heuristics: bool = True,
+    location_inference: bool = True,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
@@ -142,6 +144,7 @@ def plan_organization_operations(
         coordinates = None
         location = None
         location_provenance = None
+        location_kind = "none"
         location_status = "disabled"
         should_reverse_geocode = reverse_geocode or organization_strategy in {
             "city-state-month",
@@ -157,6 +160,7 @@ def plan_organization_operations(
                     location = reverse_geocode_coordinates(coordinates)
                 if location is not None:
                     location_status = "resolved"
+                    location_kind = "gps"
                     location_provenance = MetadataProvenance(
                         source="Reverse geocoding",
                         field="GPSLatitudeDecimal,GPSLongitudeDecimal",
@@ -175,18 +179,19 @@ def plan_organization_operations(
                         location_provenance.label,
                         location_provenance.confidence,
                     )
-                if location is None:
-                    iptc_location = extract_iptc_iim_location(image_path)
-                    if iptc_location is not None:
-                        location_fields, location_provenance = iptc_location
+                if location is None and location_inference:
+                    inferred_location = infer_textual_location(image_path)
+                    if inferred_location is not None:
+                        location_fields, location_provenance = inferred_location
                         location = ReverseGeocodedLocation(
                             city=location_fields.get("city"),
                             state=location_fields.get("state"),
                             country=location_fields.get("country"),
                         )
-                        location_status = "resolved"
+                        location_status = "inferred"
+                        location_kind = "inferred"
                         logger.info(
-                            "Location resolved: source=%s city=%s state=%s country=%s provenance=%s confidence=%s",
+                            "Location inferred: source=%s city=%s state=%s country=%s provenance=%s confidence=%s",
                             image_path,
                             location.city,
                             location.state,
@@ -194,6 +199,28 @@ def plan_organization_operations(
                             location_provenance.label,
                             location_provenance.confidence,
                         )
+                if (
+                    location is None
+                    and not location_inference
+                    and organization_strategy in {
+                        "city-state-month",
+                        "location",
+                        "location-date",
+                    }
+                ):
+                    location = ReverseGeocodedLocation(
+                        city="UnknownLocation",
+                        state="UnknownLocation",
+                        country="UnknownLocation",
+                    )
+                    location_status = "unknown-location"
+                    location_kind = "unknown"
+                    location_provenance = MetadataProvenance(
+                        source="User policy",
+                        field="UnknownLocation",
+                        confidence="low",
+                        raw_value="location inference disabled",
+                    )
             except Exception as exc:
                 location_status = "error"
                 logger.warning(
@@ -249,9 +276,12 @@ def plan_organization_operations(
                     build_location_date_destination(output_path, location, dt)
                 )
             elif organization_strategy == "city-state-month" and location is not None:
-                destination_dir = Path(
-                    build_city_state_month_destination(output_path, location, dt)
-                )
+                if location_status == "unknown-location":
+                    destination_dir = output_path / "UnknownLocation" / dt.strftime("%Y-%m")
+                else:
+                    destination_dir = Path(
+                        build_city_state_month_destination(output_path, location, dt)
+                    )
             else:
                 organization_fallback = organization_strategy in {
                     "city-state-month",
@@ -293,6 +323,7 @@ def plan_organization_operations(
                 coordinates=coordinates,
                 location=location,
                 location_provenance=location_provenance,
+                location_kind=location_kind,
                 location_status=location_status,
                 organization_fallback=organization_fallback,
                 text_normalization_observations=tuple(text_normalization_observations),

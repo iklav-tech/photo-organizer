@@ -98,6 +98,7 @@ def test_organize_accepts_output_from_config(
                     "dry_run": True,
                     "reconciliation_policy": "filesystem",
                     "date_heuristics": False,
+                    "location_inference": False,
                 },
             }
         ),
@@ -122,6 +123,7 @@ def test_organize_accepts_output_from_config(
     assert captured["destination_pattern"] == "{date:%Y}/{date:%m}"
     assert captured["reconciliation_policy"] == "filesystem"
     assert captured["date_heuristics"] is False
+    assert captured["location_inference"] is False
 
 
 def test_organize_accepts_name_pattern_from_cli(monkeypatch) -> None:
@@ -190,6 +192,28 @@ def test_organize_accepts_date_heuristics_toggle_from_cli(monkeypatch) -> None:
 
     assert result == 0
     assert captured["date_heuristics"] is False
+
+
+def test_organize_accepts_location_inference_toggle_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--no-location-inference",
+    ])
+
+    assert result == 0
+    assert captured["location_inference"] is False
 
 
 def test_organize_name_pattern_cli_overrides_config(
@@ -1092,6 +1116,8 @@ def test_organize_report_includes_resolved_location(
                 state="Sao Paulo",
                 country="Brazil",
             ),
+            location_kind="gps",
+            location_status="resolved",
             location_provenance=MetadataProvenance(
                 source="Reverse geocoding",
                 field="GPSLatitudeDecimal,GPSLongitudeDecimal",
@@ -1128,6 +1154,7 @@ def test_organize_report_includes_resolved_location(
     assert report["summary"]["location_files"] == 1
     assert report["summary"]["gps_files"] == 1
     assert report["operations"][0]["location_status"] == "resolved"
+    assert report["operations"][0]["location_kind"] == "gps"
     assert report["operations"][0]["organization_fallback"] is False
     assert report["operations"][0]["latitude"] == -23.5
     assert report["operations"][0]["longitude"] == -46.625
@@ -1191,12 +1218,70 @@ def test_organize_report_marks_missing_gps_when_reverse_geocoding_requested(
     assert report["summary"]["missing_gps_files"] == 1
     assert report["summary"]["gps_files"] == 0
     assert report["operations"][0]["location_status"] == "missing-gps"
+    assert report["operations"][0]["location_kind"] == "none"
     assert report["operations"][0]["organization_fallback"] is False
     assert report["operations"][0]["latitude"] == ""
     assert report["operations"][0]["longitude"] == ""
     assert report["operations"][0]["city"] == ""
     assert report["operations"][0]["state"] == ""
     assert report["operations"][0]["country"] == ""
+
+
+def test_organize_report_marks_inferred_location_without_gps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "execution.json"
+    planned = [
+        FileOperation(
+            source=Path("input/inferred.jpg"),
+            destination=Path("out/inferred.jpg"),
+            mode="copy",
+            location=ReverseGeocodedLocation(
+                city="Paraty",
+                state="RJ",
+                country="Brasil",
+            ),
+            location_kind="inferred",
+            location_status="inferred",
+            location_provenance=MetadataProvenance(
+                source="External manifest",
+                field="inferred.location.json",
+                confidence="low",
+                raw_value={"city": "Paraty", "state": "RJ", "country": "Brasil"},
+            ),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/inferred.jpg -> out/inferred.jpg",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--reverse-geocode",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"]["gps_files"] == 0
+    assert report["operations"][0]["location_status"] == "inferred"
+    assert report["operations"][0]["location_kind"] == "inferred"
+    assert report["operations"][0]["latitude"] == ""
+    assert report["operations"][0]["longitude"] == ""
+    assert report["operations"][0]["location_source"] == "External manifest"
 
 
 def test_organize_writes_valid_csv_execution_report(

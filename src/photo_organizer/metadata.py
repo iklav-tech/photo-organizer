@@ -1516,6 +1516,199 @@ def extract_iptc_iim_location(path: str | Path) -> tuple[dict[str, str], Metadat
     )
 
 
+def extract_xmp_textual_location(
+    path: str | Path,
+) -> tuple[dict[str, str], MetadataProvenance] | None:
+    """Return XMP textual city/state/country fields with provenance when present."""
+    fields = extract_xmp_metadata(path)
+    location = {
+        "city": fields.get("photoshop:City"),
+        "state": fields.get("photoshop:State"),
+        "country": fields.get("photoshop:Country"),
+    }
+    if all(value is None for value in location.values()):
+        return None
+
+    raw_value = {
+        key: value
+        for key, value in {
+            "photoshop:City": fields.get("photoshop:City"),
+            "photoshop:State": fields.get("photoshop:State"),
+            "photoshop:Country": fields.get("photoshop:Country"),
+        }.items()
+        if value is not None
+    }
+    field_sources = fields.get("XMPFieldSources", {})
+    source = (
+        "XMP sidecar"
+        if isinstance(field_sources, dict)
+        and any(field_sources.get(key) == "sidecar" for key in raw_value)
+        else "XMP"
+    )
+    return location, MetadataProvenance(
+        source=source,
+        field="photoshop:City,photoshop:State,photoshop:Country",
+        confidence="low",
+        raw_value=raw_value,
+    )
+
+
+def _external_location_sidecar_paths(path: Path) -> tuple[Path, ...]:
+    return tuple(
+        sidecar_path
+        for suffix in (".location.json", ".json", ".location", ".txt")
+        for sidecar_path in (path.with_suffix(suffix),)
+        if sidecar_path.is_file()
+    )
+
+
+def _location_from_manifest_payload(payload: Any) -> dict[str, str] | None:
+    if not isinstance(payload, dict):
+        return None
+    location_payload = payload.get("location")
+    if isinstance(location_payload, dict):
+        payload = location_payload
+    location = {
+        "city": payload.get("city") or payload.get("City"),
+        "state": payload.get("state") or payload.get("State"),
+        "country": payload.get("country") or payload.get("Country"),
+    }
+    if all(value is None for value in location.values()):
+        return None
+    return location
+
+
+def extract_external_location_manifest(
+    path: str | Path,
+) -> tuple[dict[str, str], MetadataProvenance] | None:
+    """Return location from a same-basename external manifest when present."""
+    file_path = Path(path)
+    for sidecar_path in _external_location_sidecar_paths(file_path):
+        try:
+            text = sidecar_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            logger.warning(
+                "Failed to read location sidecar for file=%s sidecar=%s error=%s",
+                file_path,
+                sidecar_path,
+                exc,
+            )
+            continue
+
+        location = None
+        if sidecar_path.suffix.lower() == ".json":
+            try:
+                location = _location_from_manifest_payload(json.loads(text))
+            except json.JSONDecodeError:
+                location = None
+        if location is None:
+            location = _parse_location_text(text)
+        if location is None:
+            continue
+
+        return location, MetadataProvenance(
+            source="External manifest",
+            field=sidecar_path.name,
+            confidence="low",
+            raw_value=location,
+        )
+    return None
+
+
+def _parse_location_text(text: str) -> dict[str, str] | None:
+    cleaned = normalize_text(text).value.strip()
+    if not cleaned or re.fullmatch(r"\d{4}[-_/]?\d{2}[-_/]?\d{2}", cleaned):
+        return None
+    if cleaned.lower().startswith(("pytest-", "pytest_", "tmp", "test_")):
+        return None
+
+    parts = [
+        part.strip(" .")
+        for part in re.split(r"\s*[,/]\s*", cleaned)
+        if part.strip()
+    ]
+    if parts and not all(re.search(r"[^\W\d_]", part) for part in parts):
+        return None
+    if len(parts) >= 3:
+        return {"city": parts[0], "state": parts[1], "country": parts[2]}
+    if len(parts) == 2:
+        return {"city": parts[0], "state": parts[1], "country": None}
+
+    dash_parts = [part.strip(" .") for part in cleaned.split("-") if part.strip()]
+    if (
+        len(dash_parts) == 2
+        and all(re.search(r"[^\W\d_]", part) for part in dash_parts)
+    ):
+        return {"city": dash_parts[0], "state": dash_parts[1], "country": None}
+
+    return None
+
+
+def infer_location_from_folder(
+    path: str | Path,
+) -> tuple[dict[str, str], MetadataProvenance] | None:
+    """Infer location from parent folder or album names."""
+    file_path = Path(path)
+    for parent in file_path.parents:
+        location = _parse_location_text(parent.name)
+        if location is None:
+            continue
+        return location, MetadataProvenance(
+            source="Folder",
+            field=parent.name,
+            confidence="low",
+            raw_value=parent.name,
+        )
+    return None
+
+
+def infer_location_from_batch(
+    path: str | Path,
+) -> tuple[dict[str, str], MetadataProvenance] | None:
+    """Infer location from sibling manifest context when the batch is consistent."""
+    file_path = Path(path)
+    if not file_path.parent.is_dir():
+        return None
+    locations: list[dict[str, str]] = []
+    try:
+        siblings = list(file_path.parent.iterdir())
+    except OSError:
+        return None
+    for sibling in siblings:
+        if sibling == file_path or sibling.suffix.lower() not in IMAGE_FILE_EXTENSIONS:
+            continue
+        manifest_location = extract_external_location_manifest(sibling)
+        if manifest_location is not None:
+            locations.append(manifest_location[0])
+        if len({tuple(sorted(item.items())) for item in locations}) > 1:
+            return None
+    if len(locations) != 1:
+        return None
+    return locations[0], MetadataProvenance(
+        source="Batch",
+        field="sibling manifest",
+        confidence="low",
+        raw_value=locations[0],
+    )
+
+
+def infer_textual_location(
+    path: str | Path,
+) -> tuple[dict[str, str], MetadataProvenance] | None:
+    """Infer non-GPS location from textual metadata and safe external context."""
+    for resolver in (
+        extract_iptc_iim_location,
+        extract_xmp_textual_location,
+        extract_external_location_manifest,
+        infer_location_from_folder,
+        infer_location_from_batch,
+    ):
+        location = resolver(path)
+        if location is not None:
+            return location
+    return None
+
+
 def _read_exif_datetime_fields(path: Path) -> dict[str, Any]:
     """Read EXIF datetime-like fields from a file."""
     fields = extract_exif_metadata(path)

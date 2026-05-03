@@ -11,3 +11,4 @@ behavior:
   reverse_geocode: false
   reconciliation_policy: precedence
   date_heuristics: true
+  location_inference: true

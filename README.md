@@ -224,6 +224,14 @@ metadata sources and `inferred` when they come from heuristics. Inferred date
 heuristics are enabled by default and can be disabled with
 `--no-date-heuristics` or `behavior.date_heuristics: false`.
 
+When GPS coordinates are unavailable, location strategies can infer a
+low-confidence, non-GPS location from IPTC/XMP text fields, same-basename
+external manifests, folder or album names, or a consistent sibling batch
+manifest. These locations are reported with `location_status: inferred` and
+never populate GPS coordinate fields. Users who do not want location inference
+can use `--no-location-inference` or `behavior.location_inference: false`; in
+that mode location-based strategies organize under `UnknownLocation`.
+
 ### Metadata provenance model
 
 Resolved metadata values carry provenance so reports, logs and debug output can
@@ -288,6 +296,7 @@ behavior:
   reverse_geocode: true
   reconciliation_policy: precedence
   date_heuristics: true
+  location_inference: true
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -304,7 +313,9 @@ The same structure is accepted as JSON. Supported fields:
 - `behavior.reconciliation_policy`: `precedence`, `newest`, `oldest` or
   `filesystem`;
 - `behavior.date_heuristics`: boolean to enable or disable inferred date
-  recovery.
+  recovery;
+- `behavior.location_inference`: boolean to enable or disable non-GPS location
+  inference.
 
 Filename patterns use Python datetime formatting for `{date:...}`. Supported
 fields are:
@@ -601,6 +612,7 @@ behavior:
   reverse_geocode: true
   reconciliation_policy: precedence
   date_heuristics: true
+  location_inference: true
 ```
 
 ### Example: simulation mode

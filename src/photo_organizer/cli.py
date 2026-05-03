@@ -111,11 +111,7 @@ def _write_execution_report(
         if operation.location is not None
     }
     location_status_by_source = {
-        str(operation.source): (
-            "resolved"
-            if operation.location is not None
-            else operation.location_status
-        )
+        str(operation.source): operation.location_status
         for operation in planned_operations or []
     }
     coordinates_by_source = {
@@ -177,6 +173,11 @@ def _write_execution_report(
                 operation["source"],
                 "",
             )
+            operation["location_kind"] = (
+                planned_operation.location_kind
+                if planned_operation is not None
+                else ""
+            )
             operation["organization_fallback"] = (
                 planned_operation.organization_fallback
                 if planned_operation is not None
@@ -224,6 +225,7 @@ def _write_execution_report(
             fieldnames.extend(
                 [
                     "location_status",
+                    "location_kind",
                     "organization_fallback",
                     "latitude",
                     "longitude",
@@ -535,6 +537,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable inferred date heuristics and require supported date metadata.",
     )
     organize_parser.set_defaults(date_heuristics=None)
+    location_inference_group = execution_group.add_mutually_exclusive_group()
+    location_inference_group.add_argument(
+        "--location-inference",
+        action="store_true",
+        dest="location_inference",
+        help="Enable inferred non-GPS location from textual metadata and context.",
+    )
+    location_inference_group.add_argument(
+        "--no-location-inference",
+        action="store_false",
+        dest="location_inference",
+        help="Disable inferred location and organize location strategies under UnknownLocation.",
+    )
+    organize_parser.set_defaults(location_inference=None)
     geocoding_group = execution_group.add_mutually_exclusive_group()
     geocoding_group.add_argument(
         "--reverse-geocode",
@@ -704,6 +720,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.date_heuristics is not None
             else DATE_HEURISTICS_DEFAULT
         )
+        location_inference = (
+            args.location_inference
+            if args.location_inference is not None
+            else config.location_inference
+            if config is not None and config.location_inference is not None
+            else True
+        )
 
         if not output:
             parser.error(
@@ -749,6 +772,7 @@ def main(argv: list[str] | None = None) -> int:
                 destination_pattern=destination_pattern,
                 reconciliation_policy=reconciliation_policy,
                 date_heuristics=date_heuristics,
+                location_inference=location_inference,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:

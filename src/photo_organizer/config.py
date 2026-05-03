@@ -30,6 +30,7 @@ class OrganizationConfig:
     organization_strategy: str | None = None
     reconciliation_policy: str | None = None
     date_heuristics: bool | None = None
+    location_inference: bool | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -193,6 +194,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "date_heuristics",
         "behavior.date_heuristics",
     )
+    location_inference = _optional_bool(
+        behavior,
+        "location_inference",
+        "behavior.location_inference",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -241,4 +247,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         organization_strategy=organization_strategy,
         reconciliation_policy=reconciliation_policy,
         date_heuristics=date_heuristics,
+        location_inference=location_inference,
     )

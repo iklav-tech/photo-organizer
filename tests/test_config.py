@@ -24,6 +24,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "reverse_geocode": False,
                     "reconciliation_policy": "newest",
                     "date_heuristics": False,
+                    "location_inference": False,
                 },
             }
         ),
@@ -42,6 +43,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.reverse_geocode is False
     assert config.reconciliation_policy == "newest"
     assert config.date_heuristics is False
+    assert config.location_inference is False
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
