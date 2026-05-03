@@ -6,6 +6,8 @@ import sys
 import types
 import logging
 
+import pytest
+
 import photo_organizer.metadata as metadata
 
 
@@ -80,6 +82,14 @@ def test_date_taken_policy_orders_primary_fallback_and_heuristic_sources() -> No
         ("fallback", "XMP", ("exif:DateTimeOriginal", "xmp:CreateDate")),
         ("fallback", "IPTC-IIM", ("DateCreated", "TimeCreated")),
         ("fallback", "PNG metadata", ("Creation Time", "CreationTime", "tIME")),
+        (
+            "heuristic",
+            "Sidecar external",
+            ("date_taken", "datetime", "created_at", "DateTimeOriginal", "CreateDate"),
+        ),
+        ("heuristic", "Filename", ("date pattern",)),
+        ("heuristic", "Folder", ("date pattern",)),
+        ("heuristic", "Sequence batch", ("sibling date pattern",)),
         ("heuristic", "Filesystem", ("mtime",)),
     ]
 
@@ -246,6 +256,108 @@ def test_get_best_available_datetime_uses_png_time_only_as_secondary_fallback(
         confidence="low",
         raw_value="2021:01:02 03:04:05",
     )
+    assert resolution.date_kind == "inferred"
+
+
+def test_date_heuristic_uses_external_json_sidecar_when_metadata_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    file_path.with_suffix(".json").write_text(
+        '{"date_taken": "2024-08-15T14:32:09"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.date_kind == "inferred"
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="Sidecar external",
+        field="image.json:date_taken",
+        confidence="low",
+        raw_value="2024-08-15T14:32:09",
+    )
+
+
+def test_date_heuristic_uses_filename_pattern_when_metadata_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "IMG_20240815_143209.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.date_kind == "inferred"
+    assert resolution.provenance.source == "Filename"
+    assert resolution.provenance.confidence == "low"
+
+
+def test_date_heuristic_uses_parent_folder_pattern_when_metadata_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    folder = tmp_path / "2024-08-15"
+    folder.mkdir()
+    file_path = folder / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 0, 0, 0)
+    assert resolution.date_kind == "inferred"
+    assert resolution.provenance.source == "Folder"
+
+
+def test_date_heuristic_uses_sibling_batch_when_metadata_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    dated_sibling = tmp_path / "IMG_20240815_143209.jpg"
+    dated_sibling.write_text("sibling")
+    file_path = tmp_path / "IMG_0002.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.date_kind == "inferred"
+    assert resolution.provenance.source == "Sequence batch"
+
+
+def test_date_heuristics_can_be_disabled_when_metadata_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "IMG_20240815_143209.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(metadata, "_read_exif_datetime_fields", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    with pytest.raises(ValueError, match="date heuristics are disabled"):
+        metadata.resolve_best_available_datetime(file_path, date_heuristics=False)
 
 
 def test_extract_xmp_metadata_reads_relevant_fields_and_namespaces(

@@ -88,6 +88,7 @@ class FileOperation:
     date_fallback: bool = False
     date_provenance: MetadataProvenance | None = None
     date_reconciliation: ReconciliationDecision | None = None
+    date_kind: str = "captured"
     coordinates: GPSCoordinates | None = None
     location: ReverseGeocodedLocation | None = None
     location_provenance: MetadataProvenance | None = None
@@ -105,6 +106,7 @@ def plan_organization_operations(
     naming_pattern: str | None = None,
     destination_pattern: str | None = None,
     reconciliation_policy: ReconciliationPolicy = "precedence",
+    date_heuristics: bool = True,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
@@ -124,6 +126,7 @@ def plan_organization_operations(
                 resolved_dt = resolve_best_available_datetime(
                     image_path,
                     reconciliation_policy=reconciliation_policy,
+                    date_heuristics=date_heuristics,
                 )
             except TypeError:
                 resolved_dt = resolve_best_available_datetime(image_path)
@@ -286,6 +289,7 @@ def plan_organization_operations(
                 date_fallback=resolved_dt.used_fallback,
                 date_provenance=resolved_dt.provenance,
                 date_reconciliation=resolved_dt.reconciliation,
+                date_kind=resolved_dt.date_kind,
                 coordinates=coordinates,
                 location=location,
                 location_provenance=location_provenance,

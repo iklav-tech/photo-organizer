@@ -97,6 +97,7 @@ def test_organize_accepts_output_from_config(
                     "mode": "copy",
                     "dry_run": True,
                     "reconciliation_policy": "filesystem",
+                    "date_heuristics": False,
                 },
             }
         ),
@@ -120,6 +121,7 @@ def test_organize_accepts_output_from_config(
     assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
     assert captured["destination_pattern"] == "{date:%Y}/{date:%m}"
     assert captured["reconciliation_policy"] == "filesystem"
+    assert captured["date_heuristics"] is False
 
 
 def test_organize_accepts_name_pattern_from_cli(monkeypatch) -> None:
@@ -166,6 +168,28 @@ def test_organize_accepts_reconciliation_policy_from_cli(monkeypatch) -> None:
 
     assert result == 0
     assert captured["reconciliation_policy"] == "newest"
+
+
+def test_organize_accepts_date_heuristics_toggle_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--no-date-heuristics",
+    ])
+
+    assert result == 0
+    assert captured["date_heuristics"] is False
 
 
 def test_organize_name_pattern_cli_overrides_config(
@@ -860,6 +884,7 @@ def test_organize_writes_valid_structured_execution_report(
             "date_field": "mtime",
             "date_confidence": "low",
             "date_raw_value": json.dumps(expected_ts),
+            "date_kind": "inferred",
         }
     ]
 
@@ -912,6 +937,7 @@ def test_organize_report_includes_error_status_and_observation(
             "date_field": "",
             "date_confidence": "",
             "date_raw_value": "",
+            "date_kind": "captured",
         }
     ]
 
@@ -1229,6 +1255,7 @@ def test_organize_writes_valid_csv_execution_report(
             "date_field": "",
             "date_confidence": "",
             "date_raw_value": "",
+            "date_kind": "captured",
         },
         {
             "source": "input/bad.jpg",
@@ -1240,5 +1267,6 @@ def test_organize_writes_valid_csv_execution_report(
             "date_field": "",
             "date_confidence": "",
             "date_raw_value": "",
+            "date_kind": "captured",
         },
     ]

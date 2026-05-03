@@ -29,6 +29,7 @@ class OrganizationConfig:
     reverse_geocode: bool | None = None
     organization_strategy: str | None = None
     reconciliation_policy: str | None = None
+    date_heuristics: bool | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -187,6 +188,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "reconciliation_policy",
         "behavior.reconciliation_policy",
     )
+    date_heuristics = _optional_bool(
+        behavior,
+        "date_heuristics",
+        "behavior.date_heuristics",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -234,4 +240,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         reverse_geocode=reverse_geocode,
         organization_strategy=organization_strategy,
         reconciliation_policy=reconciliation_policy,
+        date_heuristics=date_heuristics,
     )

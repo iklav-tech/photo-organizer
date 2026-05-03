@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
+import json
 import logging
 from pathlib import Path
 import re
@@ -26,7 +27,7 @@ from typing import Any, Callable, Literal
 import xml.etree.ElementTree as ET
 import zlib
 
-from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS
+from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS, IMAGE_FILE_EXTENSIONS
 from photo_organizer.text_normalization import normalize_text
 
 
@@ -50,8 +51,10 @@ MetadataFieldName = Literal["date_taken", "location", "title", "author", "descri
 MetadataSourceRole = Literal["primary", "fallback", "heuristic"]
 MetadataSupportStatus = Literal["implemented", "planned"]
 MetadataConfidence = Literal["high", "medium", "low"]
+DateValueKind = Literal["captured", "inferred"]
 ReconciliationPolicy = Literal["precedence", "newest", "oldest", "filesystem"]
 RECONCILIATION_POLICY_CHOICES = ("precedence", "newest", "oldest", "filesystem")
+DATE_HEURISTICS_DEFAULT = True
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,7 @@ class MetadataCandidate:
     role: MetadataSourceRole
     precedence: int
     used_fallback: bool = False
+    date_kind: DateValueKind = "captured"
 
 
 @dataclass(frozen=True)
@@ -149,6 +153,38 @@ METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
             "tIME is an image modification timestamp and is used only as "
             "secondary fallback."
         ),
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="heuristic",
+        source="Sidecar external",
+        keys=("date_taken", "datetime", "created_at", "DateTimeOriginal", "CreateDate"),
+        support="implemented",
+        notes="Used as low-confidence inferred date from same-basename sidecars.",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="heuristic",
+        source="Filename",
+        keys=("date pattern",),
+        support="implemented",
+        notes="Used as low-confidence inferred date from safe filename patterns.",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="heuristic",
+        source="Folder",
+        keys=("date pattern",),
+        support="implemented",
+        notes="Used as low-confidence inferred date from parent folder names.",
+    ),
+    MetadataPrecedenceRule(
+        field="date_taken",
+        role="heuristic",
+        source="Sequence batch",
+        keys=("sibling date pattern",),
+        support="implemented",
+        notes="Used as low-confidence inferred date from sibling batch context.",
     ),
     MetadataPrecedenceRule(
         field="date_taken",
@@ -295,6 +331,7 @@ class DateTimeResolution:
     used_fallback: bool
     provenance: MetadataProvenance | None = None
     reconciliation: ReconciliationDecision | None = None
+    date_kind: DateValueKind = "captured"
 
 
 @dataclass(frozen=True)
@@ -1093,7 +1130,7 @@ def _date_rule_index(source: str, field_name: str) -> tuple[int, MetadataSourceR
             continue
         if field_name in rule.keys:
             return index, rule.role
-    return len(get_metadata_precedence_policy("date_taken")), "fallback"
+    return len(get_metadata_precedence_policy("date_taken")), "heuristic"
 
 
 def _datetime_candidate(
@@ -1106,6 +1143,7 @@ def _datetime_candidate(
     precedence_source: str | None = None,
     precedence_field: str | None = None,
     used_fallback: bool = False,
+    date_kind: DateValueKind = "captured",
 ) -> MetadataCandidate:
     precedence, role = _date_rule_index(
         precedence_source or source,
@@ -1122,6 +1160,7 @@ def _datetime_candidate(
         role=role,
         precedence=precedence,
         used_fallback=used_fallback,
+        date_kind=date_kind,
     )
 
 
@@ -1203,6 +1242,250 @@ def _log_datetime_reconciliation(file_path: Path, decision: ReconciliationDecisi
         selected.label,
         decision.reason,
     )
+
+
+def _parse_datetime_from_match(
+    year: str,
+    month: str,
+    day: str,
+    hour: str = "00",
+    minute: str = "00",
+    second: str = "00",
+) -> datetime | None:
+    try:
+        parsed = datetime(
+            int(year),
+            int(month),
+            int(day),
+            int(hour),
+            int(minute),
+            int(second),
+        )
+    except ValueError:
+        return None
+    if parsed.year < 1900 or parsed.year > 2100:
+        return None
+    return parsed
+
+
+def _parse_datetime_from_text_pattern(text: str) -> tuple[datetime, str] | None:
+    normalized = normalize_text(text).value
+    patterns = (
+        re.compile(
+            r"(?<!\d)(?P<year>19\d{2}|20\d{2}|2100)[-_]?"
+            r"(?P<month>0[1-9]|1[0-2])[-_]?"
+            r"(?P<day>0[1-9]|[12]\d|3[01])"
+            r"(?:[T _-]?"
+            r"(?P<hour>[01]\d|2[0-3])[-_]?"
+            r"(?P<minute>[0-5]\d)[-_]?"
+            r"(?P<second>[0-5]\d))?(?!\d)"
+        ),
+        re.compile(
+            r"(?<!\d)(?P<year>19\d{2}|20\d{2}|2100)"
+            r"[-_](?P<month>0[1-9]|1[0-2])"
+            r"[-_](?P<day>0[1-9]|[12]\d|3[01])(?!\d)"
+        ),
+    )
+    for pattern in patterns:
+        match = pattern.search(normalized)
+        if match is None:
+            continue
+        groups = match.groupdict(default="00")
+        parsed = _parse_datetime_from_match(
+            groups["year"],
+            groups["month"],
+            groups["day"],
+            groups.get("hour", "00"),
+            groups.get("minute", "00"),
+            groups.get("second", "00"),
+        )
+        if parsed is not None:
+            return parsed, match.group(0)
+    return None
+
+
+def _external_date_sidecar_paths(path: Path) -> tuple[Path, ...]:
+    return tuple(
+        sidecar_path
+        for suffix in (".json", ".txt", ".date")
+        for sidecar_path in (path.with_suffix(suffix),)
+        if sidecar_path.is_file()
+    )
+
+
+def _iter_json_date_values(value: Any) -> list[tuple[str, Any]]:
+    if isinstance(value, dict):
+        results: list[tuple[str, Any]] = []
+        for key, item in value.items():
+            if key in {
+                "date",
+                "date_taken",
+                "datetime",
+                "created_at",
+                "DateTimeOriginal",
+                "CreateDate",
+                "DateCreated",
+            }:
+                results.append((key, item))
+            if isinstance(item, (dict, list)):
+                results.extend(_iter_json_date_values(item))
+        return results
+    if isinstance(value, list):
+        results = []
+        for item in value:
+            results.extend(_iter_json_date_values(item))
+        return results
+    return []
+
+
+def _parse_external_sidecar_datetime(path: Path) -> tuple[datetime, str, Any] | None:
+    for sidecar_path in _external_date_sidecar_paths(path):
+        try:
+            text = sidecar_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            logger.warning(
+                "Failed to read date sidecar for file=%s sidecar=%s error=%s",
+                path,
+                sidecar_path,
+                exc,
+            )
+            continue
+
+        if sidecar_path.suffix.lower() == ".json":
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = _parse_datetime_from_text_pattern(text)
+                if parsed is not None:
+                    value, raw = parsed
+                    return value, sidecar_path.name, raw
+                continue
+            for field_name, raw_value in _iter_json_date_values(payload):
+                parsed = _parse_exif_datetime(raw_value)
+                if parsed is None and isinstance(raw_value, str):
+                    text_parsed = _parse_datetime_from_text_pattern(raw_value)
+                    parsed = text_parsed[0] if text_parsed is not None else None
+                if parsed is not None:
+                    return parsed, f"{sidecar_path.name}:{field_name}", raw_value
+            continue
+
+        parsed = _parse_datetime_from_text_pattern(text)
+        if parsed is not None:
+            value, raw = parsed
+            return value, sidecar_path.name, raw
+
+    return None
+
+
+def _filename_datetime_candidate(path: Path) -> tuple[datetime, str] | None:
+    return _parse_datetime_from_text_pattern(path.stem)
+
+
+def _folder_datetime_candidate(path: Path) -> tuple[datetime, str] | None:
+    for parent in path.parents:
+        parsed = _parse_datetime_from_text_pattern(parent.name)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _batch_sequence_datetime_candidate(path: Path) -> tuple[datetime, str] | None:
+    if not path.parent.is_dir():
+        return None
+    if re.search(r"\d{2,}", path.stem) is None:
+        return None
+
+    sibling_dates: set[datetime] = set()
+    try:
+        siblings = list(path.parent.iterdir())
+    except OSError:
+        return None
+
+    for sibling in siblings:
+        if sibling == path or sibling.suffix.lower() not in IMAGE_FILE_EXTENSIONS:
+            continue
+        parsed = _filename_datetime_candidate(sibling)
+        if parsed is None:
+            parsed = _folder_datetime_candidate(sibling)
+        if parsed is not None:
+            sibling_dates.add(parsed[0])
+        if len(sibling_dates) > 1:
+            return None
+
+    if len(sibling_dates) != 1:
+        return None
+    inferred = next(iter(sibling_dates))
+    return inferred, path.parent.name
+
+
+def _heuristic_datetime_candidates(path: Path) -> list[MetadataCandidate]:
+    candidates: list[MetadataCandidate] = []
+
+    sidecar_candidate = _parse_external_sidecar_datetime(path)
+    if sidecar_candidate is not None:
+        value, field_name, raw_value = sidecar_candidate
+        candidates.append(_datetime_candidate(
+            value=value,
+            source="Sidecar external",
+            field_name=field_name,
+            confidence="low",
+            raw_value=raw_value,
+            precedence_field="date_taken",
+            used_fallback=True,
+            date_kind="inferred",
+        ))
+
+    filename_candidate = _filename_datetime_candidate(path)
+    if filename_candidate is not None:
+        value, raw_value = filename_candidate
+        candidates.append(_datetime_candidate(
+            value=value,
+            source="Filename",
+            field_name="date pattern",
+            confidence="low",
+            raw_value=raw_value,
+            used_fallback=True,
+            date_kind="inferred",
+        ))
+
+    folder_candidate = _folder_datetime_candidate(path)
+    if folder_candidate is not None:
+        value, raw_value = folder_candidate
+        candidates.append(_datetime_candidate(
+            value=value,
+            source="Folder",
+            field_name="date pattern",
+            confidence="low",
+            raw_value=raw_value,
+            used_fallback=True,
+            date_kind="inferred",
+        ))
+
+    batch_candidate = _batch_sequence_datetime_candidate(path)
+    if batch_candidate is not None:
+        value, raw_value = batch_candidate
+        candidates.append(_datetime_candidate(
+            value=value,
+            source="Sequence batch",
+            field_name="sibling date pattern",
+            confidence="low",
+            raw_value=raw_value,
+            used_fallback=True,
+            date_kind="inferred",
+        ))
+
+    mtime = path.stat().st_mtime
+    candidates.append(_datetime_candidate(
+        value=datetime.fromtimestamp(mtime),
+        source="filesystem",
+        field_name="mtime",
+        confidence="low",
+        raw_value=mtime,
+        precedence_source="Filesystem",
+        used_fallback=True,
+        date_kind="inferred",
+    ))
+    return candidates
 
 
 def extract_iptc_iim_location(path: str | Path) -> tuple[dict[str, str], MetadataProvenance] | None:
@@ -1324,12 +1607,14 @@ def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:
 def resolve_best_available_datetime(
     path: str | Path,
     reconciliation_policy: ReconciliationPolicy = "precedence",
+    date_heuristics: bool = DATE_HEURISTICS_DEFAULT,
 ) -> DateTimeResolution:
     """Return the best available datetime plus fallback metadata.
 
     The default reconciliation policy applies `METADATA_PRECEDENCE_POLICY`.
     Other policies can choose newest, oldest or filesystem values while still
-    using the precedence matrix as deterministic tie-breaker.
+    using the precedence matrix as deterministic tie-breaker. When enabled,
+    heuristic candidates are marked as inferred and use low confidence.
     """
     file_path = Path(path)
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
@@ -1403,7 +1688,7 @@ def resolve_best_available_datetime(
                 raw_value=raw_value,
             ))
 
-    raw_png_time = png_fields.get("tIME")
+    raw_png_time = png_fields.get("tIME") if date_heuristics else None
     parsed_png_time = _parse_exif_datetime(raw_png_time)
     if parsed_png_time is not None:
         candidates.append(_datetime_candidate(
@@ -1413,17 +1698,14 @@ def resolve_best_available_datetime(
             confidence="low",
             raw_value=raw_png_time,
             used_fallback=True,
+            date_kind="inferred",
         ))
 
-    mtime = file_path.stat().st_mtime
-    candidates.append(_datetime_candidate(
-        value=datetime.fromtimestamp(mtime),
-        source="filesystem",
-        field_name="mtime",
-        confidence="low",
-        raw_value=mtime,
-        used_fallback=True,
-    ))
+    if date_heuristics and (not candidates or reconciliation_policy == "filesystem"):
+        candidates.extend(_heuristic_datetime_candidates(file_path))
+    elif not candidates:
+        raise ValueError("No usable date metadata and date heuristics are disabled")
+
     decision = reconcile_metadata_candidates(
         "date_taken",
         candidates,
@@ -1444,6 +1726,7 @@ def resolve_best_available_datetime(
         used_fallback=selected.used_fallback,
         provenance=selected.provenance,
         reconciliation=decision,
+        date_kind=selected.date_kind,
     )
 
 

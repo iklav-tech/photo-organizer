@@ -179,7 +179,11 @@ Current support status:
 | `date_taken` | 3 | XMP | `exif:DateTimeOriginal`, `xmp:CreateDate` | Fallback | Implemented |
 | `date_taken` | 4 | IPTC-IIM | `DateCreated`, `TimeCreated` | Fallback | Implemented |
 | `date_taken` | 5 | PNG metadata | `Creation Time`, `CreationTime`, `tIME` | Fallback | Implemented |
-| `date_taken` | 6 | Filesystem | `mtime` | Heuristic | Implemented |
+| `date_taken` | 6 | Sidecar external | `date_taken`, `datetime`, `created_at`, `DateTimeOriginal`, `CreateDate` | Heuristic | Implemented |
+| `date_taken` | 7 | Filename | `date pattern` | Heuristic | Implemented |
+| `date_taken` | 8 | Folder | `date pattern` | Heuristic | Implemented |
+| `date_taken` | 9 | Sequence batch | `sibling date pattern` | Heuristic | Implemented |
+| `date_taken` | 10 | Filesystem | `mtime` | Heuristic | Implemented |
 | `location` | 1 | EXIF | `GPSInfo`, `GPSLatitude`, `GPSLongitude` | Primary | Implemented |
 | `location` | 2 | XMP | `exif:GPSLatitude`, `exif:GPSLongitude` | Fallback | Implemented |
 | `location` | 3 | IPTC-IIM | `City`, `Province-State`, `Country-PrimaryLocationName` | Fallback | Implemented |
@@ -201,7 +205,8 @@ The current `date_taken` resolver implements the supported subset of this
 policy: EXIF `DateTimeOriginal`, EXIF `CreateDate`/aliases, XMP date fields,
 IPTC-IIM `DateCreated`/`TimeCreated`, PNG `Creation Time`/`CreationTime`,
 PNG `tIME` as a secondary low-confidence modification-time fallback, then
-filesystem `mtime` as a heuristic.
+low-confidence inferred dates from same-basename external sidecars, filename
+patterns, folder names, sibling batch context and filesystem `mtime`.
 XMP can come from embedded metadata or from a same-basename sidecar file such as
 `IMG_001.xmp`; within the XMP tier, sidecar values override embedded XMP
 values. Location organization currently uses EXIF GPS coordinates, XMP GPS
@@ -214,6 +219,10 @@ parsed candidates, selects a winner and logs the policy, winning source and
 reason. The default `precedence` policy applies the matrix above. Users can
 override it with `--reconciliation-policy precedence|newest|oldest|filesystem`
 or `behavior.reconciliation_policy` in config.
+Date values are reported as `captured` when they come from embedded/sidecar
+metadata sources and `inferred` when they come from heuristics. Inferred date
+heuristics are enabled by default and can be disabled with
+`--no-date-heuristics` or `behavior.date_heuristics: false`.
 
 ### Metadata provenance model
 
@@ -278,6 +287,7 @@ behavior:
   plan: false
   reverse_geocode: true
   reconciliation_policy: precedence
+  date_heuristics: true
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -292,7 +302,9 @@ The same structure is accepted as JSON. Supported fields:
 - `behavior.mode`: `copy` or `move`;
 - `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans;
 - `behavior.reconciliation_policy`: `precedence`, `newest`, `oldest` or
-  `filesystem`.
+  `filesystem`;
+- `behavior.date_heuristics`: boolean to enable or disable inferred date
+  recovery.
 
 Filename patterns use Python datetime formatting for `{date:...}`. Supported
 fields are:
@@ -588,6 +600,7 @@ behavior:
   dry_run: true
   reverse_geocode: true
   reconciliation_policy: precedence
+  date_heuristics: true
 ```
 
 ### Example: simulation mode

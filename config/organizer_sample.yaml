@@ -10,3 +10,4 @@ behavior:
   plan: false
   reverse_geocode: false
   reconciliation_policy: precedence
+  date_heuristics: true

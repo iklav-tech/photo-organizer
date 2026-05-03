@@ -18,7 +18,10 @@ from photo_organizer.executor import (
 )
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
-from photo_organizer.metadata import RECONCILIATION_POLICY_CHOICES
+from photo_organizer.metadata import (
+    DATE_HEURISTICS_DEFAULT,
+    RECONCILIATION_POLICY_CHOICES,
+)
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.scanner import find_image_files, is_supported_image_file
 
@@ -164,6 +167,9 @@ def _write_execution_report(
                 else None,
             )
         )
+        operation["date_kind"] = (
+            planned_operation.date_kind if planned_operation is not None else ""
+        )
 
         if include_location_fields:
             location = location_by_source.get(operation["source"])
@@ -212,6 +218,7 @@ def _write_execution_report(
             "date_field",
             "date_confidence",
             "date_raw_value",
+            "date_kind",
         ]
         if include_location_fields:
             fieldnames.extend(
@@ -514,6 +521,20 @@ def build_parser() -> argparse.ArgumentParser:
             "or filesystem (default: precedence)."
         ),
     )
+    heuristics_group = execution_group.add_mutually_exclusive_group()
+    heuristics_group.add_argument(
+        "--date-heuristics",
+        action="store_true",
+        dest="date_heuristics",
+        help="Enable low-confidence inferred date heuristics (default).",
+    )
+    heuristics_group.add_argument(
+        "--no-date-heuristics",
+        action="store_false",
+        dest="date_heuristics",
+        help="Disable inferred date heuristics and require supported date metadata.",
+    )
+    organize_parser.set_defaults(date_heuristics=None)
     geocoding_group = execution_group.add_mutually_exclusive_group()
     geocoding_group.add_argument(
         "--reverse-geocode",
@@ -676,6 +697,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.reconciliation_policy is not None
             else "precedence"
         )
+        date_heuristics = (
+            args.date_heuristics
+            if args.date_heuristics is not None
+            else config.date_heuristics
+            if config is not None and config.date_heuristics is not None
+            else DATE_HEURISTICS_DEFAULT
+        )
 
         if not output:
             parser.error(
@@ -720,6 +748,7 @@ def main(argv: list[str] | None = None) -> int:
                 naming_pattern=naming_pattern,
                 destination_pattern=destination_pattern,
                 reconciliation_policy=reconciliation_policy,
+                date_heuristics=date_heuristics,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
