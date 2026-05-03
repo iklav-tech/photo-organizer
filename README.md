@@ -209,6 +209,12 @@ coordinates, IPTC-IIM city/state/country fields and reverse geocoding. PNG text
 metadata currently contributes date and embedded XMP fields; title, author and
 description PNG policy entries remain reserved for future user-facing fields.
 
+When supported date sources disagree, the reconciliation engine records all
+parsed candidates, selects a winner and logs the policy, winning source and
+reason. The default `precedence` policy applies the matrix above. Users can
+override it with `--reconciliation-policy precedence|newest|oldest|filesystem`
+or `behavior.reconciliation_policy` in config.
+
 ### Metadata provenance model
 
 Resolved metadata values carry provenance so reports, logs and debug output can
@@ -271,6 +277,7 @@ behavior:
   dry_run: true
   plan: false
   reverse_geocode: true
+  reconciliation_policy: precedence
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -283,7 +290,9 @@ The same structure is accepted as JSON. Supported fields:
 - `destination.strategy` or `behavior.organization_strategy`: `date`,
   `location`, `location-date` or `city-state-month`;
 - `behavior.mode`: `copy` or `move`;
-- `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans.
+- `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans;
+- `behavior.reconciliation_policy`: `precedence`, `newest`, `oldest` or
+  `filesystem`.
 
 Filename patterns use Python datetime formatting for `{date:...}`. Supported
 fields are:
@@ -578,6 +587,7 @@ behavior:
   mode: copy
   dry_run: true
   reverse_geocode: true
+  reconciliation_policy: precedence
 ```
 
 ### Example: simulation mode

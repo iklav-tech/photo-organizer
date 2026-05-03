@@ -10,7 +10,12 @@ from datetime import datetime
 from photo_organizer.cli import main
 from photo_organizer.executor import FileOperation
 from photo_organizer.geocoding import ReverseGeocodedLocation
-from photo_organizer.metadata import GPSCoordinates, MetadataProvenance
+from photo_organizer.metadata import (
+    GPSCoordinates,
+    MetadataCandidate,
+    MetadataProvenance,
+    ReconciliationDecision,
+)
 
 
 def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
@@ -88,7 +93,11 @@ def test_organize_accepts_output_from_config(
                 "output": str(tmp_path / "organized"),
                 "naming": {"pattern": "{date:%Y%m%d}_{stem}{ext}"},
                 "destination": {"pattern": "{date:%Y}/{date:%m}"},
-                "behavior": {"mode": "copy", "dry_run": True},
+                "behavior": {
+                    "mode": "copy",
+                    "dry_run": True,
+                    "reconciliation_policy": "filesystem",
+                },
             }
         ),
         encoding="utf-8",
@@ -110,6 +119,7 @@ def test_organize_accepts_output_from_config(
     assert captured["mode"] == "copy"
     assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
     assert captured["destination_pattern"] == "{date:%Y}/{date:%m}"
+    assert captured["reconciliation_policy"] == "filesystem"
 
 
 def test_organize_accepts_name_pattern_from_cli(monkeypatch) -> None:
@@ -133,6 +143,29 @@ def test_organize_accepts_name_pattern_from_cli(monkeypatch) -> None:
 
     assert result == 0
     assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
+
+
+def test_organize_accepts_reconciliation_policy_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--reconciliation-policy",
+        "newest",
+    ])
+
+    assert result == 0
+    assert captured["reconciliation_policy"] == "newest"
 
 
 def test_organize_name_pattern_cli_overrides_config(
@@ -923,6 +956,78 @@ def test_organize_report_includes_text_normalization_observations(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["operations"][0]["observations"] == (
         "text normalization: filename: normalized Unicode to NFC"
+    )
+
+
+def test_organize_report_includes_date_reconciliation_conflict(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "execution.json"
+    exif_candidate = MetadataCandidate(
+        value=datetime(2020, 1, 2, 3, 4, 5),
+        provenance=MetadataProvenance(
+            source="EXIF",
+            field="DateTimeOriginal",
+            confidence="high",
+            raw_value="2020:01:02 03:04:05",
+        ),
+        role="primary",
+        precedence=0,
+    )
+    xmp_candidate = MetadataCandidate(
+        value=datetime(2024, 8, 15, 14, 32, 9),
+        provenance=MetadataProvenance(
+            source="XMP",
+            field="xmp:CreateDate",
+            confidence="medium",
+            raw_value="2024-08-15T14:32:09",
+        ),
+        role="fallback",
+        precedence=2,
+    )
+    planned = [
+        FileOperation(
+            source=Path("input/conflict.jpg"),
+            destination=Path("out/conflict.jpg"),
+            mode="copy",
+            date_reconciliation=ReconciliationDecision(
+                field="date_taken",
+                policy="precedence",
+                selected=exif_candidate,
+                candidates=(exif_candidate, xmp_candidate),
+                reason="selected by metadata precedence policy",
+                conflict=True,
+            ),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/conflict.jpg -> out/conflict.jpg",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["operations"][0]["observations"] == (
+        "date reconciliation: policy=precedence; winner=EXIF:DateTimeOriginal; "
+        "reason=selected by metadata precedence policy; "
+        "conflicting_sources=EXIF:DateTimeOriginal, XMP:xmp:CreateDate"
     )
 
 

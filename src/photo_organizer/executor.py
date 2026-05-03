@@ -14,9 +14,12 @@ from photo_organizer.geocoding import (
 from photo_organizer.metadata import (
     GPSCoordinates,
     MetadataProvenance,
+    ReconciliationDecision,
+    ReconciliationPolicy,
     extract_iptc_iim_location,
     extract_gps_coordinates,
     resolve_best_available_datetime,
+    validate_reconciliation_policy,
 )
 from photo_organizer.naming import (
     build_default_filename,
@@ -84,6 +87,7 @@ class FileOperation:
     mode: str
     date_fallback: bool = False
     date_provenance: MetadataProvenance | None = None
+    date_reconciliation: ReconciliationDecision | None = None
     coordinates: GPSCoordinates | None = None
     location: ReverseGeocodedLocation | None = None
     location_provenance: MetadataProvenance | None = None
@@ -100,8 +104,10 @@ def plan_organization_operations(
     organization_strategy: str = "date",
     naming_pattern: str | None = None,
     destination_pattern: str | None = None,
+    reconciliation_policy: ReconciliationPolicy = "precedence",
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir."""
+    reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
     source_path = Path(source_dir)
     output_path = Path(output_dir)
     logger.debug(
@@ -114,7 +120,13 @@ def plan_organization_operations(
     operations: list[FileOperation] = []
     for image_path in find_image_files(source_path, recursive=True):
         try:
-            resolved_dt = resolve_best_available_datetime(image_path)
+            try:
+                resolved_dt = resolve_best_available_datetime(
+                    image_path,
+                    reconciliation_policy=reconciliation_policy,
+                )
+            except TypeError:
+                resolved_dt = resolve_best_available_datetime(image_path)
         except Exception as exc:
             logger.error(
                 "Failed to plan file operation: source=%s error=%s",
@@ -273,6 +285,7 @@ def plan_organization_operations(
                 mode=mode,
                 date_fallback=resolved_dt.used_fallback,
                 date_provenance=resolved_dt.provenance,
+                date_reconciliation=resolved_dt.reconciliation,
                 coordinates=coordinates,
                 location=location,
                 location_provenance=location_provenance,

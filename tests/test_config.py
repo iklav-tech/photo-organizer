@@ -22,6 +22,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "dry_run": True,
                     "plan": False,
                     "reverse_geocode": False,
+                    "reconciliation_policy": "newest",
                 },
             }
         ),
@@ -38,6 +39,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.dry_run is True
     assert config.plan is False
     assert config.reverse_geocode is False
+    assert config.reconciliation_policy == "newest"
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
@@ -71,6 +73,19 @@ def test_load_organization_config_rejects_invalid_mode(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ConfigurationError, match="behavior.mode"):
+        load_organization_config(config_path)
+
+
+def test_load_organization_config_rejects_invalid_reconciliation_policy(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"reconciliation_policy": "random"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="reconciliation_policy"):
         load_organization_config(config_path)
 
 

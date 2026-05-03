@@ -22,7 +22,7 @@ from datetime import datetime
 import logging
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 import xml.etree.ElementTree as ET
 import zlib
 
@@ -50,6 +50,8 @@ MetadataFieldName = Literal["date_taken", "location", "title", "author", "descri
 MetadataSourceRole = Literal["primary", "fallback", "heuristic"]
 MetadataSupportStatus = Literal["implemented", "planned"]
 MetadataConfidence = Literal["high", "medium", "low"]
+ReconciliationPolicy = Literal["precedence", "newest", "oldest", "filesystem"]
+RECONCILIATION_POLICY_CHOICES = ("precedence", "newest", "oldest", "filesystem")
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,35 @@ class MetadataProvenance:
     def label(self) -> str:
         """Return a concise source label such as EXIF:DateTimeOriginal."""
         return f"{self.source}:{self.field}"
+
+
+@dataclass(frozen=True)
+class MetadataCandidate:
+    """One parsed candidate value from a metadata source."""
+
+    value: Any
+    provenance: MetadataProvenance
+    role: MetadataSourceRole
+    precedence: int
+    used_fallback: bool = False
+
+
+@dataclass(frozen=True)
+class ReconciliationDecision:
+    """The selected candidate and the reason it won."""
+
+    field: MetadataFieldName
+    policy: ReconciliationPolicy
+    selected: MetadataCandidate
+    candidates: tuple[MetadataCandidate, ...]
+    reason: str
+    conflict: bool = False
+
+    @property
+    def conflicting_sources(self) -> tuple[str, ...]:
+        if not self.conflict:
+            return ()
+        return tuple(candidate.provenance.label for candidate in self.candidates)
 
 
 METADATA_PRECEDENCE_POLICY: tuple[MetadataPrecedenceRule, ...] = (
@@ -263,6 +294,7 @@ class DateTimeResolution:
     value: datetime
     used_fallback: bool
     provenance: MetadataProvenance | None = None
+    reconciliation: ReconciliationDecision | None = None
 
 
 @dataclass(frozen=True)
@@ -1047,6 +1079,132 @@ def _extract_xmp_gps_coordinates_from_fields(
     )
 
 
+def validate_reconciliation_policy(policy: str) -> ReconciliationPolicy:
+    """Validate and return a supported reconciliation policy."""
+    if policy not in RECONCILIATION_POLICY_CHOICES:
+        allowed = ", ".join(RECONCILIATION_POLICY_CHOICES)
+        raise ValueError(f"Unknown reconciliation policy '{policy}'. Allowed: {allowed}")
+    return policy  # type: ignore[return-value]
+
+
+def _date_rule_index(source: str, field_name: str) -> tuple[int, MetadataSourceRole]:
+    for index, rule in enumerate(get_metadata_precedence_policy("date_taken")):
+        if rule.source != source:
+            continue
+        if field_name in rule.keys:
+            return index, rule.role
+    return len(get_metadata_precedence_policy("date_taken")), "fallback"
+
+
+def _datetime_candidate(
+    *,
+    value: datetime,
+    source: str,
+    field_name: str,
+    confidence: MetadataConfidence,
+    raw_value: Any,
+    precedence_source: str | None = None,
+    precedence_field: str | None = None,
+    used_fallback: bool = False,
+) -> MetadataCandidate:
+    precedence, role = _date_rule_index(
+        precedence_source or source,
+        precedence_field or field_name,
+    )
+    return MetadataCandidate(
+        value=value,
+        provenance=MetadataProvenance(
+            source=source,
+            field=field_name,
+            confidence=confidence,
+            raw_value=raw_value,
+        ),
+        role=role,
+        precedence=precedence,
+        used_fallback=used_fallback,
+    )
+
+
+def _has_conflicting_candidate_values(candidates: tuple[MetadataCandidate, ...]) -> bool:
+    return len({candidate.value for candidate in candidates}) > 1
+
+
+def reconcile_metadata_candidates(
+    field: MetadataFieldName,
+    candidates: list[MetadataCandidate],
+    policy: ReconciliationPolicy = "precedence",
+) -> ReconciliationDecision:
+    """Select a candidate according to the configured reconciliation policy."""
+    if not candidates:
+        raise ValueError("Cannot reconcile metadata without candidates")
+
+    policy = validate_reconciliation_policy(policy)
+    ordered_candidates = tuple(
+        sorted(candidates, key=lambda candidate: candidate.precedence)
+    )
+
+    key_by_policy: dict[ReconciliationPolicy, Callable[[MetadataCandidate], Any]] = {
+        "precedence": lambda candidate: candidate.precedence,
+        "newest": lambda candidate: (-candidate.value.timestamp(), candidate.precedence)
+        if isinstance(candidate.value, datetime)
+        else candidate.precedence,
+        "oldest": lambda candidate: (candidate.value.timestamp(), candidate.precedence)
+        if isinstance(candidate.value, datetime)
+        else candidate.precedence,
+        "filesystem": lambda candidate: (
+            0 if candidate.provenance.source == "filesystem" else 1,
+            candidate.precedence,
+        ),
+    }
+    selected = min(ordered_candidates, key=key_by_policy[policy])
+    conflict = _has_conflicting_candidate_values(ordered_candidates)
+    if policy == "precedence":
+        reason = "selected by metadata precedence policy"
+    elif policy == "filesystem" and selected.provenance.source == "filesystem":
+        reason = "selected by filesystem reconciliation policy"
+    elif policy == "filesystem":
+        reason = "filesystem value unavailable; selected by metadata precedence policy"
+    else:
+        reason = f"selected {policy} parsed value, using precedence as tie-breaker"
+
+    return ReconciliationDecision(
+        field=field,
+        policy=policy,
+        selected=selected,
+        candidates=ordered_candidates,
+        reason=reason,
+        conflict=conflict,
+    )
+
+
+def _log_datetime_reconciliation(file_path: Path, decision: ReconciliationDecision) -> None:
+    selected = decision.selected.provenance
+    candidate_labels = ", ".join(
+        f"{candidate.provenance.label}={candidate.value.isoformat()}"
+        for candidate in decision.candidates
+    )
+    if decision.conflict:
+        logger.info(
+            "Metadata reconciliation conflict: file=%s field=%s policy=%s winner=%s reason=%s candidates=[%s]",
+            file_path,
+            decision.field,
+            decision.policy,
+            selected.label,
+            decision.reason,
+            candidate_labels,
+        )
+        return
+
+    logger.info(
+        "Metadata reconciliation selected: file=%s field=%s policy=%s winner=%s reason=%s",
+        file_path,
+        decision.field,
+        decision.policy,
+        selected.label,
+        decision.reason,
+    )
+
+
 def extract_iptc_iim_location(path: str | Path) -> tuple[dict[str, str], MetadataProvenance] | None:
     """Return IPTC-IIM city/state/country fields with provenance when present."""
     fields = extract_iptc_iim_metadata(path)
@@ -1163,16 +1321,19 @@ def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:
     return _extract_xmp_gps_coordinates_from_fields(extract_xmp_metadata(path))
 
 
-def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
+def resolve_best_available_datetime(
+    path: str | Path,
+    reconciliation_policy: ReconciliationPolicy = "precedence",
+) -> DateTimeResolution:
     """Return the best available datetime plus fallback metadata.
 
-    Implements the currently supported `date_taken` subset of
-    `METADATA_PRECEDENCE_POLICY`:
-    1. EXIF DateTimeOriginal (primary)
-    2. EXIF CreateDate/DateTime/DateTimeDigitized (fallback)
-    3. Filesystem modification time (heuristic)
+    The default reconciliation policy applies `METADATA_PRECEDENCE_POLICY`.
+    Other policies can choose newest, oldest or filesystem values while still
+    using the precedence matrix as deterministic tie-breaker.
     """
     file_path = Path(path)
+    reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
+    candidates: list[MetadataCandidate] = []
     exif_fields = _read_exif_datetime_fields(file_path)
 
     for field_name in ("DateTimeOriginal", "CreateDate"):
@@ -1182,24 +1343,13 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
             confidence: MetadataConfidence = (
                 "high" if field_name == "DateTimeOriginal" else "medium"
             )
-            provenance = MetadataProvenance(
+            candidates.append(_datetime_candidate(
+                value=parsed,
                 source="EXIF",
-                field=field_name,
+                field_name=field_name,
                 confidence=confidence,
                 raw_value=raw_value,
-            )
-            logger.info(
-                "Datetime resolved: file=%s source=%s field=%s confidence=%s",
-                file_path,
-                provenance.source,
-                provenance.field,
-                provenance.confidence,
-            )
-            return DateTimeResolution(
-                value=parsed,
-                used_fallback=False,
-                provenance=provenance,
-            )
+            ))
 
     xmp_fields = extract_xmp_metadata(file_path)
     for field_name in ("exif:DateTimeOriginal", "xmp:CreateDate"):
@@ -1212,24 +1362,14 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
                 if isinstance(field_sources, dict)
                 else None
             )
-            provenance = MetadataProvenance(
+            candidates.append(_datetime_candidate(
+                value=parsed,
                 source="XMP sidecar" if source_kind == "sidecar" else "XMP",
-                field=field_name,
+                field_name=field_name,
                 confidence="medium",
                 raw_value=raw_value,
-            )
-            logger.info(
-                "Datetime resolved: file=%s source=%s field=%s confidence=%s",
-                file_path,
-                provenance.source,
-                provenance.field,
-                provenance.confidence,
-            )
-            return DateTimeResolution(
-                value=parsed,
-                used_fallback=False,
-                provenance=provenance,
-            )
+                precedence_source="XMP",
+            ))
 
     iptc_fields = extract_iptc_iim_metadata(file_path)
     raw_date = iptc_fields.get("DateCreated")
@@ -1239,91 +1379,71 @@ def resolve_best_available_datetime(path: str | Path) -> DateTimeResolution:
             "DateCreated": raw_date,
             "TimeCreated": iptc_fields.get("TimeCreated"),
         }
-        provenance = MetadataProvenance(
+        candidates.append(_datetime_candidate(
+            value=parsed,
             source="IPTC-IIM",
-            field="2:55,2:60",
+            field_name="2:55,2:60",
             confidence="medium",
             raw_value={
                 key: value for key, value in raw_value.items() if value is not None
             },
-        )
-        logger.info(
-            "Datetime resolved: file=%s source=%s field=%s confidence=%s",
-            file_path,
-            provenance.source,
-            provenance.field,
-            provenance.confidence,
-        )
-        return DateTimeResolution(
-            value=parsed,
-            used_fallback=False,
-            provenance=provenance,
-        )
+            precedence_field="DateCreated",
+        ))
 
     png_fields = extract_png_metadata(file_path)
     for field_name in ("Creation Time", "CreationTime"):
         raw_value = png_fields.get(field_name)
         parsed = _parse_exif_datetime(raw_value)
         if parsed is not None:
-            provenance = MetadataProvenance(
+            candidates.append(_datetime_candidate(
+                value=parsed,
                 source="PNG metadata",
-                field=field_name,
+                field_name=field_name,
                 confidence="medium",
                 raw_value=raw_value,
-            )
-            logger.info(
-                "Datetime resolved: file=%s source=%s field=%s confidence=%s",
-                file_path,
-                provenance.source,
-                provenance.field,
-                provenance.confidence,
-            )
-            return DateTimeResolution(
-                value=parsed,
-                used_fallback=False,
-                provenance=provenance,
-            )
+            ))
 
     raw_png_time = png_fields.get("tIME")
     parsed_png_time = _parse_exif_datetime(raw_png_time)
     if parsed_png_time is not None:
-        provenance = MetadataProvenance(
+        candidates.append(_datetime_candidate(
+            value=parsed_png_time,
             source="PNG metadata",
-            field="tIME",
+            field_name="tIME",
             confidence="low",
             raw_value=raw_png_time,
-        )
-        logger.info(
-            "Datetime secondary fallback: file=%s source=%s field=%s confidence=%s",
-            file_path,
-            provenance.source,
-            provenance.field,
-            provenance.confidence,
-        )
-        return DateTimeResolution(
-            value=parsed_png_time,
             used_fallback=True,
-            provenance=provenance,
-        )
+        ))
 
     mtime = file_path.stat().st_mtime
-    provenance = MetadataProvenance(
+    candidates.append(_datetime_candidate(
+        value=datetime.fromtimestamp(mtime),
         source="filesystem",
-        field="mtime",
+        field_name="mtime",
         confidence="low",
         raw_value=mtime,
-    )
-    logger.info(
-        "Datetime fallback to file modification time for file=%s source=%s field=%s confidence=%s",
-        file_path,
-        provenance.source,
-        provenance.field,
-        provenance.confidence,
-    )
-    return DateTimeResolution(
-        value=datetime.fromtimestamp(mtime),
         used_fallback=True,
-        provenance=provenance,
+    ))
+    decision = reconcile_metadata_candidates(
+        "date_taken",
+        candidates,
+        reconciliation_policy,
+    )
+    _log_datetime_reconciliation(file_path, decision)
+    selected = decision.selected
+    if selected.provenance.source == "filesystem":
+        logger.info(
+            "Datetime fallback to file modification time for file=%s source=%s field=%s confidence=%s",
+            file_path,
+            selected.provenance.source,
+            selected.provenance.field,
+            selected.provenance.confidence,
+        )
+    return DateTimeResolution(
+        value=selected.value,
+        used_fallback=selected.used_fallback,
+        provenance=selected.provenance,
+        reconciliation=decision,
     )
 
 

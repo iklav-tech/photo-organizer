@@ -9,6 +9,7 @@ from typing import Any
 
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.planner import validate_destination_pattern
+from photo_organizer.metadata import validate_reconciliation_policy
 
 
 class ConfigurationError(ValueError):
@@ -27,6 +28,7 @@ class OrganizationConfig:
     plan: bool | None = None
     reverse_geocode: bool | None = None
     organization_strategy: str | None = None
+    reconciliation_policy: str | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -180,6 +182,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "organization_strategy",
         "behavior.organization_strategy",
     )
+    reconciliation_policy = _optional_string(
+        behavior,
+        "reconciliation_policy",
+        "behavior.reconciliation_policy",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -199,6 +206,13 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
             "organization strategy must be 'date', 'location', 'location-date' "
             "or 'city-state-month'"
         )
+    if reconciliation_policy is not None:
+        try:
+            validate_reconciliation_policy(reconciliation_policy)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"Invalid behavior.reconciliation_policy: {exc}"
+            ) from exc
     if naming_pattern is not None:
         try:
             validate_filename_pattern(naming_pattern)
@@ -219,4 +233,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         plan=plan,
         reverse_geocode=reverse_geocode,
         organization_strategy=organization_strategy,
+        reconciliation_policy=reconciliation_policy,
     )

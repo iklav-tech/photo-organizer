@@ -926,6 +926,77 @@ def test_get_best_available_datetime_prioritizes_datetimeoriginal(
     )
 
 
+def test_datetime_reconciliation_records_conflict_winner_and_reason(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "_read_exif_datetime_fields",
+        lambda _path: {"DateTimeOriginal": "2020:01:02 03:04:05"},
+    )
+    monkeypatch.setattr(
+        metadata,
+        "extract_xmp_metadata",
+        lambda _path: {"xmp:CreateDate": "2024-08-15T14:32:09"},
+    )
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    with caplog.at_level(logging.INFO):
+        resolution = metadata.resolve_best_available_datetime(file_path)
+
+    assert resolution.value == datetime(2020, 1, 2, 3, 4, 5)
+    assert resolution.reconciliation is not None
+    assert resolution.reconciliation.conflict is True
+    assert resolution.reconciliation.policy == "precedence"
+    assert resolution.reconciliation.selected.provenance.label == "EXIF:DateTimeOriginal"
+    assert resolution.reconciliation.reason == "selected by metadata precedence policy"
+    assert "Metadata reconciliation conflict" in caplog.text
+    assert "winner=EXIF:DateTimeOriginal" in caplog.text
+
+
+def test_datetime_reconciliation_can_prefer_newest_value(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    timestamp = datetime(2019, 1, 1, 0, 0, 0).timestamp()
+    import os
+
+    os.utime(file_path, (timestamp, timestamp))
+    monkeypatch.setattr(
+        metadata,
+        "_read_exif_datetime_fields",
+        lambda _path: {"DateTimeOriginal": "2020:01:02 03:04:05"},
+    )
+    monkeypatch.setattr(
+        metadata,
+        "extract_xmp_metadata",
+        lambda _path: {"xmp:CreateDate": "2024-08-15T14:32:09"},
+    )
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        reconciliation_policy="newest",
+    )
+
+    assert resolution.value == datetime(2024, 8, 15, 14, 32, 9)
+    assert resolution.provenance == metadata.MetadataProvenance(
+        source="XMP",
+        field="xmp:CreateDate",
+        confidence="medium",
+        raw_value="2024-08-15T14:32:09",
+    )
+    assert resolution.reconciliation is not None
+    assert resolution.reconciliation.reason == (
+        "selected newest parsed value, using precedence as tie-breaker"
+    )
+
+
 def test_get_best_available_datetime_uses_createdate_as_second_option(
     tmp_path: Path, monkeypatch
 ) -> None:

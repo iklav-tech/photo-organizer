@@ -9,3 +9,4 @@ behavior:
   dry_run: true
   plan: false
   reverse_geocode: false
+  reconciliation_policy: precedence

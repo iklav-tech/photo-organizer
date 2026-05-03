@@ -18,6 +18,7 @@ from photo_organizer.executor import (
 )
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
+from photo_organizer.metadata import RECONCILIATION_POLICY_CHOICES
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.scanner import find_image_files, is_supported_image_file
 
@@ -136,6 +137,24 @@ def _write_execution_report(
                 f"{operation['observations']}; {normalization_note}"
                 if operation["observations"]
                 else normalization_note
+            )
+        if (
+            planned_operation is not None
+            and planned_operation.date_reconciliation is not None
+            and planned_operation.date_reconciliation.conflict
+        ):
+            reconciliation = planned_operation.date_reconciliation
+            reconciliation_note = (
+                "date reconciliation: "
+                f"policy={reconciliation.policy}; "
+                f"winner={reconciliation.selected.provenance.label}; "
+                f"reason={reconciliation.reason}; "
+                f"conflicting_sources={', '.join(reconciliation.conflicting_sources)}"
+            )
+            operation["observations"] = (
+                f"{operation['observations']}; {reconciliation_note}"
+                if operation["observations"]
+                else reconciliation_note
             )
         operation.update(
             _provenance_report_fields(
@@ -486,6 +505,15 @@ def build_parser() -> argparse.ArgumentParser:
             "{original}. Example: '{date:%%Y%%m%%d}_{stem}{ext}'."
         ),
     )
+    execution_group.add_argument(
+        "--reconciliation-policy",
+        choices=RECONCILIATION_POLICY_CHOICES,
+        default=None,
+        help=(
+            "Metadata conflict policy for dates: precedence, newest, oldest, "
+            "or filesystem (default: precedence)."
+        ),
+    )
     geocoding_group = execution_group.add_mutually_exclusive_group()
     geocoding_group.add_argument(
         "--reverse-geocode",
@@ -641,6 +669,13 @@ def main(argv: list[str] | None = None) -> int:
         destination_pattern = (
             config.destination_pattern if config is not None else None
         )
+        reconciliation_policy = (
+            args.reconciliation_policy
+            if args.reconciliation_policy is not None
+            else config.reconciliation_policy
+            if config is not None and config.reconciliation_policy is not None
+            else "precedence"
+        )
 
         if not output:
             parser.error(
@@ -684,6 +719,7 @@ def main(argv: list[str] | None = None) -> int:
                 organization_strategy=strategy,
                 naming_pattern=naming_pattern,
                 destination_pattern=destination_pattern,
+                reconciliation_policy=reconciliation_policy,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
