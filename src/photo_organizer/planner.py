@@ -9,6 +9,11 @@ import string
 from typing import Protocol
 
 from photo_organizer.metadata import get_best_available_datetime
+from photo_organizer.text_normalization import (
+    TextNormalizationResult,
+    describe_text_normalization,
+    normalize_path_part,
+)
 
 
 class LocationLike(Protocol):
@@ -17,19 +22,27 @@ class LocationLike(Protocol):
     city: str | None
 
 
-def _clean_location_part(value: str | None) -> str:
+def normalize_location_part(value: str | None) -> TextNormalizationResult:
+    """Normalize a location component for use as one path segment."""
+    result = normalize_path_part(value, default="Unknown")
     if value is None:
-        return "Unknown"
+        return result
+    return result
 
-    text = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", value.strip())
-    text = re.sub(r"\s+", " ", text).strip(" .")
-    return text or "Unknown"
+
+def describe_location_part_normalization(
+    field: str,
+    value: str | None,
+) -> str | None:
+    return describe_text_normalization(field, normalize_location_part(value))
+
+
+def _clean_location_part(value: str | None) -> str:
+    return normalize_path_part(value, default="Unknown").value
 
 
 def _clean_destination_part(value: str) -> str:
-    text = re.sub(r'[<>:"\\|?*\x00-\x1f]', "-", value.strip())
-    text = re.sub(r"\s+", " ", text).strip(" .")
-    return text or "Unknown"
+    return normalize_path_part(value, default="Unknown").value
 
 
 def _validate_pattern_fields(pattern: str, allowed_fields: set[str]) -> None:

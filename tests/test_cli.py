@@ -883,6 +883,49 @@ def test_organize_report_includes_error_status_and_observation(
     ]
 
 
+def test_organize_report_includes_text_normalization_observations(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "execution.json"
+    planned = [
+        FileOperation(
+            source=Path("input/Cafe.jpg"),
+            destination=Path("out/Café.jpg"),
+            mode="copy",
+            text_normalization_observations=(
+                "filename: normalized Unicode to NFC",
+            ),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/Cafe.jpg -> out/Café.jpg",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["operations"][0]["observations"] == (
+        "text normalization: filename: normalized Unicode to NFC"
+    )
+
+
 def test_organize_report_includes_resolved_location(
     tmp_path: Path, monkeypatch
 ) -> None:

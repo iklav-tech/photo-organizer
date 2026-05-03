@@ -6,6 +6,13 @@ from datetime import datetime
 import string
 from pathlib import Path
 
+from photo_organizer.text_normalization import (
+    TextNormalizationResult,
+    describe_text_normalization,
+    normalize_path_part,
+    normalize_text,
+)
+
 
 _ALLOWED_FILENAME_FIELDS = {"date", "stem", "ext", "original"}
 
@@ -39,7 +46,31 @@ def build_default_filename(dt: datetime, original_path: str | Path) -> str:
     """
     extension = Path(original_path).suffix
     timestamp = dt.strftime("%Y-%m-%d_%H-%M-%S")
-    return f"{timestamp}{extension}"
+    return f"{timestamp}{normalize_text(extension).value}"
+
+
+def normalize_filename(filename: str) -> TextNormalizationResult:
+    """Normalize a generated filename while preserving a valid path component."""
+    return normalize_path_part(filename, default="Unknown")
+
+
+def describe_filename_normalization(filename: str) -> str | None:
+    return describe_text_normalization("filename", normalize_filename(filename))
+
+
+def _render_pattern_filename(
+    dt: datetime,
+    original_path: str | Path,
+    pattern: str,
+) -> str:
+    validate_filename_pattern(pattern)
+    path = Path(original_path)
+    return pattern.format(
+        date=dt,
+        stem=path.stem,
+        ext=path.suffix,
+        original=path.name,
+    )
 
 
 def build_pattern_filename(
@@ -48,16 +79,22 @@ def build_pattern_filename(
     pattern: str,
 ) -> str:
     """Build a filename from a user-supplied format pattern."""
-    validate_filename_pattern(pattern)
-    path = Path(original_path)
-    filename = pattern.format(
-        date=dt,
-        stem=path.stem,
-        ext=path.suffix,
-        original=path.name,
-    )
+    filename = _render_pattern_filename(dt, original_path, pattern)
+    result = normalize_filename(filename)
+    filename = result.value
     if not filename or filename in {".", ".."}:
         raise ValueError("Generated filename is empty or invalid")
     if Path(filename).name != filename:
         raise ValueError("Filename pattern must not contain path separators")
     return filename
+
+
+def describe_pattern_filename_normalization(
+    dt: datetime,
+    original_path: str | Path,
+    pattern: str,
+) -> str | None:
+    """Describe normalization applied while rendering a filename pattern."""
+    return describe_filename_normalization(
+        _render_pattern_filename(dt, original_path, pattern)
+    )

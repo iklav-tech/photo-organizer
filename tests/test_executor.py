@@ -163,6 +163,68 @@ def test_plan_organization_operations_resolves_location_when_enabled(
     assert operations[0].location_status == "resolved"
 
 
+def test_plan_organization_operations_records_text_normalization(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "Cafe\u0301:01.jpg"
+    image.write_text("a")
+    coordinates = GPSCoordinates(latitude=-23.5, longitude=-46.625)
+    location = ReverseGeocodedLocation(
+        city="SÃ£o Paulo",
+        state="SP",
+        country="Brasil",
+    )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_gps_coordinates",
+        lambda _path: coordinates,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.reverse_geocode_coordinates",
+        lambda _coordinates: location,
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        reverse_geocode=True,
+        organization_strategy="city-state-month",
+        naming_pattern="{stem}{ext}",
+    )
+
+    assert operations[0].destination == (
+        output_dir / "São Paulo-SP" / "2024-08" / "Café-01.jpg"
+    )
+    assert operations[0].location == ReverseGeocodedLocation(
+        city="São Paulo",
+        state="SP",
+        country="Brasil",
+    )
+    assert any(
+        observation.startswith("city: repaired legacy charset mojibake")
+        for observation in operations[0].text_normalization_observations
+    )
+    assert any(
+        "filename: normalized Unicode to NFC" in observation
+        for observation in operations[0].text_normalization_observations
+    )
+
+
 def test_plan_organization_operations_uses_extracted_gps_for_reverse_geocoding(
     tmp_path: Path, monkeypatch
 ) -> None:

@@ -125,6 +125,18 @@ def _write_execution_report(
     }
     for operation in operations:
         planned_operation = planned_operation_by_source.get(operation["source"])
+        if (
+            planned_operation is not None
+            and planned_operation.text_normalization_observations
+        ):
+            normalization_note = "text normalization: " + " | ".join(
+                planned_operation.text_normalization_observations
+            )
+            operation["observations"] = (
+                f"{operation['observations']}; {normalization_note}"
+                if operation["observations"]
+                else normalization_note
+            )
         operation.update(
             _provenance_report_fields(
                 "date",

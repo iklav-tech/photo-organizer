@@ -52,6 +52,18 @@ def test_build_pattern_filename_uses_configured_placeholders() -> None:
     assert result == "20240815-143209_IMG_1034.jpg"
 
 
+def test_build_pattern_filename_normalizes_text_and_invalid_characters() -> None:
+    dt = datetime(2024, 8, 15, 14, 32, 9)
+
+    result = build_pattern_filename(
+        dt,
+        "Cafe\u0301:Sa\u0303o.jpg",
+        "{stem}{ext}",
+    )
+
+    assert result == "Café-São.jpg"
+
+
 def test_build_pattern_filename_rejects_path_separators() -> None:
     dt = datetime(2024, 8, 15, 14, 32, 9)
 

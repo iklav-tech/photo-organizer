@@ -60,6 +60,18 @@ def test_build_location_destination_sanitizes_folder_names() -> None:
     assert result == Path("organized") / "Brasil" / "Rio-Minas" / "Sao Tome--"
 
 
+def test_build_location_destination_normalizes_legacy_unicode_text() -> None:
+    location = SimpleNamespace(
+        country="Brasil",
+        state="Parana\u0301",
+        city="SÃ£o Paulo",
+    )
+
+    result = planner.build_location_destination("organized", location)
+
+    assert result == Path("organized") / "Brasil" / "Paraná" / "São Paulo"
+
+
 def test_build_location_date_destination_uses_location_and_year_month() -> None:
     location = SimpleNamespace(
         country="Brasil",

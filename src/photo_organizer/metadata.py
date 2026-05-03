@@ -27,6 +27,7 @@ import xml.etree.ElementTree as ET
 import zlib
 
 from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS
+from photo_organizer.text_normalization import normalize_text
 
 
 logger = logging.getLogger(__name__)
@@ -322,7 +323,7 @@ def _parse_exif_datetime(value: Any) -> datetime | None:
         return None
 
     if isinstance(value, bytes):
-        value = value.decode("utf-8", errors="ignore")
+        value = normalize_text(value).value
 
     if not isinstance(value, str):
         return None
@@ -356,7 +357,7 @@ def _parse_exif_datetime(value: Any) -> datetime | None:
 def _parse_iptc_datetime(date_value: Any, time_value: Any = None) -> datetime | None:
     """Parse IPTC-IIM DateCreated and optional TimeCreated fields."""
     if isinstance(date_value, bytes):
-        date_value = date_value.decode("utf-8", errors="ignore")
+        date_value = normalize_text(date_value).value
     if not isinstance(date_value, str):
         return None
 
@@ -366,7 +367,7 @@ def _parse_iptc_datetime(date_value: Any, time_value: Any = None) -> datetime | 
 
     time_text = "000000"
     if isinstance(time_value, bytes):
-        time_value = time_value.decode("utf-8", errors="ignore")
+        time_value = normalize_text(time_value).value
     if isinstance(time_value, str) and time_value.strip():
         match = re.match(r"^(\d{2})(\d{2})(\d{2})", time_value.strip())
         if match:
@@ -422,7 +423,7 @@ def _gps_dms_to_decimal(value: Any, ref: Any) -> float | None:
     decimal = degrees + minutes / 60 + seconds / 3600
 
     if isinstance(ref, bytes):
-        ref = ref.decode("ascii", errors="ignore")
+        ref = normalize_text(ref).value
     if isinstance(ref, str) and ref.strip().upper() in {"S", "W"}:
         decimal *= -1
 
@@ -440,7 +441,7 @@ def _xmp_gps_to_decimal(value: Any, ref: Any = None) -> float | None:
         return -abs(decimal) if text_ref in {"S", "W"} else decimal
 
     if isinstance(value, bytes):
-        value = value.decode("utf-8", errors="ignore")
+        value = normalize_text(value).value
     if not isinstance(value, str):
         return None
 
@@ -485,20 +486,15 @@ def _qualified_xmp_name(name: str) -> str:
 
 
 def _decode_iptc_value(value: bytes) -> str:
-    for encoding in ("utf-8", "latin-1"):
-        try:
-            return value.decode(encoding).strip("\x00").strip()
-        except UnicodeDecodeError:
-            continue
-    return value.decode("utf-8", errors="replace").strip("\x00").strip()
+    return normalize_text(value).value.strip("\x00").strip()
 
 
 def _decode_png_latin1(value: bytes) -> str:
-    return value.decode("latin-1").strip("\x00").strip()
+    return normalize_text(value).value.strip("\x00").strip()
 
 
 def _decode_png_utf8(value: bytes) -> str:
-    return value.decode("utf-8", errors="replace").strip("\x00").strip()
+    return normalize_text(value).value.strip("\x00").strip()
 
 
 def _split_png_null_field(data: bytes, offset: int = 0) -> tuple[bytes, int] | None:
@@ -728,7 +724,7 @@ def _xmp_text_value(element: ET.Element) -> str:
         for text in element.itertext()
         if text is not None and text.strip()
     ]
-    return " ".join(texts)
+    return normalize_text(" ".join(texts)).value
 
 
 def _parse_xmp_packet(packet: str) -> dict[str, Any]:
@@ -742,7 +738,7 @@ def _parse_xmp_packet(packet: str) -> dict[str, Any]:
         for raw_name, value in element.attrib.items():
             field_name = _qualified_xmp_name(raw_name)
             if field_name in XMP_RELEVANT_FIELDS and value:
-                fields[field_name] = value
+                fields[field_name] = normalize_text(value).value
 
         field_name = _qualified_xmp_name(element.tag)
         if field_name in XMP_RELEVANT_FIELDS:
@@ -1147,6 +1143,8 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
                 if not value:
                     value = _normalize_gps_info(_read_gps_ifd(exif_data, key), gps_tags)
             if value not in (None, {}, ""):
+                if isinstance(value, (str, bytes)):
+                    value = normalize_text(value).value
                 fields[tag_name] = value
 
     gps_coordinates = _extract_gps_coordinates_from_fields(fields)

@@ -18,15 +18,21 @@ from photo_organizer.metadata import (
     extract_gps_coordinates,
     resolve_best_available_datetime,
 )
-from photo_organizer.naming import build_default_filename, build_pattern_filename
+from photo_organizer.naming import (
+    build_default_filename,
+    build_pattern_filename,
+    describe_pattern_filename_normalization,
+)
 from photo_organizer.planner import (
     build_city_state_month_destination,
     build_date_destination,
     build_location_date_destination,
     build_location_destination,
     build_pattern_destination,
+    describe_location_part_normalization,
 )
 from photo_organizer.scanner import find_image_files
+from photo_organizer.text_normalization import normalize_text
 
 
 logger = logging.getLogger(__name__)
@@ -83,6 +89,7 @@ class FileOperation:
     location_provenance: MetadataProvenance | None = None
     location_status: str = "disabled"
     organization_fallback: bool = False
+    text_normalization_observations: tuple[str, ...] = ()
 
 
 def plan_organization_operations(
@@ -181,6 +188,27 @@ def plan_organization_operations(
                 )
 
         organization_fallback = False
+        text_normalization_observations: list[str] = []
+        if location is not None:
+            for field_name, value in (
+                ("city", location.city),
+                ("state", location.state),
+                ("country", location.country),
+            ):
+                observation = describe_location_part_normalization(field_name, value)
+                if observation is not None:
+                    text_normalization_observations.append(observation)
+            location = ReverseGeocodedLocation(
+                city=normalize_text(location.city).value
+                if location.city is not None
+                else None,
+                state=normalize_text(location.state).value
+                if location.state is not None
+                else None,
+                country=normalize_text(location.country).value
+                if location.country is not None
+                else None,
+            )
         try:
             if destination_pattern is not None:
                 destination_dir = Path(
@@ -221,6 +249,14 @@ def plan_organization_operations(
                 if naming_pattern is not None
                 else build_default_filename(dt, image_path)
             )
+            if naming_pattern is not None:
+                observation = describe_pattern_filename_normalization(
+                    dt,
+                    image_path,
+                    naming_pattern,
+                )
+                if observation is not None:
+                    text_normalization_observations.append(observation)
         except Exception as exc:
             logger.error(
                 "Failed to plan file operation: source=%s error=%s",
@@ -242,6 +278,7 @@ def plan_organization_operations(
                 location_provenance=location_provenance,
                 location_status=location_status,
                 organization_fallback=organization_fallback,
+                text_normalization_observations=tuple(text_normalization_observations),
             )
         )
 

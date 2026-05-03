@@ -19,6 +19,15 @@ def _iptc_dataset(record: int, dataset: int, value: str) -> bytes:
     )
 
 
+def _iptc_dataset_bytes(record: int, dataset: int, raw_value: bytes) -> bytes:
+    return (
+        b"\x1c"
+        + bytes([record, dataset])
+        + len(raw_value).to_bytes(2, "big")
+        + raw_value
+    )
+
+
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     crc = binascii.crc32(chunk_type + data) & 0xFFFFFFFF
     return len(data).to_bytes(4, "big") + chunk_type + data + crc.to_bytes(4, "big")
@@ -168,6 +177,25 @@ def test_extract_png_metadata_reads_itxt_utf8_xmp_and_legacy_text(
     assert png_fields["PNGFieldSources"]["XML:com.adobe.xmp"] == "iTXt"
     assert xmp_fields["xmp:CreateDate"] == "2024-08-15T14:32:09"
     assert xmp_fields["XMPFieldSources"]["xmp:CreateDate"] == "embedded"
+
+
+def test_legacy_text_metadata_is_charset_and_unicode_normalized(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "legacy.jpg"
+    file_path.write_bytes(
+        _iptc_dataset_bytes(2, 90, "SÃ£o Paulo".encode("utf-8"))
+        + _iptc_dataset_bytes(2, 95, "Parana\u0301".encode("utf-8"))
+        + _iptc_dataset_bytes(2, 120, "Caf\xe9".encode("cp1252"))
+        + _iptc_dataset_bytes(2, 80, "Jo\xe3o".encode("cp1252"))
+    )
+
+    fields = metadata.extract_iptc_iim_metadata(file_path)
+
+    assert fields["City"] == "São Paulo"
+    assert fields["Province-State"] == "Paraná"
+    assert fields["Caption-Abstract"] == "Café"
+    assert fields["By-line"] == "João"
 
 
 def test_get_best_available_datetime_uses_png_creation_time_before_time_chunk(
