@@ -1450,3 +1450,200 @@ def test_organize_writes_valid_csv_execution_report(
             "event_name": "",
         },
     ]
+
+
+# ---------------------------------------------------------------------------
+# --clock-offset CLI flag
+# ---------------------------------------------------------------------------
+
+def test_organize_accepts_clock_offset_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--clock-offset",
+        "+3h",
+    ])
+
+    assert result == 0
+    assert captured["clock_offset"] == "+3h"
+
+
+def test_organize_accepts_clock_offset_day_format_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    # Negative offsets must use the = form to avoid argparse treating the
+    # leading '-' as an option prefix.
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--clock-offset=-1d",
+    ])
+
+    assert result == 0
+    assert captured["clock_offset"] == "-1d"
+
+
+def test_organize_rejects_invalid_clock_offset(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--clock-offset",
+            "bad-offset",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "invalid --clock-offset" in captured.err
+
+
+def test_organize_accepts_clock_offset_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "behavior": {"clock_offset": "+01:00"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured["clock_offset"] == "+01:00"
+
+
+def test_organize_cli_clock_offset_overrides_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "behavior": {"clock_offset": "+01:00"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--config",
+        str(config_path),
+        "--clock-offset",
+        "+3h",
+    ])
+
+    assert result == 0
+    assert captured["clock_offset"] == "+3h"
+
+
+def test_organize_report_includes_clock_offset_and_original_datetime(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Report observations include clock_offset and the original datetime."""
+    report_path = tmp_path / "execution.json"
+    original_dt = datetime(2020, 6, 15, 10, 0, 0)
+    corrected_dt = datetime(2020, 6, 15, 13, 0, 0)
+
+    planned = [
+        FileOperation(
+            source=Path("input/a.jpg"),
+            destination=Path("out/a.jpg"),
+            mode="copy",
+            date_provenance=MetadataProvenance(
+                source="Correction manifest",
+                field="global:clock_offset",
+                confidence="high",
+                raw_value={
+                    "manifest": ".",
+                    "selectors": ("global:clock_offset",),
+                    "timezone": None,
+                    "clock_offset": "+3h",
+                    "base_source": "EXIF:DateTimeOriginal",
+                    "base_value": original_dt.isoformat(),
+                },
+            ),
+            correction_manifest=CorrectionApplication(
+                source_path=Path("."),
+                selectors=("global:clock_offset",),
+                clock_offset="+3h",
+                priority="highest",
+            ),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/a.jpg -> out/a.jpg",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    observations = report["operations"][0]["observations"]
+    assert "clock_offset=+3h" in observations
+    assert f"original_datetime={original_dt.isoformat()}" in observations

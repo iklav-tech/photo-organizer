@@ -350,6 +350,7 @@ class GPSCoordinates:
 XMP_NAMESPACE_PREFIXES = {
     "http://ns.adobe.com/xap/1.0/": "xmp",
     "http://ns.adobe.com/exif/1.0/": "exif",
+    "http://ns.adobe.com/tiff/1.0/": "tiff",
     "http://purl.org/dc/elements/1.1/": "dc",
     "http://ns.adobe.com/photoshop/1.0/": "photoshop",
     "http://www.w3.org/1999/02/22-rdf-syntax-ns#": "rdf",
@@ -363,6 +364,8 @@ XMP_RELEVANT_FIELDS = {
     "exif:GPSLongitude",
     "exif:GPSLatitudeRef",
     "exif:GPSLongitudeRef",
+    "tiff:Make",
+    "tiff:Model",
     "dc:title",
     "dc:creator",
     "dc:description",
@@ -1490,19 +1493,62 @@ def _heuristic_datetime_candidates(path: Path) -> list[MetadataCandidate]:
 
 
 def _parse_clock_offset(value: str | None) -> int | None:
+    """Parse a clock offset string into a total number of seconds.
+
+    Accepted formats:
+    - ``+3h`` / ``-3h``  — hours with explicit ``h`` suffix
+    - ``+1d`` / ``-1d``  — days (converted to hours × 24)
+    - ``+00:30`` / ``-00:30`` — ``HH:MM`` with colon separator
+    - ``+3`` / ``-3``    — bare integer treated as hours
+    - ``+0:30``          — ``H:MM`` short form
+
+    Returns the offset in seconds, or ``None`` when the value cannot be parsed
+    or is out of range.
+    """
     if value is None:
         return None
     text = value.strip()
-    match = re.fullmatch(r"([+-]?)(\d{1,2})(?::?(\d{2}))?", text)
-    if match is None:
+
+    # Days: [+-]Nd
+    day_match = re.fullmatch(r"([+-]?)(\d{1,3})[dD]", text)
+    if day_match is not None:
+        sign_text, day_text = day_match.groups()
+        sign = -1 if sign_text == "-" else 1
+        days = int(day_text)
+        return sign * days * 24 * 3600
+
+    # Hours with explicit suffix: [+-]Nh
+    hour_suffix_match = re.fullmatch(r"([+-]?)(\d{1,4})[hH]", text)
+    if hour_suffix_match is not None:
+        sign_text, hour_text = hour_suffix_match.groups()
+        sign = -1 if sign_text == "-" else 1
+        hours = int(hour_text)
+        return sign * hours * 3600
+
+    # HH[:MM] — bare hours or hours:minutes
+    hm_match = re.fullmatch(r"([+-]?)(\d{1,2})(?::?(\d{2}))?", text)
+    if hm_match is None:
         return None
-    sign_text, hour_text, minute_text = match.groups()
+    sign_text, hour_text, minute_text = hm_match.groups()
     sign = -1 if sign_text == "-" else 1
     hours = int(hour_text)
     minutes = int(minute_text or "0")
     if hours > 23 or minutes > 59:
         return None
     return sign * ((hours * 60 + minutes) * 60)
+
+
+def validate_clock_offset(value: str) -> str:
+    """Validate a clock offset string and return it unchanged.
+
+    Raises :class:`ValueError` when the format is not recognised.
+    """
+    if _parse_clock_offset(value) is None:
+        raise ValueError(
+            f"Invalid clock offset '{value}'. "
+            "Accepted formats: +3h, -1d, +00:30, -5:45, +12."
+        )
+    return value
 
 
 def _correction_precedence(priority: str) -> int:
@@ -1880,6 +1926,37 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         fields["GPSLongitudeDecimal"] = gps_coordinates.longitude
 
     return fields
+
+
+def _metadata_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = normalize_text(value).value if isinstance(value, bytes) else str(value)
+    text = normalize_text(text).value.strip("\x00").strip()
+    return text or None
+
+
+def extract_camera_profile(path: str | Path) -> dict[str, str]:
+    """Return camera make/model metadata for correction manifest matching."""
+    file_path = Path(path)
+    exif_fields = extract_exif_metadata(file_path)
+    make = _metadata_text(exif_fields.get("Make"))
+    model = _metadata_text(exif_fields.get("Model"))
+
+    if make is None or model is None:
+        xmp_fields = extract_xmp_metadata(file_path)
+        make = make or _metadata_text(xmp_fields.get("tiff:Make"))
+        model = model or _metadata_text(xmp_fields.get("tiff:Model"))
+
+    profile = " ".join(part for part in (make, model) if part)
+    result: dict[str, str] = {}
+    if make:
+        result["make"] = make
+    if model:
+        result["model"] = model
+    if profile:
+        result["profile"] = profile
+    return result
 
 
 def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:

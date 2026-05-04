@@ -70,3 +70,144 @@ def test_load_correction_manifest_reads_csv_rules(tmp_path: Path) -> None:
         "state": "RJ",
         "country": "Brasil",
     }
+
+
+def test_correction_manifest_matches_camera_profile(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "corrections.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "camera": "Canon PowerShot A530",
+                        "clock_offset": "+3h",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+
+    manifest = load_correction_manifest(manifest_path)
+    correction = correction_for_file(
+        manifest,
+        image,
+        tmp_path,
+        camera_profile={
+            "make": "Canon",
+            "model": "PowerShot A530",
+            "profile": "Canon PowerShot A530",
+        },
+    )
+
+    assert correction is not None
+    assert correction.clock_offset == "+3h"
+    assert correction.selectors == ("camera:Canon PowerShot A530",)
+
+
+def test_correction_manifest_matches_camera_make_and_model_fields(
+    tmp_path: Path,
+) -> None:
+    manifest_path = tmp_path / "corrections.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "camera_make": "Olympus",
+                        "camera_model": "C-2020Z",
+                        "clock_offset": "-1d",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+
+    manifest = load_correction_manifest(manifest_path)
+    correction = correction_for_file(
+        manifest,
+        image,
+        tmp_path,
+        camera_profile={
+            "make": "Olympus",
+            "model": "C-2020Z",
+            "profile": "Olympus C-2020Z",
+        },
+    )
+
+    assert correction is not None
+    assert correction.clock_offset == "-1d"
+    assert correction.selectors == ("camera_model:C-2020Z",)
+
+
+def test_correction_manifest_matches_camera_model_selector(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "corrections.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "camera_model": "FinePix*",
+                        "clock_offset": "+00:30",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+
+    manifest = load_correction_manifest(manifest_path)
+    correction = correction_for_file(
+        manifest,
+        image,
+        tmp_path,
+        camera_profile={
+            "make": "FUJIFILM",
+            "model": "FinePix S5000",
+            "profile": "FUJIFILM FinePix S5000",
+        },
+    )
+
+    assert correction is not None
+    assert correction.clock_offset == "+00:30"
+
+
+def test_correction_manifest_matches_camera_make_only(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "corrections.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {
+                        "camera_make": "Canon",
+                        "clock_offset": "+1h",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+
+    manifest = load_correction_manifest(manifest_path)
+    correction = correction_for_file(
+        manifest,
+        image,
+        tmp_path,
+        camera_profile={
+            "make": "Canon",
+            "model": "PowerShot A530",
+            "profile": "Canon PowerShot A530",
+        },
+    )
+
+    assert correction is not None
+    assert correction.clock_offset == "+1h"

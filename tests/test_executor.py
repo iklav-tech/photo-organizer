@@ -1340,3 +1340,170 @@ def test_apply_operations_reports_success_and_failure_per_item(tmp_path: Path) -
     assert len(logs) == 2
     assert logs[0] == f"[INFO] COPY {good_source} -> {good_destination}"
     assert logs[1].startswith(f"[ERROR] COPY {bad_source} -> {bad_destination}")
+
+
+# ---------------------------------------------------------------------------
+# Global clock_offset parameter
+# ---------------------------------------------------------------------------
+
+def test_plan_organization_operations_applies_global_clock_offset(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A global clock_offset is injected as a synthetic CorrectionApplication."""
+    from photo_organizer.correction_manifest import CorrectionApplication
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.jpg"
+    image.write_text("a")
+
+    captured_corrections: list = []
+
+    def fake_resolve(path, **kwargs):
+        captured_corrections.append(kwargs.get("correction"))
+        return DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        fake_resolve,
+    )
+
+    plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        clock_offset="+3h",
+    )
+
+    assert len(captured_corrections) == 1
+    correction = captured_corrections[0]
+    assert isinstance(correction, CorrectionApplication)
+    assert correction.clock_offset == "+3h"
+    assert "global:clock_offset" in correction.selectors
+
+
+def test_plan_organization_operations_global_clock_offset_does_not_override_manifest_offset(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Per-file manifest clock_offset takes precedence over the global one."""
+    from photo_organizer.correction_manifest import (
+        CorrectionApplication,
+        CorrectionManifest,
+        CorrectionRule,
+    )
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.jpg"
+    image.write_text("a")
+
+    manifest_path = tmp_path / "corrections.json"
+    manifest = CorrectionManifest(
+        path=manifest_path,
+        rules=(
+            CorrectionRule(
+                selector="*.jpg",
+                selector_type="glob",
+                clock_offset="+01:00",
+            ),
+        ),
+    )
+
+    captured_corrections: list = []
+
+    def fake_resolve(path, **kwargs):
+        captured_corrections.append(kwargs.get("correction"))
+        return DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        fake_resolve,
+    )
+
+    plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        correction_manifest=manifest,
+        clock_offset="+3h",
+    )
+
+    assert len(captured_corrections) == 1
+    correction = captured_corrections[0]
+    # The manifest's per-file offset (+01:00) must be preserved.
+    assert correction.clock_offset == "+01:00"
+
+
+def test_plan_organization_operations_applies_camera_profile_clock_offset(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Camera-profile manifest rules match EXIF make/model metadata."""
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "a.jpg"
+    image.write_text("a")
+    manifest = CorrectionManifest(
+        path=tmp_path / "corrections.json",
+        rules=(
+            CorrectionRule(
+                selector="Canon PowerShot A530",
+                selector_type="camera",
+                clock_offset="+3h",
+            ),
+        ),
+    )
+    captured_corrections: list = []
+
+    def fake_resolve(path, **kwargs):
+        captured_corrections.append(kwargs.get("correction"))
+        return DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        )
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.find_image_files",
+        lambda _src, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.extract_camera_profile",
+        lambda _path: {
+            "make": "Canon",
+            "model": "PowerShot A530",
+            "profile": "Canon PowerShot A530",
+        },
+    )
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        fake_resolve,
+    )
+
+    plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        correction_manifest=manifest,
+    )
+
+    assert len(captured_corrections) == 1
+    correction = captured_corrections[0]
+    assert correction is not None
+    assert correction.clock_offset == "+3h"
+    assert correction.selectors == ("camera:Canon PowerShot A530",)

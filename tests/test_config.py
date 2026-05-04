@@ -140,3 +140,40 @@ def test_load_organization_config_rejects_unknown_pattern_field(
 
     with pytest.raises(ConfigurationError, match="Invalid naming.pattern"):
         load_organization_config(config_path)
+
+
+def test_load_organization_config_reads_clock_offset(tmp_path: Path) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"clock_offset": "+3h"}}),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.clock_offset == "+3h"
+
+
+def test_load_organization_config_rejects_invalid_clock_offset(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"clock_offset": "bad-offset"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="clock_offset"):
+        load_organization_config(config_path)
+
+
+def test_load_organization_config_accepts_day_clock_offset(tmp_path: Path) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"clock_offset": "-1d"}}),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.clock_offset == "-1d"

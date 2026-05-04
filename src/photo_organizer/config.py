@@ -10,7 +10,7 @@ from typing import Any
 from photo_organizer.correction_manifest import validate_correction_priority
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.planner import validate_destination_pattern
-from photo_organizer.metadata import validate_reconciliation_policy
+from photo_organizer.metadata import validate_clock_offset, validate_reconciliation_policy
 
 
 class ConfigurationError(ValueError):
@@ -34,6 +34,7 @@ class OrganizationConfig:
     location_inference: bool | None = None
     correction_manifest: str | None = None
     correction_priority: str | None = None
+    clock_offset: str | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -212,6 +213,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "correction_priority",
         "behavior.correction_priority",
     )
+    clock_offset = _optional_string(
+        behavior,
+        "clock_offset",
+        "behavior.clock_offset",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -245,6 +251,13 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
             raise ConfigurationError(
                 f"Invalid behavior.correction_priority: {exc}"
             ) from exc
+    if clock_offset is not None:
+        try:
+            validate_clock_offset(clock_offset)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"Invalid behavior.clock_offset: {exc}"
+            ) from exc
     if naming_pattern is not None:
         try:
             validate_filename_pattern(naming_pattern)
@@ -270,4 +283,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         location_inference=location_inference,
         correction_manifest=correction_manifest,
         correction_priority=correction_priority,
+        clock_offset=clock_offset,
     )

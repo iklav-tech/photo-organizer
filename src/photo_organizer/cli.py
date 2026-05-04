@@ -26,6 +26,7 @@ from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.metadata import (
     DATE_HEURISTICS_DEFAULT,
     RECONCILIATION_POLICY_CHOICES,
+    validate_clock_offset,
 )
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.scanner import find_image_files, is_supported_image_file
@@ -169,6 +170,17 @@ def _write_execution_report(
             )
             if correction.event_name:
                 correction_note += f"; event={correction.event_name}"
+            if correction.clock_offset:
+                correction_note += f"; clock_offset={correction.clock_offset}"
+                # Surface the original (pre-correction) datetime when available
+                # in the provenance raw_value so the report preserves it.
+                prov = planned_operation.date_provenance
+                if (
+                    prov is not None
+                    and isinstance(prov.raw_value, dict)
+                    and "base_value" in prov.raw_value
+                ):
+                    correction_note += f"; original_datetime={prov.raw_value['base_value']}"
             operation["observations"] = (
                 f"{operation['observations']}; {correction_note}"
                 if operation["observations"]
@@ -564,6 +576,18 @@ def build_parser() -> argparse.ArgumentParser:
             "or heuristic (default: manifest/default highest)."
         ),
     )
+    execution_group.add_argument(
+        "--clock-offset",
+        metavar="OFFSET",
+        default=None,
+        help=(
+            "Apply a fixed time offset to every file's captured datetime. "
+            "Useful for correcting camera clock drift. "
+            "Accepted formats: +3h, -1d, +00:30, -5:45. "
+            "For negative offsets use the = form: --clock-offset=-1d. "
+            "Per-file offsets in a correction manifest take precedence."
+        ),
+    )
     heuristics_group = execution_group.add_mutually_exclusive_group()
     heuristics_group.add_argument(
         "--date-heuristics",
@@ -791,6 +815,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.location_inference is not None
             else True
         )
+        clock_offset = (
+            args.clock_offset
+            if args.clock_offset is not None
+            else config.clock_offset
+            if config is not None and config.clock_offset is not None
+            else None
+        )
 
         if not output:
             parser.error(
@@ -815,6 +846,11 @@ def main(argv: list[str] | None = None) -> int:
                 validate_filename_pattern(naming_pattern)
             except ValueError as exc:
                 parser.error(f"invalid --name-pattern: {exc}")
+        if clock_offset is not None:
+            try:
+                validate_clock_offset(clock_offset)
+            except ValueError as exc:
+                parser.error(f"invalid --clock-offset: {exc}")
 
         logger.info(
             "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
@@ -839,6 +875,7 @@ def main(argv: list[str] | None = None) -> int:
                 location_inference=location_inference,
                 correction_manifest=correction_manifest,
                 correction_priority=correction_priority,
+                clock_offset=clock_offset,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:

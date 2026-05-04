@@ -349,6 +349,11 @@ rules:
     city: "Paraty"
     state: "RJ"
     country: "Brasil"
+  - camera: "Canon PowerShot A530"
+    clock_offset: "+3h"
+  - camera_make: "Olympus"
+    camera_model: "C-2020Z"
+    clock_offset: "-1d"
 ```
 
 Filename patterns use Python datetime formatting for `{date:...}`. Supported

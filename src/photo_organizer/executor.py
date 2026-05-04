@@ -22,6 +22,7 @@ from photo_organizer.metadata import (
     MetadataProvenance,
     ReconciliationDecision,
     ReconciliationPolicy,
+    extract_camera_profile,
     extract_gps_coordinates,
     infer_textual_location,
     resolve_best_available_datetime,
@@ -118,8 +119,18 @@ def plan_organization_operations(
     location_inference: bool = True,
     correction_manifest: CorrectionManifest | None = None,
     correction_priority: CorrectionPriority | None = None,
+    clock_offset: str | None = None,
 ) -> list[FileOperation]:
-    """Plan organization operations for all supported images in source_dir."""
+    """Plan organization operations for all supported images in source_dir.
+
+    When *clock_offset* is provided it is applied as a global time correction to
+    every file that does not already have a per-file ``clock_offset`` set in the
+    *correction_manifest*.  The offset is merged into the per-file
+    :class:`~photo_organizer.correction_manifest.CorrectionApplication` so the
+    original datetime is always preserved in the provenance ``raw_value``.
+
+    Accepted offset formats: ``+3h``, ``-1d``, ``+00:30``, ``-5:45``, ``+12``.
+    """
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
     source_path = Path(source_dir)
     output_path = Path(output_dir)
@@ -132,12 +143,43 @@ def plan_organization_operations(
 
     operations: list[FileOperation] = []
     for image_path in find_image_files(source_path, recursive=True):
+        camera_profile = (
+            extract_camera_profile(image_path)
+            if correction_manifest is not None
+            else None
+        )
         correction = correction_for_file(
             correction_manifest,
             image_path,
             source_path,
             correction_priority,
+            camera_profile,
         )
+        # Apply the global clock_offset when the per-file correction does not
+        # already carry one.  We synthesise a minimal CorrectionApplication so
+        # the offset flows through the same metadata resolution path and the
+        # original datetime is preserved in the provenance raw_value.
+        if clock_offset is not None:
+            if correction is None:
+                correction = CorrectionApplication(
+                    source_path=source_path,
+                    selectors=("global:clock_offset",),
+                    clock_offset=clock_offset,
+                    priority=correction_priority or "highest",
+                )
+            elif correction.clock_offset is None:
+                correction = CorrectionApplication(
+                    source_path=correction.source_path,
+                    selectors=correction.selectors,
+                    date_value=correction.date_value,
+                    timezone=correction.timezone,
+                    clock_offset=clock_offset,
+                    city=correction.city,
+                    state=correction.state,
+                    country=correction.country,
+                    event_name=correction.event_name,
+                    priority=correction.priority,
+                )
         try:
             try:
                 resolved_dt = resolve_best_available_datetime(

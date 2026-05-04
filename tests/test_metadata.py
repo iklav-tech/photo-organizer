@@ -1247,3 +1247,162 @@ def test_get_best_available_datetime_logs_fallback_decision(
         metadata.get_best_available_datetime(file_path)
 
     assert "Datetime fallback to file modification time" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Clock offset parsing – extended format support
+# ---------------------------------------------------------------------------
+
+def test_parse_clock_offset_accepts_hours_with_h_suffix() -> None:
+    from photo_organizer.metadata import _parse_clock_offset
+
+    assert _parse_clock_offset("+3h") == 3 * 3600
+    assert _parse_clock_offset("-3h") == -3 * 3600
+    assert _parse_clock_offset("+12H") == 12 * 3600
+
+
+def test_extract_camera_profile_reads_exif_make_and_model(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "extract_exif_metadata",
+        lambda _path: {"Make": "Canon", "Model": "PowerShot A530"},
+    )
+
+    assert metadata.extract_camera_profile(file_path) == {
+        "make": "Canon",
+        "model": "PowerShot A530",
+        "profile": "Canon PowerShot A530",
+    }
+
+
+def test_extract_camera_profile_uses_xmp_when_exif_is_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(metadata, "extract_exif_metadata", lambda _path: {})
+    monkeypatch.setattr(
+        metadata,
+        "extract_xmp_metadata",
+        lambda _path: {"tiff:Make": "FUJIFILM", "tiff:Model": "FinePix S5000"},
+    )
+
+    assert metadata.extract_camera_profile(file_path) == {
+        "make": "FUJIFILM",
+        "model": "FinePix S5000",
+        "profile": "FUJIFILM FinePix S5000",
+    }
+
+
+def test_parse_clock_offset_accepts_days_with_d_suffix() -> None:
+    from photo_organizer.metadata import _parse_clock_offset
+
+    assert _parse_clock_offset("+1d") == 24 * 3600
+    assert _parse_clock_offset("-1d") == -24 * 3600
+    assert _parse_clock_offset("+2D") == 2 * 24 * 3600
+
+
+def test_parse_clock_offset_accepts_hhmm_colon_format() -> None:
+    from photo_organizer.metadata import _parse_clock_offset
+
+    assert _parse_clock_offset("+00:30") == 30 * 60
+    assert _parse_clock_offset("-05:45") == -(5 * 3600 + 45 * 60)
+    assert _parse_clock_offset("+01:00") == 3600
+
+
+def test_parse_clock_offset_accepts_bare_hours() -> None:
+    from photo_organizer.metadata import _parse_clock_offset
+
+    assert _parse_clock_offset("+3") == 3 * 3600
+    assert _parse_clock_offset("-3") == -3 * 3600
+
+
+def test_parse_clock_offset_returns_none_for_invalid_values() -> None:
+    from photo_organizer.metadata import _parse_clock_offset
+
+    assert _parse_clock_offset("abc") is None
+    assert _parse_clock_offset("+99:99") is None
+    assert _parse_clock_offset("") is None
+    assert _parse_clock_offset(None) is None
+
+
+def test_validate_clock_offset_raises_for_invalid_format() -> None:
+    from photo_organizer.metadata import validate_clock_offset
+
+    with pytest.raises(ValueError, match="Invalid clock offset"):
+        validate_clock_offset("abc")
+
+
+def test_validate_clock_offset_returns_value_unchanged_for_valid_format() -> None:
+    from photo_organizer.metadata import validate_clock_offset
+
+    assert validate_clock_offset("+3h") == "+3h"
+    assert validate_clock_offset("-1d") == "-1d"
+    assert validate_clock_offset("+00:30") == "+00:30"
+
+
+def test_correction_manifest_clock_offset_with_h_suffix_adjusts_datetime(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A clock_offset using the +Nh suffix format is applied correctly."""
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "_read_exif_datetime_fields",
+        lambda _path: {"DateTimeOriginal": "2020:06:15 10:00:00"},
+    )
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+    correction = CorrectionApplication(
+        source_path=tmp_path / "corrections.csv",
+        selectors=("glob:*.jpg",),
+        clock_offset="+3h",
+        priority="highest",
+    )
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        correction=correction,
+    )
+
+    assert resolution.value == datetime(2020, 6, 15, 13, 0, 0)
+    assert resolution.provenance.source == "Correction manifest"
+    assert resolution.provenance.raw_value["clock_offset"] == "+3h"
+    assert resolution.provenance.raw_value["base_value"] == "2020-06-15T10:00:00"
+
+
+def test_correction_manifest_clock_offset_with_day_suffix_adjusts_datetime(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A clock_offset using the -Nd suffix format shifts by full days."""
+    file_path = tmp_path / "image.jpg"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "_read_exif_datetime_fields",
+        lambda _path: {"DateTimeOriginal": "2020:06:15 10:00:00"},
+    )
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_iptc_iim_metadata", lambda _path: {})
+    monkeypatch.setattr(metadata, "extract_png_metadata", lambda _path: {})
+    correction = CorrectionApplication(
+        source_path=tmp_path / "corrections.csv",
+        selectors=("glob:*.jpg",),
+        clock_offset="-1d",
+        priority="highest",
+    )
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        correction=correction,
+    )
+
+    assert resolution.value == datetime(2020, 6, 14, 10, 0, 0)
+    assert resolution.provenance.raw_value["clock_offset"] == "-1d"
+    assert resolution.provenance.raw_value["base_value"] == "2020-06-15T10:00:00"

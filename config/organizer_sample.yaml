@@ -14,3 +14,10 @@ behavior:
   location_inference: true
   correction_manifest: corrections.yaml
   correction_priority: highest
+  # clock_offset: apply a fixed time correction to every file's captured datetime.
+  # Useful for cameras with a wrong clock (e.g. wrong timezone or drifted battery).
+  # The original datetime is always preserved in the execution report.
+  # Accepted formats: +3h, -1d, +00:30, -5:45, +12
+  # For camera-specific offsets, add correction manifest rules with camera,
+  # camera_make or camera_model selectors.
+  # clock_offset: "+01:00"
