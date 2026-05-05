@@ -176,6 +176,37 @@ Current support status:
 - **Planned**: formal policy is defined, but extraction support is not yet
   implemented.
 
+#### Format x metadata source x supported fields
+
+| Format | Metadata source | Source class | Supported fields | Status |
+| --- | --- | --- | --- | --- |
+| JPEG (`.jpg`, `.jpeg`) | EXIF | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` | Implemented |
+| JPEG (`.jpg`, `.jpeg`) | XMP packet inside file bytes | Embedded metadata | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
+| JPEG (`.jpg`, `.jpeg`) | IPTC-IIM datasets | Embedded metadata | `DateCreated`, `TimeCreated`, `City`, `Province-State`, `Country-PrimaryLocationName`, `ObjectName`, `Headline`, `By-line`, `Writer-Editor`, `Caption-Abstract` | Implemented |
+| TIFF (`.tif`, `.tiff`) | EXIF/TIFF tags | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed by Pillow | Implemented |
+| PNG (`.png`) | eXIf chunk via Pillow EXIF reader | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` | Implemented |
+| PNG (`.png`) | `iTXt`, `tEXt`, `zTXt`, `tIME` chunks | Embedded metadata | `XML:com.adobe.xmp`, `Creation Time`, `CreationTime`, `tIME`, arbitrary text keywords for inspection | Implemented |
+| PNG (`.png`) | XMP packet in `iTXt` or raw file bytes | Embedded metadata | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
+| JPEG, TIFF, PNG | Same-basename `.xmp` file, for example `IMG_001.xmp` | Sidecar | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
+| JPEG, TIFF, PNG | Same-basename `.json` external manifest | Heuristic sidecar | `date_taken`, `datetime`, `created_at`, `DateTimeOriginal`, `CreateDate`, `city`, `state`, `country` | Implemented |
+| JPEG, TIFF, PNG | Filename, parent folder and sibling batch context | Heuristic | Safe date patterns and location-like folder names | Implemented |
+| JPEG, TIFF, PNG, WEBP, BMP | Filesystem | Filesystem | `mtime` | Implemented |
+| WEBP (`.webp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
+| BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
+
+Source classes used in reports and explanations:
+
+- **Embedded metadata**: metadata stored inside the media file itself, such as
+  EXIF, TIFF tags, IPTC-IIM, XMP packets or PNG text chunks.
+- **Sidecar**: an external file with the same basename, currently `.xmp`, used
+  as structured metadata. Inside the XMP tier, sidecar values override embedded
+  XMP values because they usually represent later metadata edits.
+- **Filesystem**: operating-system file attributes. Only `mtime` is used, and
+  only as a low-confidence date fallback/explicit reconciliation policy.
+- **Heuristic**: inferred context that is not authoritative embedded metadata,
+  such as external JSON manifests, filename dates, folder names and sibling
+  batch patterns.
+
 | Field | Priority | Source | Keys | Role | Status |
 | --- | ---: | --- | --- | --- | --- |
 | `date_taken` | 1 | EXIF | `DateTimeOriginal` | Primary | Implemented |
@@ -273,6 +304,30 @@ Examples:
 This makes it possible to answer questions such as "why was this date chosen?"
 or "why was this location selected?" from the planned operation and audit
 report data.
+
+### Known Metadata Limitations
+
+- RAW and manufacturer-specific formats such as CR2/CR3, NEF, ARW and ORF are
+  not supported by the current metadata reader.
+- HEIF/HEIC is not supported yet.
+- WEBP and BMP are recognized as image files for scanning/hashing, but embedded
+  metadata is not read from them; date organization falls back to heuristics or
+  filesystem `mtime`.
+- The reader depends on Pillow for EXIF/TIFF/eXIf extraction. Tags not exposed
+  by Pillow or malformed IFDs may be unavailable, although known date/GPS tags
+  are recovered when possible.
+- PNG `tIME` is treated as an image modification timestamp, not an original
+  capture timestamp. It is low-confidence and secondary to `Creation Time`,
+  XMP and EXIF dates.
+- IPTC-IIM extraction reads a documented subset of legacy datasets. Unknown
+  datasets are ignored.
+- XMP extraction reads a focused allowlist used by organization and reports; it
+  is not a full XMP/RDF implementation.
+- Textual title, author and description policy entries exist for future
+  user-facing fields, but organization decisions currently use date and
+  location fields.
+- Reverse geocoding requires GPS coordinates and may fail or return no result
+  depending on the configured geocoding provider/network behavior.
 
 ### Naming and planning
 
