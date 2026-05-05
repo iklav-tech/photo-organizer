@@ -863,29 +863,56 @@ def test_extract_exif_metadata_skips_formats_without_real_exif_support(
     assert result == {}
 
 
-def test_extract_exif_metadata_skips_heif_without_decoder(
+def test_extract_exif_metadata_warns_when_heif_backend_is_missing(
     tmp_path: Path, monkeypatch, caplog
+) -> None:
+    from photo_organizer.heif_backend import HeifDependencyError
+
+    file_path = tmp_path / "image.heic"
+    file_path.write_text("x")
+
+    def raise_missing_backend(_self, _path):
+        raise HeifDependencyError("install with pip install -r requirements.txt")
+
+    monkeypatch.setattr(
+        metadata.PillowHeifBackend,
+        "open",
+        raise_missing_backend,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = metadata.extract_exif_metadata(file_path)
+
+    assert result == {}
+    assert "HEIF backend unavailable" in caplog.text
+    assert "pip install -r requirements.txt" in caplog.text
+
+
+def test_extract_exif_metadata_reads_heif_through_backend(
+    tmp_path: Path, monkeypatch
 ) -> None:
     file_path = tmp_path / "image.heic"
     file_path.write_text("x")
 
-    def fail_if_opened(_path):
-        raise AssertionError("HEIF should not be opened for EXIF extraction")
+    class FakeImage:
+        def __enter__(self):
+            return self
 
-    fake_image_module = types.SimpleNamespace(open=fail_if_opened)
-    fake_exif_tags_module = types.SimpleNamespace(TAGS={})
-    fake_pil_module = types.SimpleNamespace(
-        Image=fake_image_module,
-        ExifTags=fake_exif_tags_module,
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def getexif(self):
+            return {36867: "2024:01:02 03:04:05"}
+
+    monkeypatch.setattr(
+        metadata.PillowHeifBackend,
+        "open",
+        lambda _self, _path: FakeImage(),
     )
 
-    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+    result = metadata.extract_exif_metadata(file_path)
 
-    with caplog.at_level(logging.DEBUG):
-        result = metadata.extract_exif_metadata(file_path)
-
-    assert result == {}
-    assert "unsupported metadata format" in caplog.text
+    assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
 
 
 def test_extract_exif_metadata_handles_read_exceptions_safely(

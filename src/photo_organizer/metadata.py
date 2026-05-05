@@ -27,8 +27,13 @@ from typing import Any, Callable, Literal
 import xml.etree.ElementTree as ET
 import zlib
 
-from photo_organizer.constants import EXIF_IMAGE_FILE_EXTENSIONS, IMAGE_FILE_EXTENSIONS
+from photo_organizer.constants import (
+    EXIF_IMAGE_FILE_EXTENSIONS,
+    HEIF_IMAGE_FILE_EXTENSIONS,
+    IMAGE_FILE_EXTENSIONS,
+)
 from photo_organizer.correction_manifest import CorrectionApplication
+from photo_organizer.heif_backend import HeifDependencyError, PillowHeifBackend
 from photo_organizer.text_normalization import normalize_text
 
 
@@ -1883,8 +1888,16 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         return {}
 
     try:
-        with Image.open(file_path) as image:
+        image_context = (
+            PillowHeifBackend().open(file_path)
+            if file_path.suffix.lower() in HEIF_IMAGE_FILE_EXTENSIONS
+            else Image.open(file_path)
+        )
+        with image_context as image:
             exif_data, used_container_fallback = _read_pillow_exif_data(image)
+    except HeifDependencyError as exc:
+        logger.warning("HEIF backend unavailable for file=%s: %s", file_path, exc)
+        return {}
     except Exception as exc:
         logger.warning("Fatal EXIF read error for file=%s error=%s", file_path, exc)
         return {}

@@ -25,6 +25,8 @@ The project includes a tested v0.5.0 CLI workflow:
 - IPTC-IIM legacy dataset extraction;
 - PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata handling;
 - HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
+- HEIC/HEIF metadata opening through `pillow-heif` and native `libheif`
+  support;
 - documented format/source/field compatibility matrix;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
@@ -70,6 +72,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 python -c "import photo_organizer; print(photo_organizer.__version__)"
+```
+
+Alternative dependency installation:
+
+```bash
+pip install -r requirements.txt
 ```
 
 Portuguese summary: Organizador de fotos em Python via linha de comando, com renomeacao e organizacao por data, hora e metadados.
@@ -223,7 +231,7 @@ Current support status:
 | JPEG, TIFF, PNG, WEBP, BMP, HEIF | Filesystem | Filesystem | `mtime` | Implemented |
 | WEBP (`.webp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
-| HEIF (`.heic`, `.heif`, `.hif`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
+| HEIF (`.heic`, `.heif`, `.hif`) | EXIF via HEIF backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed by `pillow-heif`/Pillow | Implemented |
 
 Source classes used in reports and explanations:
 
@@ -341,9 +349,10 @@ report data.
 - RAW and manufacturer-specific formats such as CR2/CR3, NEF, ARW and ORF are
   not supported by the current metadata reader.
 - HEIF/HEIC containers (`.heic`, `.heif`, `.hif`) are detected and can enter
-  scan/hash/inspect/organize flows, but embedded HEIF metadata is not decoded
-  by the current reader. They rely on sidecars, heuristics or filesystem
-  `mtime` unless a future HEIF decoder is added.
+  scan/hash/inspect/organize flows. Embedded HEIF metadata uses `pillow-heif`
+  and native `libheif` support; if the native backend is unavailable, the app
+  logs an orientative warning and falls back to sidecars, heuristics or
+  filesystem `mtime`.
 - WEBP and BMP are recognized as image files for scanning/hashing, but embedded
   metadata is not read from them; date organization falls back to heuristics or
   filesystem `mtime`.
@@ -1001,6 +1010,7 @@ and PyYAML for YAML configuration files.
 
 - `Pillow` for EXIF support;
 - `PyYAML` for YAML configuration support;
+- `pillow-heif` for HEIF/HEIC opening through `libheif`;
 - `pytest` for development testing.
 
 ## Testing
@@ -1341,9 +1351,10 @@ work delivered after the v0.4.0 workflow.
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections;
 - richer report analytics;
-- HEIC/HEIF detection for iPhone and iPad photo collections is implemented;
-- investigate metadata extraction and decoding requirements for the HEIF
-  ecosystem, including Apple's `public.heic` type;
+- HEIC/HEIF detection and `pillow-heif` backend integration for iPhone and iPad
+  photo collections is implemented;
+- continue validating metadata extraction behavior across the HEIF ecosystem,
+  including Apple's `public.heic` type;
 - evaluate standard non-Apple decoding paths such as `libheif` and compatible
   Python bindings;
 - define install and fallback behavior for environments without HEIF decoding

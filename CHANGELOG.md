@@ -95,6 +95,13 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - `.heic`
   - `.heif`
   - `.hif`
+- HEIF/HEIC metadata backend abstraction:
+  - `photo_organizer.heif_backend.HeifBackend`
+  - `PillowHeifBackend`
+  - clear dependency guidance when `pillow-heif`/`libheif` is unavailable
+- `pillow-heif` added as a project dependency for HEIF/HEIC support.
+- `requirements.txt` added with Python dependencies and native `libheif`
+  installation guidance.
 - Config support for:
   - `behavior.reconciliation_policy`
   - `behavior.date_heuristics`
@@ -139,7 +146,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Location-based organization can infer non-GPS location metadata when
   configured.
 - README updated to consolidate the delivered v0.5.0 workflow, explain
-  reports, compatibility matrix, known limitations and metadata test corpus.
+  reports, compatibility matrix, HEIF backend guidance, known limitations and
+  metadata test corpus.
 - Project structure documentation now includes:
   - `correction_manifest.py`
   - `text_normalization.py`
@@ -152,6 +160,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   safely in explain JSON reports.
 - `pytest` and `.venv/bin/python -m pytest` both collect the metadata corpus
   tests correctly.
+- Missing HEIF native/backend dependencies now produce a clear warning with
+  installation guidance instead of an opaque decoder failure.
 - Malformed XMP parse errors are handled without interrupting metadata audits.
 - Missing date metadata can be reported as an expected absence when heuristics
   are disabled.

@@ -22,7 +22,7 @@ IMAGE_FORMATS = (
     ImageFormat("TIFF", frozenset({".tif", ".tiff"}), supports_exif=True),
     ImageFormat("WEBP", frozenset({".webp"})),
     ImageFormat("BMP", frozenset({".bmp"})),
-    ImageFormat("HEIF", frozenset({".heic", ".heif", ".hif"})),
+    ImageFormat("HEIF", frozenset({".heic", ".heif", ".hif"}), supports_exif=True),
 )
 
 IMAGE_FILE_EXTENSIONS = frozenset(
@@ -34,6 +34,12 @@ EXIF_IMAGE_FILE_EXTENSIONS = frozenset(
     extension
     for image_format in IMAGE_FORMATS
     if image_format.supports_exif
+    for extension in image_format.extensions
+)
+HEIF_IMAGE_FILE_EXTENSIONS = frozenset(
+    extension
+    for image_format in IMAGE_FORMATS
+    if image_format.name == "HEIF"
     for extension in image_format.extensions
 )
 

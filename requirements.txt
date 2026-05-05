@@ -1,0 +1,7 @@
+Pillow>=10.0
+PyYAML>=6.0
+pillow-heif>=0.16.0
+
+# pillow-heif uses libheif for HEIF/HEIC support. If your platform wheel does
+# not bundle the native library, install libheif with the OS package manager,
+# for example: apt install libheif1, brew install libheif, or equivalent.
