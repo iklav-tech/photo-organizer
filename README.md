@@ -6,25 +6,39 @@ Repository: https://github.com/iklav-tech/photo-organizer
 
 ## Changelog
 
-Release history is tracked in [CHANGELOG.md](CHANGELOG.md), including delivered v0.1.0, v0.2.0, v0.3.0 and v0.4.0 scope.
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md). This README also
+consolidates the delivered v0.1.0 through v0.5.0 scope below.
 
 ## Current status
 
-The project includes a tested v0.4.0 CLI workflow:
+The project includes a tested v0.5.0 CLI workflow:
 
 - CLI with `scan` and `organize` commands;
 - `dedupe` command for read-only duplicate discovery;
+- `inspect` command for read-only metadata auditing;
+- `explain` command for JSON decision-trail reports;
 - image scanning with recursive search;
 - centralized and easily extensible supported image format list;
 - case-insensitive extension matching;
 - EXIF extraction for compatible JPEG, PNG and TIFF images;
+- XMP embedded packet and same-basename `.xmp` sidecar extraction;
+- IPTC-IIM legacy dataset extraction;
+- PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata handling;
+- documented format/source/field compatibility matrix;
+- explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
 - duplicate image grouping by content hash with original/duplicates output;
 - structured duplicate reports in JSON or CSV for later analysis;
-- date resolution with EXIF priority and fallback;
+- date resolution with precedence-based reconciliation and configurable
+  conflict policy;
 - GPS coordinate extraction from EXIF metadata;
 - optional reverse geocoding from GPS coordinates to city, state and country;
+- low-confidence date and location inference from sidecars, filenames, folders
+  and sibling context;
+- correction manifests for batch date/location overrides and camera clock
+  offsets;
+- provenance tracking with source, field, confidence and raw value;
 - deterministic default naming rules;
 - configurable filename patterns through CLI or configuration files;
 - destination folder planning by date (`YYYY/MM/DD`), location, location plus
@@ -38,11 +52,15 @@ The project includes a tested v0.4.0 CLI workflow:
 - structured execution summaries;
 - resilient per-file error handling for invalid files and malformed metadata;
 - optional audit report export in JSON or CSV with `--report`;
+- explain reports export chosen date/location, candidates, source and
+  confidence in JSON;
 - external JSON/YAML organization config with custom naming, destination and
   behavior rules;
 - improved CLI help with examples and grouped arguments;
 - structured logging with configurable log level;
-- friendly error messages for invalid/missing source directory.
+- friendly error messages for invalid/missing source directory;
+- synthetic legacy metadata corpus covering success, absence and conflict
+  scenarios.
 
 Quick local setup:
 
@@ -82,6 +100,7 @@ Example use cases:
 - avoid filename conflicts;
 - run in simulation mode before changing real files;
 - export an audit report of what happened;
+- explain why each file received a chosen date/location without reading code;
 - find duplicate images by content hash before organizing or cleaning a collection;
 - export duplicate reports for spreadsheet or automated analysis.
 
@@ -98,11 +117,13 @@ Example use cases:
 - `photo-organizer organize --help`
 - `photo-organizer inspect SOURCE --report metadata-audit.json`
 - `photo-organizer explain SOURCE --report explain.json`
+- `photo-organizer explain SOURCE --reverse-geocode --report explain.json`
 - `photo-organizer dedupe SOURCE --report duplicates.json`
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
 - `photo-organizer organize SOURCE --config organizer.yaml`
 - `photo-organizer organize SOURCE --output Organized --name-pattern "{date:%Y%m%d}_{stem}{ext}"`
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
+- `photo-organizer organize SOURCE --output Organized --correction-manifest corrections.yaml`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters, invalid report
@@ -144,7 +165,10 @@ EXIF from that format.
 - primary date resolution priority:
   1. `DateTimeOriginal`
   2. `CreateDate`
-  3. file `mtime` fallback
+  3. XMP date fields
+  4. IPTC-IIM date fields
+  5. PNG date fields
+  6. low-confidence heuristics and filesystem fallback
 - normalized output as `datetime`.
 - GPS coordinates normalized to decimal degrees when available;
 - embedded XMP packets parsed for date and GPS fields when present;
@@ -155,8 +179,12 @@ EXIF from that format.
   secondary fallback, never as the original capture date;
 - same-basename `.xmp` sidecar files parsed for date and GPS fields when
   present;
+- same-basename external JSON manifests can provide low-confidence date and
+  location hints;
 - legacy IPTC-IIM datasets parsed for date, time, city, state, country, title,
   author and description when present;
+- conflicting date candidates are recorded and reconciled with
+  `precedence`, `newest`, `oldest` or `filesystem` policy;
 - missing GPS data handled safely without interrupting the run;
 - reverse geocoding failures are treated as unresolved location data.
 
@@ -460,7 +488,22 @@ date path.
 - summary distinguishes `dry-run`, `execute` and `plan` modes;
 - `--report path.json` exports a structured JSON report;
 - `--report path.csv` exports a CSV report;
-- report rows include source, destination, action, status and observations.
+- report rows include source, destination, action, status and observations;
+- execution reports include provenance fields for selected date and, when
+  location is enabled, GPS/location source, confidence and raw values.
+
+Explain reports:
+
+- `photo-organizer explain SOURCE --report explain.json` writes a read-only JSON
+  decision report;
+- each file contains `chosen_date`, `chosen_location`, `candidates` and
+  `sources`;
+- date candidates include parsed value, source, field, confidence, raw value,
+  role and whether they are captured or inferred;
+- location candidates include GPS, XMP/IPTC textual location, external
+  manifests and folder/batch inference when available;
+- the report is designed for debugging problematic files without opening the
+  code.
 
 Duplicate reports:
 
@@ -494,25 +537,32 @@ photo-organizer/
       __main__.py
       cli.py
       config.py
+      correction_manifest.py
       constants.py
       geocoding.py
       scanner.py
       metadata.py
       hashing.py
+      text_normalization.py
       naming.py
       planner.py
       executor.py
       logging_config.py
   tests/
+    fixtures/
+      README.md
+      metadata_corpus.py
     test_import.py
     test_cli.py
     test_config.py
+    test_correction_manifest.py
     test_geocoding.py
     test_scanner.py
     test_executor.py
     test_integration.py
     test_naming.py
     test_metadata.py
+    test_metadata_corpus.py
     test_hashing.py
     test_planner.py
 ```
@@ -521,23 +571,38 @@ photo-organizer/
 
 - `cli.py`: command-line interface and command orchestration;
 - `config.py`: external JSON/YAML configuration loading and validation;
+- `correction_manifest.py`: batch date/location correction manifest parsing,
+  matching and validation;
 - `scanner.py`: recursive file scanning and extension filtering;
-- `metadata.py`: EXIF extraction, GPS extraction and best-date resolution;
+- `metadata.py`: EXIF, XMP, IPTC-IIM, PNG metadata extraction, GPS extraction,
+  provenance and best-date reconciliation;
 - `geocoding.py`: reverse geocoding from GPS coordinates to city, state and country;
 - `hashing.py`: deterministic file/image hashes, safe digest comparison and duplicate grouping;
 - `naming.py`: deterministic and pattern-based filename generation;
 - `planner.py`: destination folder planning by date, location and custom patterns;
 - `executor.py`: operation planning and execution/simulation;
+- `text_normalization.py`: Unicode/path-safe text normalization and
+  report-friendly normalization observations;
 - `logging_config.py`: logging setup and level control;
 - `constants.py`: centralized image format definitions, including EXIF capability flags.
 
 ## Organization rules
 
-Date priority strategy:
+Default date decision strategy:
 
 1. EXIF `DateTimeOriginal`;
-2. `CreateDate`;
-3. file modification date as fallback.
+2. EXIF `CreateDate`, `DateTime` or `DateTimeDigitized`;
+3. XMP `exif:DateTimeOriginal` or `xmp:CreateDate`, including same-basename
+   `.xmp` sidecars;
+4. IPTC-IIM `DateCreated` and `TimeCreated`;
+5. PNG `Creation Time`, `CreationTime` and then low-confidence `tIME`;
+6. correction-manifest candidates according to configured priority;
+7. low-confidence heuristics from external sidecars, filenames, folders,
+   sibling batch context and filesystem `mtime`.
+
+The default reconciliation policy is `precedence`. It can be changed to
+`newest`, `oldest` or `filesystem` with `--reconciliation-policy` or
+`behavior.reconciliation_policy`.
 
 Example generated filename:
 
@@ -932,6 +997,31 @@ and PyYAML for YAML configuration files.
 - `PyYAML` for YAML configuration support;
 - `pytest` for development testing.
 
+## Testing
+
+Run the full suite from the repository root:
+
+```bash
+pytest
+```
+
+The suite uses temporary directories and synthetic files, so it does not need a
+checked-in binary photo collection. The metadata corpus in
+`tests/fixtures/metadata_corpus.py` generates deterministic samples for:
+
+- JPEG with EXIF;
+- TIFF tags;
+- IPTC-IIM;
+- embedded XMP;
+- XMP sidecar;
+- PNG eXIf;
+- PNG `iTXt`/`tEXt`;
+- files without usable metadata;
+- conflicting EXIF/XMP metadata.
+
+Corpus tests cover successful extraction, missing metadata behavior,
+conflicting candidates and the automated date precedence matrix.
+
 ## Best practices adopted
 
 - separation of responsibilities;
@@ -944,9 +1034,12 @@ and PyYAML for YAML configuration files.
 - non-overwriting destination conflict handling;
 - structured audit reports;
 - structured duplicate reports;
+- explainable decision reports;
 - external configuration validation;
 - configurable naming and destination patterns;
 - GPS and reverse-geocoding workflows with fallback behavior;
+- metadata compatibility and limitation documentation;
+- synthetic legacy metadata corpus tests;
 - deterministic chunked hashing for large files;
 - safe digest comparison;
 - test-ready code;
@@ -1157,6 +1250,69 @@ after the v0.3.0 workflow.
   location fallback, custom filename patterns, external config and the
   `city-state-month` strategy.
 
+## Version v0.5.0 delivered scope
+
+This section consolidates the metadata audit, explainability and compatibility
+work delivered after the v0.4.0 workflow.
+
+### Metadata reconciliation and provenance
+
+- date decisions are resolved through an explicit precedence matrix;
+- supported candidates include EXIF, XMP, IPTC-IIM, PNG metadata, correction
+  manifests, external sidecars, filename/folder/batch heuristics and filesystem
+  `mtime`;
+- every resolved value carries source, field, confidence and raw value
+  provenance;
+- conflicting date candidates are retained in the reconciliation decision;
+- reconciliation policy can be `precedence`, `newest`, `oldest` or
+  `filesystem`;
+- date values are classified as `captured` or `inferred`.
+
+### Metadata audit and explain reports
+
+- `inspect` audits available metadata sources and final decisions without
+  modifying files;
+- `audit-metadata` remains available as an alias for `inspect`;
+- `explain` writes a JSON report focused on decision debugging;
+- explain reports include `chosen_date`, `chosen_location`, `candidates`,
+  `sources` and confidence values;
+- JSON serialization handles Pillow-specific EXIF value types such as
+  rational numbers.
+
+### Legacy and sidecar metadata support
+
+- embedded XMP packets are parsed from supported image files and PNG `iTXt`
+  chunks;
+- same-basename `.xmp` sidecars are parsed and take precedence within the XMP
+  tier;
+- IPTC-IIM legacy datasets are parsed for date/time, location and textual
+  fields;
+- PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata paths are covered;
+- same-basename JSON external manifests can provide low-confidence inferred
+  date and location hints.
+
+### Corrections and inference
+
+- correction manifests support exact path, folder, glob, filename pattern and
+  camera-based matching;
+- correction fields include date, timezone, clock offset, event name and
+  city/state/country;
+- correction priority can be `highest`, `metadata` or `heuristic`;
+- global and per-file clock offsets preserve original datetimes in provenance;
+- date heuristics and location inference can be disabled through CLI or config.
+
+### Compatibility documentation and test corpus
+
+- README now includes a format/source/field compatibility matrix;
+- README differentiates embedded metadata, sidecars, filesystem values and
+  heuristics;
+- known limitations are documented explicitly;
+- synthetic legacy corpus fixtures cover JPEG/EXIF, TIFF tags, IPTC-IIM,
+  embedded XMP, XMP sidecar, PNG eXIf, PNG text chunks, missing metadata and
+  conflicting metadata;
+- automated corpus tests cover success, absence, conflict and precedence
+  behavior.
+
 ## Roadmap
 
 ### Version 0.1.0
@@ -1172,12 +1328,13 @@ after the v0.3.0 workflow.
 - implemented and stabilized (see Version v0.4.0 delivered scope section).
 
 ### Version 0.5.0
+- implemented and stabilized (see Version v0.5.0 delivered scope section).
+
+### Version 0.6.0
 - support for more media types (including videos);
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections;
-- richer report analytics.
-
-### Version 0.6.0
+- richer report analytics;
 - HEIC/HEIF support for iPhone and iPad photo collections;
 - investigate metadata extraction and decoding requirements for the HEIF
   ecosystem, including Apple's `public.heic` type;
@@ -1198,8 +1355,8 @@ after the v0.3.0 workflow.
 
 ## Project status
 
-In active development, with a stable tested v0.4.0 workflow for scan, organize
-and dedupe flows.
+In active development, with a stable tested v0.5.0 workflow for scan, dedupe,
+inspect, explain and organize flows.
 
 ## Motivation
 
