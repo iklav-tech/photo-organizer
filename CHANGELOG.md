@@ -4,6 +4,188 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and follows semantic versioning.
 
+## [0.5.0] - 2026-05-05
+
+### Added
+
+- Read-only metadata audit command:
+  - `photo-organizer inspect SOURCE`
+  - `photo-organizer audit-metadata SOURCE`
+  - JSON and CSV reports through `--report`
+- Explainable decision report command:
+  - `photo-organizer explain SOURCE`
+  - JSON report through `--report explain.json`
+  - optional `--reverse-geocode`
+- Explain report fields for each file:
+  - `chosen_date`
+  - `chosen_location`
+  - `candidates`
+  - `sources`
+  - source field and confidence
+  - raw values when available
+- Metadata provenance model with:
+  - source
+  - field
+  - confidence
+  - raw value
+- Date reconciliation model that records:
+  - selected candidate
+  - all parsed candidates
+  - conflict status
+  - reconciliation policy
+  - selection reason
+- Configurable reconciliation policies:
+  - `precedence`
+  - `newest`
+  - `oldest`
+  - `filesystem`
+- Embedded XMP packet extraction for supported image files.
+- Same-basename `.xmp` sidecar extraction for date and GPS fields.
+- XMP sidecar precedence within the XMP tier.
+- PNG metadata support for:
+  - `eXIf`
+  - `iTXt`
+  - `tEXt`
+  - `zTXt`
+  - `tIME`
+  - XMP packets stored in `XML:com.adobe.xmp`
+- IPTC-IIM legacy dataset extraction for:
+  - date and time
+  - city, state and country
+  - title
+  - author
+  - description
+- Low-confidence date heuristics from:
+  - same-basename external sidecars
+  - filename patterns
+  - parent folder date patterns
+  - sibling batch context
+  - filesystem `mtime`
+- Non-GPS location inference from:
+  - IPTC-IIM textual location
+  - XMP textual location
+  - external manifests
+  - folder or album names
+  - sibling batch context
+- Correction manifests for batch overrides:
+  - CSV
+  - JSON
+  - YAML
+  - YML
+- Correction manifest selectors:
+  - exact file path
+  - folder
+  - glob
+  - filename pattern
+  - camera profile
+- Correction manifest fields:
+  - date
+  - timezone
+  - clock offset
+  - city
+  - state
+  - country
+  - event name
+- Correction priority options:
+  - `highest`
+  - `metadata`
+  - `heuristic`
+- Global `--clock-offset` support.
+- Config support for:
+  - `behavior.reconciliation_policy`
+  - `behavior.date_heuristics`
+  - `behavior.location_inference`
+  - `behavior.correction_manifest`
+  - `behavior.correction_priority`
+  - `behavior.clock_offset`
+- Text normalization observations in reports.
+- Format/source/field compatibility matrix in README.
+- Explicit metadata limitation documentation in README.
+- Synthetic legacy metadata corpus fixtures covering:
+  - JPEG/EXIF
+  - TIFF tags
+  - IPTC-IIM
+  - embedded XMP
+  - XMP sidecar
+  - PNG `eXIf`
+  - PNG `iTXt`/`tEXt`
+  - files without usable metadata
+  - conflicting metadata
+- Automated corpus tests for:
+  - successful extraction
+  - missing metadata
+  - metadata conflict
+  - date precedence matrix
+
+### Changed
+
+- Date resolution now uses an explicit metadata precedence matrix instead of a
+  simple EXIF/mtime chain.
+- Date decisions now distinguish captured values from inferred values.
+- Metadata conflict handling now keeps all candidates for reporting and debug
+  output.
+- Execution reports now include date provenance fields.
+- Location-aware execution reports now include GPS/location provenance fields.
+- Plan operations now carry date reconciliation, location provenance, location
+  status and correction manifest details.
+- XMP values from same-basename sidecars override embedded XMP values within
+  the XMP tier.
+- PNG `tIME` is treated as a low-confidence image modification timestamp rather
+  than an original capture timestamp.
+- Location-based organization can infer non-GPS location metadata when
+  configured.
+- README updated to consolidate the delivered v0.5.0 workflow, explain
+  reports, compatibility matrix, known limitations and metadata test corpus.
+- Project structure documentation now includes:
+  - `correction_manifest.py`
+  - `text_normalization.py`
+  - `tests/fixtures/metadata_corpus.py`
+  - `tests/test_metadata_corpus.py`
+
+### Fixed
+
+- Pillow-specific EXIF values such as rational numbers are now serialized
+  safely in explain JSON reports.
+- `pytest` and `.venv/bin/python -m pytest` both collect the metadata corpus
+  tests correctly.
+- Malformed XMP parse errors are handled without interrupting metadata audits.
+- Missing date metadata can be reported as an expected absence when heuristics
+  are disabled.
+- Correction clock offsets preserve the original datetime in provenance.
+- Text normalization changes are surfaced in report observations.
+
+### Behavior guarantees in v0.5.0
+
+- `inspect` and `explain` are read-only commands.
+- `explain --report` writes JSON only.
+- Explain reports include chosen date, chosen location, candidates, source and
+  confidence for debugging decisions without reading code.
+- Date reconciliation is deterministic for the default `precedence` policy.
+- `newest`, `oldest` and `filesystem` policies use precedence as a tie-breaker
+  where applicable.
+- Sidecar XMP values override embedded XMP values only inside the XMP tier; EXIF
+  still has higher default date precedence.
+- Inferred dates use low confidence.
+- Files without usable metadata fail clearly when date heuristics are disabled.
+- Unknown IPTC-IIM datasets are ignored safely.
+- WEBP and BMP remain supported for scan/hash flows but embedded metadata is
+  not read by the current metadata reader.
+
+### Validation
+
+- Local automated tests passing for v0.5.0 scope (`pytest`, 239 tests).
+- Tests cover explain report JSON generation and serialization of non-JSON EXIF
+  value types.
+- Tests cover inspect reports, metadata source audit and final date/location
+  decisions.
+- Tests cover correction manifests, correction priorities and clock offsets.
+- Tests cover XMP embedded metadata, XMP sidecars and sidecar precedence.
+- Tests cover IPTC-IIM date and textual metadata extraction.
+- Tests cover PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata paths.
+- Tests cover missing metadata and disabled date heuristics.
+- Tests cover metadata conflict recording and precedence winners.
+- Tests cover the synthetic legacy metadata corpus and compatibility matrix.
+
 ## [0.4.0] - 2026-05-01
 
 ### Added
