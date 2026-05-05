@@ -8,12 +8,15 @@ import json
 import logging
 from importlib import metadata as importlib_metadata
 from pathlib import Path
+from typing import Any
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.config import ConfigurationError, load_organization_config
 from photo_organizer.correction_manifest import (
     CORRECTION_PRIORITY_CHOICES,
+    CorrectionApplication,
     CorrectionManifestError,
+    correction_for_file,
     load_correction_manifest,
 )
 from photo_organizer.executor import (
@@ -21,11 +24,25 @@ from photo_organizer.executor import (
     apply_operations,
     plan_organization_operations,
 )
+from photo_organizer.geocoding import reverse_geocode_coordinates
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.metadata import (
     DATE_HEURISTICS_DEFAULT,
     RECONCILIATION_POLICY_CHOICES,
+    extract_camera_profile,
+    extract_embedded_xmp_metadata,
+    extract_exif_metadata,
+    extract_external_location_manifest,
+    extract_gps_coordinates,
+    extract_iptc_iim_location,
+    extract_iptc_iim_metadata,
+    extract_png_metadata,
+    extract_xmp_sidecar_metadata,
+    extract_xmp_textual_location,
+    infer_location_from_batch,
+    infer_location_from_folder,
+    resolve_best_available_datetime,
     validate_clock_offset,
 )
 from photo_organizer.naming import validate_filename_pattern
@@ -385,6 +402,401 @@ def _write_dedupe_report(
     )
 
 
+def _inspect_serializable(value: object) -> object:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()  # type: ignore[no-any-return]
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, dict):
+        return {key: _inspect_serializable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_inspect_serializable(item) for item in value]
+    return value
+
+
+def _inspect_source_item(source: str, fields: dict[str, Any]) -> dict[str, object]:
+    visible_fields = {
+        key: value
+        for key, value in fields.items()
+        if value not in (None, "", {}, [])
+        and key not in {"XMPFieldSources", "XMPNamespaces", "PNGFieldSources"}
+    }
+    return {
+        "source": source,
+        "exists": bool(visible_fields),
+        "fields": _inspect_serializable(visible_fields),
+    }
+
+
+def _inspect_candidate_item(candidate) -> dict[str, object]:
+    return {
+        "value": candidate.value.isoformat()
+        if hasattr(candidate.value, "isoformat")
+        else str(candidate.value),
+        "source": candidate.provenance.source,
+        "field": candidate.provenance.field,
+        "confidence": candidate.provenance.confidence,
+        "raw_value": _inspect_serializable(candidate.provenance.raw_value),
+        "role": candidate.role,
+        "date_kind": candidate.date_kind,
+        "used_fallback": candidate.used_fallback,
+    }
+
+
+def _inspect_provenance_item(provenance) -> dict[str, object] | None:
+    if provenance is None:
+        return None
+    return {
+        "source": provenance.source,
+        "field": provenance.field,
+        "confidence": provenance.confidence,
+        "raw_value": _inspect_serializable(provenance.raw_value),
+    }
+
+
+def _global_clock_offset_correction(
+    source_path: Path,
+    clock_offset: str | None,
+    correction_priority: str | None,
+) -> CorrectionApplication | None:
+    if clock_offset is None:
+        return None
+    return CorrectionApplication(
+        source_path=source_path,
+        selectors=("global:clock_offset",),
+        clock_offset=clock_offset,
+        priority=correction_priority or "highest",
+    )
+
+
+def _merge_global_clock_offset(
+    source_path: Path,
+    correction,
+    clock_offset: str | None,
+    correction_priority: str | None,
+):
+    if clock_offset is None:
+        return correction
+    if correction is None:
+        return _global_clock_offset_correction(
+            source_path,
+            clock_offset,
+            correction_priority,
+        )
+    if correction.clock_offset is not None:
+        return correction
+    return CorrectionApplication(
+        source_path=correction.source_path,
+        selectors=correction.selectors,
+        date_value=correction.date_value,
+        timezone=correction.timezone,
+        clock_offset=clock_offset,
+        city=correction.city,
+        state=correction.state,
+        country=correction.country,
+        event_name=correction.event_name,
+        priority=correction.priority,
+    )
+
+
+def _inspect_location(
+    path: Path,
+    reverse_geocode: bool,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    sources: list[dict[str, object]] = []
+    coordinates = extract_gps_coordinates(path)
+    if coordinates is not None:
+        sources.append(
+            {
+                "source": coordinates.provenance.source
+                if coordinates.provenance is not None
+                else "GPS",
+                "exists": True,
+                "fields": {
+                    "latitude": coordinates.latitude,
+                    "longitude": coordinates.longitude,
+                },
+            }
+        )
+
+    textual_resolvers = (
+        extract_iptc_iim_location,
+        extract_xmp_textual_location,
+        extract_external_location_manifest,
+        infer_location_from_folder,
+        infer_location_from_batch,
+    )
+    textual_matches = []
+    for resolver in textual_resolvers:
+        match = resolver(path)
+        if match is None:
+            continue
+        location_fields, provenance = match
+        textual_matches.append(match)
+        sources.append(
+            {
+                "source": provenance.source,
+                "exists": True,
+                "fields": _inspect_serializable(location_fields),
+            }
+        )
+
+    if coordinates is not None and reverse_geocode:
+        location = reverse_geocode_coordinates(coordinates)
+        if location is not None:
+            return {
+                "status": "resolved",
+                "kind": "gps",
+                "latitude": coordinates.latitude,
+                "longitude": coordinates.longitude,
+                "city": location.city,
+                "state": location.state,
+                "country": location.country,
+                "provenance": {
+                    "source": "Reverse geocoding",
+                    "field": "GPSLatitudeDecimal,GPSLongitudeDecimal",
+                    "confidence": "medium",
+                },
+            }, sources
+
+    if coordinates is not None:
+        return {
+            "status": "gps",
+            "kind": "gps",
+            "latitude": coordinates.latitude,
+            "longitude": coordinates.longitude,
+            "city": None,
+            "state": None,
+            "country": None,
+            "provenance": _inspect_provenance_item(coordinates.provenance),
+        }, sources
+
+    if textual_matches:
+        location_fields, provenance = textual_matches[0]
+        return {
+            "status": "inferred",
+            "kind": "inferred",
+            "latitude": None,
+            "longitude": None,
+            "city": location_fields.get("city"),
+            "state": location_fields.get("state"),
+            "country": location_fields.get("country"),
+            "provenance": _inspect_provenance_item(provenance),
+        }, sources
+
+    return {
+        "status": "missing",
+        "kind": "none",
+        "latitude": None,
+        "longitude": None,
+        "city": None,
+        "state": None,
+        "country": None,
+        "provenance": None,
+    }, sources
+
+
+def _inspect_file(
+    path: Path,
+    source_root: Path,
+    reconciliation_policy: str,
+    date_heuristics: bool,
+    correction_manifest,
+    correction_priority: str | None,
+    clock_offset: str | None,
+    reverse_geocode: bool,
+) -> dict[str, object]:
+    exif_fields = extract_exif_metadata(path)
+    xmp_embedded_fields = extract_embedded_xmp_metadata(path)
+    xmp_sidecar_fields = extract_xmp_sidecar_metadata(path)
+    iptc_fields = extract_iptc_iim_metadata(path)
+    png_fields = extract_png_metadata(path)
+    camera_profile = extract_camera_profile(path)
+    correction = correction_for_file(
+        correction_manifest,
+        path,
+        source_root,
+        correction_priority,
+        camera_profile,
+    )
+    correction = _merge_global_clock_offset(
+        source_root,
+        correction,
+        clock_offset,
+        correction_priority,
+    )
+    source_items = [
+        _inspect_source_item("EXIF", exif_fields),
+        _inspect_source_item("XMP embedded", xmp_embedded_fields),
+        _inspect_source_item("XMP sidecar", xmp_sidecar_fields),
+        _inspect_source_item("IPTC-IIM", iptc_fields),
+        _inspect_source_item("PNG metadata", png_fields),
+        _inspect_source_item("Camera profile", camera_profile),
+    ]
+
+    date_error = None
+    try:
+        date_resolution = resolve_best_available_datetime(
+            path,
+            reconciliation_policy=reconciliation_policy,  # type: ignore[arg-type]
+            date_heuristics=date_heuristics,
+            correction=correction,
+        )
+        date_decision = {
+            "status": "resolved",
+            "value": date_resolution.value.isoformat(),
+            "source": date_resolution.provenance.source
+            if date_resolution.provenance is not None
+            else "",
+            "field": date_resolution.provenance.field
+            if date_resolution.provenance is not None
+            else "",
+            "confidence": date_resolution.provenance.confidence
+            if date_resolution.provenance is not None
+            else "",
+            "date_kind": date_resolution.date_kind,
+            "used_fallback": date_resolution.used_fallback,
+            "reconciliation_policy": reconciliation_policy,
+            "reconciliation_reason": date_resolution.reconciliation.reason
+            if date_resolution.reconciliation is not None
+            else "",
+            "conflict": date_resolution.reconciliation.conflict
+            if date_resolution.reconciliation is not None
+            else False,
+        }
+        date_candidates = [
+            _inspect_candidate_item(candidate)
+            for candidate in (
+                date_resolution.reconciliation.candidates
+                if date_resolution.reconciliation is not None
+                else ()
+            )
+        ]
+    except Exception as exc:
+        date_error = str(exc)
+        date_decision = {
+            "status": "error",
+            "value": None,
+            "source": "",
+            "field": "",
+            "confidence": "",
+            "date_kind": "",
+            "used_fallback": False,
+            "reconciliation_policy": reconciliation_policy,
+            "reconciliation_reason": date_error,
+            "conflict": False,
+        }
+        date_candidates = []
+
+    location_decision, location_sources = _inspect_location(path, reverse_geocode)
+    source_items.extend(location_sources)
+    if correction is not None:
+        source_items.append(
+            {
+                "source": "Correction manifest",
+                "exists": True,
+                "fields": {
+                    "path": str(correction.source_path),
+                    "selectors": list(correction.selectors),
+                    "date": correction.date_value,
+                    "timezone": correction.timezone,
+                    "clock_offset": correction.clock_offset,
+                    "city": correction.city,
+                    "state": correction.state,
+                    "country": correction.country,
+                    "event": correction.event_name,
+                },
+            }
+        )
+
+    return {
+        "path": str(path),
+        "sources": source_items,
+        "date": {
+            "decision": date_decision,
+            "candidates": date_candidates,
+        },
+        "location": {
+            "decision": location_decision,
+            "sources": location_sources,
+        },
+    }
+
+
+def _write_inspect_report(
+    report_path: str | Path,
+    summary: dict[str, int],
+    files: list[dict[str, object]],
+) -> None:
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.suffix.lower() == ".json":
+        path.write_text(
+            json.dumps(
+                {"summary": summary, "files": files},
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return
+
+    if path.suffix.lower() != ".csv":
+        raise ValueError("Report path must end with .json or .csv")
+
+    with path.open("w", encoding="utf-8", newline="") as report_file:
+        writer = csv.DictWriter(
+            report_file,
+            fieldnames=[
+                "path",
+                "sources",
+                "date_status",
+                "date_value",
+                "date_source",
+                "date_field",
+                "date_confidence",
+                "date_kind",
+                "date_conflict",
+                "location_status",
+                "location_kind",
+                "latitude",
+                "longitude",
+                "city",
+                "state",
+                "country",
+            ],
+        )
+        writer.writeheader()
+        for item in files:
+            date_decision = item["date"]["decision"]  # type: ignore[index]
+            location_decision = item["location"]["decision"]  # type: ignore[index]
+            writer.writerow(
+                {
+                    "path": item["path"],
+                    "sources": ", ".join(
+                        str(source["source"])
+                        for source in item["sources"]  # type: ignore[index]
+                        if source.get("exists")
+                    ),
+                    "date_status": date_decision["status"],
+                    "date_value": date_decision["value"],
+                    "date_source": date_decision["source"],
+                    "date_field": date_decision["field"],
+                    "date_confidence": date_decision["confidence"],
+                    "date_kind": date_decision["date_kind"],
+                    "date_conflict": date_decision["conflict"],
+                    "location_status": location_decision["status"],
+                    "location_kind": location_decision["kind"],
+                    "latitude": location_decision["latitude"],
+                    "longitude": location_decision["longitude"],
+                    "city": location_decision["city"],
+                    "state": location_decision["state"],
+                    "country": location_decision["country"],
+                }
+            )
+
+
 def format_version_info() -> str:
     """Render a Linux-style version output with project metadata."""
     app_name = __app_name__
@@ -428,6 +840,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   photo-organizer scan ./Photos
+  photo-organizer inspect ./Photos
   photo-organizer dedupe ./Photos
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
@@ -490,6 +903,84 @@ def build_parser() -> argparse.ArgumentParser:
         "--report",
         metavar="PATH",
         help="Write a structured duplicate report to this .json or .csv path.",
+    )
+
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        aliases=["audit-metadata"],
+        help="Audit available metadata sources and final decisions.",
+        description=(
+            "Inspect supported image files and show available metadata sources "
+            "plus final date and location decisions."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer inspect ./Photos
+  photo-organizer inspect ./Photos --report metadata-audit.json
+  photo-organizer inspect ./Photos --report metadata-audit.csv
+  photo-organizer inspect ./Photos --correction-manifest corrections.yaml
+""",
+    )
+    inspect_parser.add_argument(
+        "source",
+        metavar="SOURCE",
+        help="Directory containing photos to inspect.",
+    )
+    inspect_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Write a structured metadata audit report to this .json or .csv path.",
+    )
+    inspect_parser.add_argument(
+        "--reconciliation-policy",
+        choices=RECONCILIATION_POLICY_CHOICES,
+        default="precedence",
+        help=(
+            "Metadata conflict policy for date decisions: precedence, newest, "
+            "oldest, or filesystem (default: precedence)."
+        ),
+    )
+    inspect_parser.add_argument(
+        "--correction-manifest",
+        metavar="PATH",
+        help="Read batch correction overrides from a .csv, .json, .yaml or .yml file.",
+    )
+    inspect_parser.add_argument(
+        "--correction-priority",
+        choices=CORRECTION_PRIORITY_CHOICES,
+        default=None,
+        help=(
+            "Priority for correction manifest date overrides: highest, metadata "
+            "or heuristic (default: manifest/default highest)."
+        ),
+    )
+    inspect_parser.add_argument(
+        "--clock-offset",
+        metavar="OFFSET",
+        default=None,
+        help=(
+            "Apply a fixed time offset to inspect corrected captured datetime. "
+            "Accepted formats: +3h, -1d, +00:30, -5:45."
+        ),
+    )
+    inspect_heuristics_group = inspect_parser.add_mutually_exclusive_group()
+    inspect_heuristics_group.add_argument(
+        "--date-heuristics",
+        action="store_true",
+        dest="date_heuristics",
+        help="Enable low-confidence inferred date heuristics (default).",
+    )
+    inspect_heuristics_group.add_argument(
+        "--no-date-heuristics",
+        action="store_false",
+        dest="date_heuristics",
+        help="Disable inferred date heuristics.",
+    )
+    inspect_parser.set_defaults(date_heuristics=None)
+    inspect_parser.add_argument(
+        "--reverse-geocode",
+        action="store_true",
+        help="Resolve GPS coordinates into city, state and country during audit.",
     )
 
     organize_parser = subparsers.add_parser(
@@ -721,6 +1212,124 @@ def main(argv: list[str] | None = None) -> int:
         if args.report:
             _write_dedupe_report(args.report, groups)
             logger.info("Dedupe report written: path=%s", args.report)
+        return 0
+
+    if args.command in {"inspect", "audit-metadata"}:
+        if args.report and Path(args.report).suffix.lower() not in {".json", ".csv"}:
+            parser.error(
+                "inspect --report must end with .json or .csv. "
+                "Example: --report metadata-audit.json"
+            )
+        if args.clock_offset is not None:
+            try:
+                validate_clock_offset(args.clock_offset)
+            except ValueError as exc:
+                parser.error(f"invalid --clock-offset: {exc}")
+
+        try:
+            correction_manifest = (
+                load_correction_manifest(args.correction_manifest)
+                if args.correction_manifest is not None
+                else None
+            )
+        except (CorrectionManifestError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"invalid correction manifest: {exc}")
+
+        date_heuristics = (
+            args.date_heuristics
+            if args.date_heuristics is not None
+            else DATE_HEURISTICS_DEFAULT
+        )
+        logger.info("Execution started: inspect source=%s", args.source)
+        try:
+            files = find_image_files(args.source, recursive=True)
+        except FileNotFoundError:
+            logger.error("Source directory does not exist: %s", args.source)
+            logger.info("Execution finished: inspect inspected_files=0")
+            return 1
+        except NotADirectoryError:
+            logger.error("Source path is not a directory: %s", args.source)
+            logger.info("Execution finished: inspect inspected_files=0")
+            return 1
+
+        source_root = Path(args.source)
+        inspected_files = [
+            _inspect_file(
+                path,
+                source_root,
+                args.reconciliation_policy,
+                date_heuristics,
+                correction_manifest,
+                args.correction_priority,
+                args.clock_offset,
+                args.reverse_geocode,
+            )
+            for path in files
+        ]
+        summary = {
+            "inspected_files": len(inspected_files),
+            "date_resolved_files": sum(
+                1
+                for item in inspected_files
+                if item["date"]["decision"]["status"] == "resolved"  # type: ignore[index]
+            ),
+            "location_resolved_files": sum(
+                1
+                for item in inspected_files
+                if item["location"]["decision"]["status"]  # type: ignore[index]
+                in {"gps", "resolved", "inferred"}
+            ),
+            "date_conflict_files": sum(
+                1
+                for item in inspected_files
+                if item["date"]["decision"]["conflict"]  # type: ignore[index]
+            ),
+        }
+
+        for item in inspected_files:
+            date_decision = item["date"]["decision"]  # type: ignore[index]
+            location_decision = item["location"]["decision"]  # type: ignore[index]
+            source_names = ", ".join(
+                str(source["source"])
+                for source in item["sources"]  # type: ignore[index]
+                if source.get("exists")
+            )
+            print(f"File: {item['path']}")
+            print(f"  Sources: {source_names or 'none'}")
+            print(
+                "  Date: "
+                f"{date_decision['status']} "
+                f"{date_decision['value'] or ''} "
+                f"({date_decision['source']}:{date_decision['field']})".strip()
+            )
+            location_value = ", ".join(
+                str(value)
+                for value in (
+                    location_decision["city"],
+                    location_decision["state"],
+                    location_decision["country"],
+                )
+                if value
+            )
+            if not location_value and location_decision["latitude"] is not None:
+                location_value = (
+                    f"{location_decision['latitude']}, "
+                    f"{location_decision['longitude']}"
+                )
+            print(
+                "  Location: "
+                f"{location_decision['status']} "
+                f"{location_value}".rstrip()
+            )
+
+        if args.report:
+            _write_inspect_report(args.report, summary, inspected_files)
+            logger.info("Inspect report written: path=%s", args.report)
+
+        logger.info(
+            "Execution finished: inspect inspected_files=%d",
+            len(inspected_files),
+        )
         return 0
 
     if args.command == "organize":

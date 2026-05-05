@@ -93,7 +93,9 @@ Example use cases:
 - `photo-organizer --version`
 - `photo-organizer scan --help`
 - `photo-organizer dedupe --help`
+- `photo-organizer inspect --help`
 - `photo-organizer organize --help`
+- `photo-organizer inspect SOURCE --report metadata-audit.json`
 - `photo-organizer dedupe SOURCE --report duplicates.json`
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
 - `photo-organizer organize SOURCE --config organizer.yaml`
@@ -610,6 +612,18 @@ Duplicate group 1:
 photo-organizer dedupe ~/Photos --report duplicates.json
 photo-organizer dedupe ~/Photos --report duplicates.csv
 ```
+
+### Example: inspect metadata before organizing
+
+```bash
+photo-organizer inspect ~/Photos
+photo-organizer inspect ~/Photos --report metadata-audit.json
+photo-organizer audit-metadata ~/Photos --report metadata-audit.csv
+```
+
+The inspect command is read-only. It lists available metadata sources per file
+and shows the final date and location decisions that would drive organization.
+Reports can be exported as JSON or CSV.
 
 ### Example: organizing by date
 

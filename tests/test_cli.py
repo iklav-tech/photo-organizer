@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 
 from photo_organizer.cli import main
+import photo_organizer.cli as cli
 from photo_organizer.correction_manifest import CorrectionApplication
 from photo_organizer.executor import FileOperation
 from photo_organizer.geocoding import ReverseGeocodedLocation
@@ -28,6 +29,7 @@ def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out
     assert "scan" in captured.out
     assert "dedupe" in captured.out
+    assert "inspect" in captured.out
     assert "organize" in captured.out
     assert "Examples:" in captured.out
 
@@ -40,6 +42,18 @@ def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
+    assert "Examples:" in captured.out
+
+
+def test_inspect_help_works(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["inspect", "--help"])
+
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out
+    assert "SOURCE" in captured.out
+    assert "--report" in captured.out
     assert "Examples:" in captured.out
 
 
@@ -365,6 +379,196 @@ def test_dedupe_rejects_unknown_report_extension(
     captured = capsys.readouterr()
     assert "dedupe --report must end with .json or .csv" in captured.err
     assert "--report duplicates.json" in captured.err
+
+
+def _inspect_item(path: Path) -> dict[str, object]:
+    return {
+        "path": str(path),
+        "sources": [
+            {
+                "source": "EXIF",
+                "exists": True,
+                "fields": {"DateTimeOriginal": "2020:06:15 10:00:00"},
+            }
+        ],
+        "date": {
+            "decision": {
+                "status": "resolved",
+                "value": "2020-06-15T10:00:00",
+                "source": "EXIF",
+                "field": "DateTimeOriginal",
+                "confidence": "high",
+                "date_kind": "captured",
+                "used_fallback": False,
+                "reconciliation_policy": "precedence",
+                "reconciliation_reason": "selected by metadata precedence policy",
+                "conflict": False,
+            },
+            "candidates": [],
+        },
+        "location": {
+            "decision": {
+                "status": "inferred",
+                "kind": "inferred",
+                "latitude": None,
+                "longitude": None,
+                "city": "Paraty",
+                "state": "RJ",
+                "country": "Brasil",
+                "provenance": {
+                    "source": "External manifest",
+                    "field": "a.json",
+                    "confidence": "low",
+                    "raw_value": {
+                        "city": "Paraty",
+                        "state": "RJ",
+                        "country": "Brasil",
+                    },
+                },
+            },
+            "sources": [
+                {
+                    "source": "External manifest",
+                    "exists": True,
+                    "fields": {
+                        "city": "Paraty",
+                        "state": "RJ",
+                        "country": "Brasil",
+                    },
+                }
+            ],
+        },
+    }
+
+
+def test_inspect_prints_sources_and_final_decisions(
+    tmp_path: Path,
+    monkeypatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: _inspect_item(path),
+    )
+
+    result = main(["inspect", str(tmp_path)])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert f"File: {image}" in captured.out
+    assert "Sources: EXIF" in captured.out
+    assert "Date: resolved 2020-06-15T10:00:00" in captured.out
+    assert "Location: inferred Paraty, RJ, Brasil" in captured.out
+
+
+def test_inspect_writes_json_report(tmp_path: Path, monkeypatch) -> None:
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+    report_path = tmp_path / "metadata-audit.json"
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: _inspect_item(path),
+    )
+
+    result = main(["inspect", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"] == {
+        "inspected_files": 1,
+        "date_resolved_files": 1,
+        "location_resolved_files": 1,
+        "date_conflict_files": 0,
+    }
+    assert report["files"][0]["date"]["decision"]["source"] == "EXIF"
+    assert report["files"][0]["location"]["decision"]["city"] == "Paraty"
+
+
+def test_inspect_writes_csv_report(tmp_path: Path, monkeypatch) -> None:
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+    report_path = tmp_path / "metadata-audit.csv"
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: _inspect_item(path),
+    )
+
+    result = main(["audit-metadata", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    with report_path.open(encoding="utf-8", newline="") as report_file:
+        rows = list(csv.DictReader(report_file))
+    assert rows[0]["path"] == str(image)
+    assert rows[0]["sources"] == "EXIF"
+    assert rows[0]["date_source"] == "EXIF"
+    assert rows[0]["location_status"] == "inferred"
+
+
+def test_inspect_rejects_unknown_report_extension(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["inspect", str(tmp_path), "--report", "metadata-audit.txt"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "inspect --report must end with .json or .csv" in captured.err
+
+
+def test_inspect_location_reverse_geocodes_gps(tmp_path: Path, monkeypatch) -> None:
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+    coordinates = GPSCoordinates(
+        latitude=-23.2,
+        longitude=-44.7,
+        provenance=MetadataProvenance(
+            source="EXIF",
+            field="GPSInfo",
+            confidence="high",
+            raw_value={"GPSLatitudeDecimal": -23.2, "GPSLongitudeDecimal": -44.7},
+        ),
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_gps_coordinates",
+        lambda _path: coordinates,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.reverse_geocode_coordinates",
+        lambda _coordinates: ReverseGeocodedLocation(
+            city="Paraty",
+            state="RJ",
+            country="Brasil",
+        ),
+    )
+    for resolver_name in (
+        "extract_iptc_iim_location",
+        "extract_xmp_textual_location",
+        "extract_external_location_manifest",
+        "infer_location_from_folder",
+        "infer_location_from_batch",
+    ):
+        monkeypatch.setattr(f"photo_organizer.cli.{resolver_name}", lambda _path: None)
+
+    decision, sources = cli._inspect_location(image, reverse_geocode=True)
+
+    assert decision["status"] == "resolved"
+    assert decision["city"] == "Paraty"
+    assert sources[0]["source"] == "EXIF"
 
 
 def test_organize_plan_mode_shows_plan_without_execution(
