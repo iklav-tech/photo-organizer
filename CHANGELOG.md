@@ -91,6 +91,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - `metadata`
   - `heuristic`
 - Global `--clock-offset` support.
+- HEIC/HEIF container detection for scan, hash, inspect and organize pipelines:
+  - `.heic`
+  - `.heif`
+  - `.hif`
 - Config support for:
   - `behavior.reconciliation_policy`
   - `behavior.date_heuristics`
@@ -168,8 +172,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Inferred dates use low confidence.
 - Files without usable metadata fail clearly when date heuristics are disabled.
 - Unknown IPTC-IIM datasets are ignored safely.
-- WEBP and BMP remain supported for scan/hash flows but embedded metadata is
-  not read by the current metadata reader.
+- WEBP, BMP and HEIF remain supported for scan/hash flows but embedded metadata
+  is not read by the current metadata reader.
 
 ### Validation
 

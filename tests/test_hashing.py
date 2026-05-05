@@ -26,6 +26,15 @@ def test_calculate_image_hash_matches_sha256_expected_value(tmp_path: Path) -> N
     assert result == "de7030234493a8bea844dbe1d8676e68a2c1a4b014c721f0425a22b6df66faec"
 
 
+def test_calculate_image_hash_accepts_heic_extension(tmp_path: Path) -> None:
+    file_path = tmp_path / "photo.heic"
+    file_path.write_bytes(b"image bytes")
+
+    result = hashing.calculate_image_hash(file_path)
+
+    assert result == "de7030234493a8bea844dbe1d8676e68a2c1a4b014c721f0425a22b6df66faec"
+
+
 def test_calculate_file_hash_reads_in_chunks(tmp_path: Path, monkeypatch) -> None:
     file_path = tmp_path / "large.jpg"
     content = b"abcdefghij"

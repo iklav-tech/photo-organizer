@@ -24,6 +24,7 @@ The project includes a tested v0.5.0 CLI workflow:
 - XMP embedded packet and same-basename `.xmp` sidecar extraction;
 - IPTC-IIM legacy dataset extraction;
 - PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata handling;
+- HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
 - documented format/source/field compatibility matrix;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
@@ -132,7 +133,8 @@ Example use cases:
 ### Scan behavior
 
 - recursive search in source directory;
-- supported extensions: `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.webp`, `.bmp`;
+- supported extensions: `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.webp`,
+  `.bmp`, `.heic`, `.heif`, `.hif`;
 - unsupported files are ignored;
 - stable/consistent returned path list;
 - user-friendly message when source directory does not exist.
@@ -155,8 +157,8 @@ EXIF from that format.
 ### Metadata behavior
 
 - EXIF extraction for compatible JPEG, PNG `eXIf` and TIFF images;
-- formats without real EXIF support in the current reader, such as WEBP and
-  BMP, safely skip EXIF extraction and use file `mtime` fallback;
+- formats without real EXIF support in the current reader, such as WEBP, BMP
+  and HEIF/HEIC, safely skip EXIF extraction and use file `mtime` fallback;
 - safe handling when EXIF is missing;
 - safe handling of EXIF read exceptions;
 - safe handling of malformed EXIF data without interrupting the whole run;
@@ -218,9 +220,10 @@ Current support status:
 | JPEG, TIFF, PNG | Same-basename `.xmp` file, for example `IMG_001.xmp` | Sidecar | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
 | JPEG, TIFF, PNG | Same-basename `.json` external manifest | Heuristic sidecar | `date_taken`, `datetime`, `created_at`, `DateTimeOriginal`, `CreateDate`, `city`, `state`, `country` | Implemented |
 | JPEG, TIFF, PNG | Filename, parent folder and sibling batch context | Heuristic | Safe date patterns and location-like folder names | Implemented |
-| JPEG, TIFF, PNG, WEBP, BMP | Filesystem | Filesystem | `mtime` | Implemented |
+| JPEG, TIFF, PNG, WEBP, BMP, HEIF | Filesystem | Filesystem | `mtime` | Implemented |
 | WEBP (`.webp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
+| HEIF (`.heic`, `.heif`, `.hif`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 
 Source classes used in reports and explanations:
 
@@ -337,7 +340,10 @@ report data.
 
 - RAW and manufacturer-specific formats such as CR2/CR3, NEF, ARW and ORF are
   not supported by the current metadata reader.
-- HEIF/HEIC is not supported yet.
+- HEIF/HEIC containers (`.heic`, `.heif`, `.hif`) are detected and can enter
+  scan/hash/inspect/organize flows, but embedded HEIF metadata is not decoded
+  by the current reader. They rely on sidecars, heuristics or filesystem
+  `mtime` unless a future HEIF decoder is added.
 - WEBP and BMP are recognized as image files for scanning/hashing, but embedded
   metadata is not read from them; date organization falls back to heuristics or
   filesystem `mtime`.
@@ -1335,7 +1341,7 @@ work delivered after the v0.4.0 workflow.
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections;
 - richer report analytics;
-- HEIC/HEIF support for iPhone and iPad photo collections;
+- HEIC/HEIF detection for iPhone and iPad photo collections is implemented;
 - investigate metadata extraction and decoding requirements for the HEIF
   ecosystem, including Apple's `public.heic` type;
 - evaluate standard non-Apple decoding paths such as `libheif` and compatible

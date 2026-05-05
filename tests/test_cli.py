@@ -43,6 +43,8 @@ def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
+    assert ".heic" in captured.out
+    assert ".heif" in captured.out
     assert "Examples:" in captured.out
 
 
@@ -55,6 +57,7 @@ def test_inspect_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
     assert "--report" in captured.out
+    assert ".heic" in captured.out
     assert "Examples:" in captured.out
 
 
@@ -82,6 +85,7 @@ def test_organize_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--name-pattern" in captured.out
     assert "{date}" in captured.out
     assert "city-state-month" in captured.out
+    assert ".heic" in captured.out
     assert "Paths:" in captured.out
     assert "Audit report:" in captured.out
     assert "Examples:" in captured.out
@@ -519,6 +523,22 @@ def test_inspect_writes_csv_report(tmp_path: Path, monkeypatch) -> None:
     assert rows[0]["location_status"] == "inferred"
 
 
+def test_inspect_accepts_heic_files_with_filesystem_fallback(tmp_path: Path) -> None:
+    image = tmp_path / "IMG_0001.HEIC"
+    image.write_bytes(b"heic-placeholder")
+    expected_ts = datetime(2024, 5, 6, 7, 8, 9).timestamp()
+    os.utime(image, (expected_ts, expected_ts))
+    report_path = tmp_path / "metadata-audit.json"
+
+    result = main(["inspect", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"]["inspected_files"] == 1
+    assert report["files"][0]["path"] == str(image)
+    assert report["files"][0]["date"]["decision"]["source"] == "filesystem"
+
+
 def test_inspect_rejects_unknown_report_extension(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -862,6 +882,7 @@ def test_scan_logs_start_end_and_count(monkeypatch, caplog) -> None:
 
     assert result == 0
     assert "Execution started: scan source=./photos" in caplog.text
+    assert ".heic" in caplog.text
     assert "Execution finished: scan processed_files=2" in caplog.text
 
 
@@ -1096,6 +1117,30 @@ def test_organize_dry_run_end_to_end_shows_expected_destinations_and_keeps_files
         "missing_gps_files=0 "
         "organization_fallback_files=0"
     ) in caplog.text
+
+
+def test_organize_dry_run_accepts_heic_files(tmp_path: Path, caplog) -> None:
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    source_dir.mkdir()
+    image = source_dir / "IMG_0001.heic"
+    image.write_bytes(b"heic-placeholder")
+    expected_ts = datetime(2024, 5, 6, 7, 8, 9).timestamp()
+    os.utime(image, (expected_ts, expected_ts))
+
+    with caplog.at_level(logging.INFO):
+        result = main([
+            "organize",
+            str(source_dir),
+            "--output",
+            str(output_dir),
+            "--dry-run",
+        ])
+
+    expected = output_dir / "2024" / "05" / "06" / "2024-05-06_07-08-09.heic"
+    assert result == 0
+    assert f"[DRY-RUN] MOVE {image} -> {expected}" in caplog.text
+    assert "processed_files=1" in caplog.text
 
 
 def test_organize_end_to_end_adds_suffixes_for_destination_collisions(

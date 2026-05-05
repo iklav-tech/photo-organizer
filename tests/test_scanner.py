@@ -13,6 +13,9 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
     (tmp_path / "e.tiff").write_text("x")
     (tmp_path / "f.webp").write_text("x")
     (tmp_path / "g.bmp").write_text("x")
+    (tmp_path / "h.heic").write_text("x")
+    (tmp_path / "i.heif").write_text("x")
+    (tmp_path / "j.hif").write_text("x")
 
     result = find_image_files(tmp_path)
 
@@ -24,6 +27,9 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
         tmp_path / "e.tiff",
         tmp_path / "f.webp",
         tmp_path / "g.bmp",
+        tmp_path / "h.heic",
+        tmp_path / "i.heif",
+        tmp_path / "j.hif",
     ]
 
 
@@ -53,6 +59,8 @@ def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> 
     (tmp_path / "mixed.JpEg").write_text("x")
     (tmp_path / "lower.png").write_text("x")
     (tmp_path / "bitmap.BMP").write_text("x")
+    (tmp_path / "heic.HEIC").write_text("x")
+    (tmp_path / "heif.HeIf").write_text("x")
     (tmp_path / "web.WEBP").write_text("x")
     (tmp_path / "ignored.GIF").write_text("x")
 
@@ -60,6 +68,8 @@ def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> 
 
     assert result == [
         tmp_path / "bitmap.BMP",
+        tmp_path / "heic.HEIC",
+        tmp_path / "heif.HeIf",
         tmp_path / "lower.png",
         tmp_path / "mixed.JpEg",
         tmp_path / "upper.JPG",

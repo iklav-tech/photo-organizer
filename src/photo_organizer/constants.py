@@ -22,6 +22,7 @@ IMAGE_FORMATS = (
     ImageFormat("TIFF", frozenset({".tif", ".tiff"}), supports_exif=True),
     ImageFormat("WEBP", frozenset({".webp"})),
     ImageFormat("BMP", frozenset({".bmp"})),
+    ImageFormat("HEIF", frozenset({".heic", ".heif", ".hif"})),
 )
 
 IMAGE_FILE_EXTENSIONS = frozenset(
@@ -35,3 +36,8 @@ EXIF_IMAGE_FILE_EXTENSIONS = frozenset(
     if image_format.supports_exif
     for extension in image_format.extensions
 )
+
+
+def supported_image_extensions_text() -> str:
+    """Return a stable comma-separated list of supported image extensions."""
+    return ", ".join(sorted(IMAGE_FILE_EXTENSIONS))

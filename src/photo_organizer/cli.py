@@ -12,6 +12,7 @@ from typing import Any
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.config import ConfigurationError, load_organization_config
+from photo_organizer.constants import supported_image_extensions_text
 from photo_organizer.correction_manifest import (
     CORRECTION_PRIORITY_CHOICES,
     CorrectionApplication,
@@ -944,6 +945,7 @@ def format_version_info() -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    supported_extensions = supported_image_extensions_text()
     parser = argparse.ArgumentParser(
         prog="photo-organizer",
         description="Organize photo files by date metadata.",
@@ -975,7 +977,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser = subparsers.add_parser(
         "scan",
         help="List supported image files in a directory.",
-        description="Scan a directory recursively for supported image files.",
+        description=(
+            "Scan a directory recursively for supported image files. "
+            f"Supported extensions: {supported_extensions}."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   photo-organizer scan ./Photos
@@ -991,7 +996,10 @@ def build_parser() -> argparse.ArgumentParser:
     dedupe_parser = subparsers.add_parser(
         "dedupe",
         help="List duplicate images in a directory by content hash.",
-        description="Find supported image files with identical content hashes.",
+        description=(
+            "Find supported image files with identical content hashes. "
+            f"Supported extensions: {supported_extensions}."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   photo-organizer dedupe ./Photos
@@ -1022,7 +1030,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Audit available metadata sources and final decisions.",
         description=(
             "Inspect supported image files and show available metadata sources "
-            "plus final date and location decisions."
+            "plus final date and location decisions. "
+            f"Supported extensions: {supported_extensions}."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
@@ -1099,7 +1108,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write an explainable decision report for each file.",
         description=(
             "Show the decision trail for each supported image file, including "
-            "chosen date, chosen location, candidates, sources and confidence."
+            "chosen date, chosen location, candidates, sources and confidence. "
+            f"Supported extensions: {supported_extensions}."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
@@ -1174,7 +1184,10 @@ def build_parser() -> argparse.ArgumentParser:
     organize_parser = subparsers.add_parser(
         "organize",
         help="Copy or move photos into date-based folders.",
-        description="Organize supported image files into YYYY/MM/DD folders.",
+        description=(
+            "Organize supported image files into YYYY/MM/DD folders. "
+            f"Supported extensions: {supported_extensions}."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   photo-organizer organize ./Photos --output ./OrganizedPhotos
@@ -1342,7 +1355,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "scan":
-        logger.info("Execution started: scan source=%s", args.source)
+        logger.info(
+            "Execution started: scan source=%s supported_extensions=%s",
+            args.source,
+            supported_image_extensions_text(),
+        )
         try:
             files = find_image_files(args.source, recursive=True)
         except FileNotFoundError:

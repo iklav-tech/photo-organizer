@@ -863,6 +863,31 @@ def test_extract_exif_metadata_skips_formats_without_real_exif_support(
     assert result == {}
 
 
+def test_extract_exif_metadata_skips_heif_without_decoder(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    file_path = tmp_path / "image.heic"
+    file_path.write_text("x")
+
+    def fail_if_opened(_path):
+        raise AssertionError("HEIF should not be opened for EXIF extraction")
+
+    fake_image_module = types.SimpleNamespace(open=fail_if_opened)
+    fake_exif_tags_module = types.SimpleNamespace(TAGS={})
+    fake_pil_module = types.SimpleNamespace(
+        Image=fake_image_module,
+        ExifTags=fake_exif_tags_module,
+    )
+
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil_module)
+
+    with caplog.at_level(logging.DEBUG):
+        result = metadata.extract_exif_metadata(file_path)
+
+    assert result == {}
+    assert "unsupported metadata format" in caplog.text
+
+
 def test_extract_exif_metadata_handles_read_exceptions_safely(
     tmp_path: Path, monkeypatch
 ) -> None:
