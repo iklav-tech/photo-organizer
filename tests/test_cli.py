@@ -30,6 +30,7 @@ def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "scan" in captured.out
     assert "dedupe" in captured.out
     assert "inspect" in captured.out
+    assert "explain" in captured.out
     assert "organize" in captured.out
     assert "Examples:" in captured.out
 
@@ -528,6 +529,102 @@ def test_inspect_rejects_unknown_report_extension(
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert "inspect --report must end with .json or .csv" in captured.err
+
+
+def test_explain_writes_json_decision_report(tmp_path: Path, monkeypatch) -> None:
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+    report_path = tmp_path / "explain.json"
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: _inspect_item(path),
+    )
+
+    result = main(["explain", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"] == {
+        "explained_files": 1,
+        "date_resolved_files": 1,
+        "location_resolved_files": 1,
+        "date_conflict_files": 0,
+    }
+    item = report["files"][0]
+    assert item["chosen_date"]["value"] == "2020-06-15T10:00:00"
+    assert item["chosen_date"]["source"] == "EXIF"
+    assert item["chosen_date"]["confidence"] == "high"
+    assert item["chosen_location"]["city"] == "Paraty"
+    assert item["chosen_location"]["source"] == "External manifest"
+    assert item["chosen_location"]["confidence"] == "low"
+    assert "candidates" in item
+    assert "date" in item["candidates"]
+    assert item["candidates"]["location"][0]["source"] == "External manifest"
+
+
+def test_explain_rejects_non_json_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["explain", str(tmp_path), "--report", "explain.csv"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "explain --report must end with .json" in captured.err
+
+
+def test_explain_json_handles_non_json_exif_raw_values(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class RationalLike:
+        def __float__(self) -> float:
+            return 1.5
+
+    image = tmp_path / "a.jpg"
+    image.write_text("x")
+    report_path = tmp_path / "explain.json"
+    item = _inspect_item(image)
+    item["date"]["candidates"] = [  # type: ignore[index]
+        {
+            "value": "2020-06-15T10:00:00",
+            "source": "EXIF",
+            "field": "GPSInfo",
+            "confidence": "high",
+            "raw_value": {"GPSLatitude": (RationalLike(), RationalLike())},
+            "role": "primary",
+            "date_kind": "captured",
+            "used_fallback": False,
+        }
+    ]
+    item["location"]["sources"][0]["raw_value"] = {  # type: ignore[index]
+        "GPSLatitude": (RationalLike(), RationalLike()),
+    }
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: item,
+    )
+
+    result = main(["explain", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["files"][0]["candidates"]["date"][0]["raw_value"] == {
+        "GPSLatitude": [1.5, 1.5],
+    }
+    assert report["files"][0]["candidates"]["location"][0]["raw_value"] == {
+        "GPSLatitude": [1.5, 1.5],
+    }
 
 
 def test_inspect_location_reverse_geocodes_gps(tmp_path: Path, monkeypatch) -> None:

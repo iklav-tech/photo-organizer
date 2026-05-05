@@ -403,14 +403,23 @@ def _write_dedupe_report(
 
 
 def _inspect_serializable(value: object) -> object:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
     if hasattr(value, "isoformat"):
         return value.isoformat()  # type: ignore[no-any-return]
     if isinstance(value, tuple):
-        return list(value)
+        return [_inspect_serializable(item) for item in value]
     if isinstance(value, dict):
         return {key: _inspect_serializable(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_inspect_serializable(item) for item in value]
+    try:
+        json.dumps(value)
+    except TypeError:
+        try:
+            return float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return str(value)
     return value
 
 
@@ -512,6 +521,15 @@ def _inspect_location(
                 if coordinates.provenance is not None
                 else "GPS",
                 "exists": True,
+                "field": coordinates.provenance.field
+                if coordinates.provenance is not None
+                else "",
+                "confidence": coordinates.provenance.confidence
+                if coordinates.provenance is not None
+                else "",
+                "raw_value": _inspect_serializable(coordinates.provenance.raw_value)
+                if coordinates.provenance is not None
+                else {},
                 "fields": {
                     "latitude": coordinates.latitude,
                     "longitude": coordinates.longitude,
@@ -537,6 +555,9 @@ def _inspect_location(
             {
                 "source": provenance.source,
                 "exists": True,
+                "field": provenance.field,
+                "confidence": provenance.confidence,
+                "raw_value": _inspect_serializable(provenance.raw_value),
                 "fields": _inspect_serializable(location_fields),
             }
         )
@@ -556,6 +577,10 @@ def _inspect_location(
                     "source": "Reverse geocoding",
                     "field": "GPSLatitudeDecimal,GPSLongitudeDecimal",
                     "confidence": "medium",
+                    "raw_value": {
+                        "latitude": coordinates.latitude,
+                        "longitude": coordinates.longitude,
+                    },
                 },
             }, sources
 
@@ -797,6 +822,91 @@ def _write_inspect_report(
             )
 
 
+def _explain_date_decision(item: dict[str, object]) -> dict[str, object]:
+    decision = item["date"]["decision"]  # type: ignore[index]
+    return {
+        "value": decision["value"],
+        "source": decision["source"],
+        "field": decision["field"],
+        "confidence": decision["confidence"],
+        "date_kind": decision["date_kind"],
+        "used_fallback": decision["used_fallback"],
+        "reconciliation_policy": decision["reconciliation_policy"],
+        "reconciliation_reason": decision["reconciliation_reason"],
+        "conflict": decision["conflict"],
+    }
+
+
+def _explain_location_decision(item: dict[str, object]) -> dict[str, object]:
+    decision = item["location"]["decision"]  # type: ignore[index]
+    provenance = decision.get("provenance") or {}
+    return {
+        "status": decision["status"],
+        "kind": decision["kind"],
+        "latitude": decision["latitude"],
+        "longitude": decision["longitude"],
+        "city": decision["city"],
+        "state": decision["state"],
+        "country": decision["country"],
+        "source": provenance.get("source", "") if isinstance(provenance, dict) else "",
+        "field": provenance.get("field", "") if isinstance(provenance, dict) else "",
+        "confidence": provenance.get("confidence", "")
+        if isinstance(provenance, dict)
+        else "",
+        "raw_value": provenance.get("raw_value", {})
+        if isinstance(provenance, dict)
+        else {},
+    }
+
+
+def _explain_location_candidate(source: dict[str, object]) -> dict[str, object]:
+    return {
+        "source": source["source"],
+        "field": source.get("field", ""),
+        "confidence": source.get("confidence", ""),
+        "value": _inspect_serializable(source.get("fields", {})),
+        "raw_value": _inspect_serializable(
+            source.get("raw_value", source.get("fields", {}))
+        ),
+    }
+
+
+def _explain_item_from_inspect_item(item: dict[str, object]) -> dict[str, object]:
+    return {
+        "path": item["path"],
+        "chosen_date": _explain_date_decision(item),
+        "chosen_location": _explain_location_decision(item),
+        "candidates": {
+            "date": _inspect_serializable(item["date"]["candidates"]),  # type: ignore[index]
+            "location": [
+                _explain_location_candidate(source)
+                for source in item["location"]["sources"]  # type: ignore[index]
+            ],
+        },
+        "sources": _inspect_serializable(item["sources"]),
+    }
+
+
+def _write_explain_report(
+    report_path: str | Path,
+    summary: dict[str, int],
+    files: list[dict[str, object]],
+) -> None:
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.suffix.lower() != ".json":
+        raise ValueError("Explain report path must end with .json")
+
+    report = {
+        "summary": summary,
+        "files": [_explain_item_from_inspect_item(item) for item in files],
+    }
+    path.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def format_version_info() -> str:
     """Render a Linux-style version output with project metadata."""
     app_name = __app_name__
@@ -841,6 +951,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="""Examples:
   photo-organizer scan ./Photos
   photo-organizer inspect ./Photos
+  photo-organizer explain ./Photos --report explain.json
   photo-organizer dedupe ./Photos
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
@@ -981,6 +1092,83 @@ def build_parser() -> argparse.ArgumentParser:
         "--reverse-geocode",
         action="store_true",
         help="Resolve GPS coordinates into city, state and country during audit.",
+    )
+
+    explain_parser = subparsers.add_parser(
+        "explain",
+        help="Write an explainable decision report for each file.",
+        description=(
+            "Show the decision trail for each supported image file, including "
+            "chosen date, chosen location, candidates, sources and confidence."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer explain ./Photos
+  photo-organizer explain ./Photos --report explain.json
+  photo-organizer explain ./Photos --reverse-geocode --report explain.json
+  photo-organizer explain ./Photos --correction-manifest corrections.yaml --report explain.json
+""",
+    )
+    explain_parser.add_argument(
+        "source",
+        metavar="SOURCE",
+        help="Directory containing photos to explain.",
+    )
+    explain_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Write the explain report to this .json path.",
+    )
+    explain_parser.add_argument(
+        "--reconciliation-policy",
+        choices=RECONCILIATION_POLICY_CHOICES,
+        default="precedence",
+        help=(
+            "Metadata conflict policy for date decisions: precedence, newest, "
+            "oldest, or filesystem (default: precedence)."
+        ),
+    )
+    explain_parser.add_argument(
+        "--correction-manifest",
+        metavar="PATH",
+        help="Read batch correction overrides from a .csv, .json, .yaml or .yml file.",
+    )
+    explain_parser.add_argument(
+        "--correction-priority",
+        choices=CORRECTION_PRIORITY_CHOICES,
+        default=None,
+        help=(
+            "Priority for correction manifest date overrides: highest, metadata "
+            "or heuristic (default: manifest/default highest)."
+        ),
+    )
+    explain_parser.add_argument(
+        "--clock-offset",
+        metavar="OFFSET",
+        default=None,
+        help=(
+            "Apply a fixed time offset to explain corrected captured datetime. "
+            "Accepted formats: +3h, -1d, +00:30, -5:45."
+        ),
+    )
+    explain_heuristics_group = explain_parser.add_mutually_exclusive_group()
+    explain_heuristics_group.add_argument(
+        "--date-heuristics",
+        action="store_true",
+        dest="date_heuristics",
+        help="Enable low-confidence inferred date heuristics (default).",
+    )
+    explain_heuristics_group.add_argument(
+        "--no-date-heuristics",
+        action="store_false",
+        dest="date_heuristics",
+        help="Disable inferred date heuristics.",
+    )
+    explain_parser.set_defaults(date_heuristics=None)
+    explain_parser.add_argument(
+        "--reverse-geocode",
+        action="store_true",
+        help="Resolve GPS coordinates into city, state and country in the report.",
     )
 
     organize_parser = subparsers.add_parser(
@@ -1214,8 +1402,14 @@ def main(argv: list[str] | None = None) -> int:
             logger.info("Dedupe report written: path=%s", args.report)
         return 0
 
-    if args.command in {"inspect", "audit-metadata"}:
-        if args.report and Path(args.report).suffix.lower() not in {".json", ".csv"}:
+    if args.command in {"inspect", "audit-metadata", "explain"}:
+        if args.command == "explain":
+            if args.report and Path(args.report).suffix.lower() != ".json":
+                parser.error(
+                    "explain --report must end with .json. "
+                    "Example: --report explain.json"
+                )
+        elif args.report and Path(args.report).suffix.lower() not in {".json", ".csv"}:
             parser.error(
                 "inspect --report must end with .json or .csv. "
                 "Example: --report metadata-audit.json"
@@ -1240,16 +1434,16 @@ def main(argv: list[str] | None = None) -> int:
             if args.date_heuristics is not None
             else DATE_HEURISTICS_DEFAULT
         )
-        logger.info("Execution started: inspect source=%s", args.source)
+        logger.info("Execution started: %s source=%s", args.command, args.source)
         try:
             files = find_image_files(args.source, recursive=True)
         except FileNotFoundError:
             logger.error("Source directory does not exist: %s", args.source)
-            logger.info("Execution finished: inspect inspected_files=0")
+            logger.info("Execution finished: %s inspected_files=0", args.command)
             return 1
         except NotADirectoryError:
             logger.error("Source path is not a directory: %s", args.source)
-            logger.info("Execution finished: inspect inspected_files=0")
+            logger.info("Execution finished: %s inspected_files=0", args.command)
             return 1
 
         source_root = Path(args.source)
@@ -1285,6 +1479,61 @@ def main(argv: list[str] | None = None) -> int:
                 if item["date"]["decision"]["conflict"]  # type: ignore[index]
             ),
         }
+
+        if args.command == "explain":
+            explain_summary = {
+                "explained_files": summary["inspected_files"],
+                "date_resolved_files": summary["date_resolved_files"],
+                "location_resolved_files": summary["location_resolved_files"],
+                "date_conflict_files": summary["date_conflict_files"],
+            }
+            for item in inspected_files:
+                explain_item = _explain_item_from_inspect_item(item)
+                chosen_date = explain_item["chosen_date"]
+                chosen_location = explain_item["chosen_location"]
+                candidates = explain_item["candidates"]
+                print(f"File: {explain_item['path']}")
+                print(
+                    "  Chosen date: "
+                    f"{chosen_date['value'] or 'missing'} "
+                    f"source={chosen_date['source'] or 'none'} "
+                    f"confidence={chosen_date['confidence'] or 'none'}"
+                )
+                location_parts = ", ".join(
+                    str(value)
+                    for value in (
+                        chosen_location["city"],
+                        chosen_location["state"],
+                        chosen_location["country"],
+                    )
+                    if value
+                )
+                if not location_parts and chosen_location["latitude"] is not None:
+                    location_parts = (
+                        f"{chosen_location['latitude']}, "
+                        f"{chosen_location['longitude']}"
+                    )
+                print(
+                    "  Chosen location: "
+                    f"{location_parts or chosen_location['status']} "
+                    f"source={chosen_location['source'] or 'none'} "
+                    f"confidence={chosen_location['confidence'] or 'none'}"
+                )
+                print(
+                    "  Candidates: "
+                    f"date={len(candidates['date'])} "
+                    f"location={len(candidates['location'])}"
+                )
+
+            if args.report:
+                _write_explain_report(args.report, explain_summary, inspected_files)
+                logger.info("Explain report written: path=%s", args.report)
+
+            logger.info(
+                "Execution finished: explain explained_files=%d",
+                len(inspected_files),
+            )
+            return 0
 
         for item in inspected_files:
             date_decision = item["date"]["decision"]  # type: ignore[index]

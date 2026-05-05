@@ -94,8 +94,10 @@ Example use cases:
 - `photo-organizer scan --help`
 - `photo-organizer dedupe --help`
 - `photo-organizer inspect --help`
+- `photo-organizer explain --help`
 - `photo-organizer organize --help`
 - `photo-organizer inspect SOURCE --report metadata-audit.json`
+- `photo-organizer explain SOURCE --report explain.json`
 - `photo-organizer dedupe SOURCE --report duplicates.json`
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
 - `photo-organizer organize SOURCE --config organizer.yaml`
@@ -625,6 +627,17 @@ The inspect command is read-only. It lists available metadata sources per file
 and shows the final date and location decisions that would drive organization.
 Reports can be exported as JSON or CSV.
 
+### Example: explain decision trails
+
+```bash
+photo-organizer explain ~/Photos --report explain.json
+photo-organizer explain ~/Photos --reverse-geocode --report explain.json
+```
+
+The explain command is read-only. Its JSON report is meant for debugging
+problem files without reading code: each file includes `chosen_date`,
+`chosen_location`, candidate values, source fields and confidence.
+
 ### Example: organizing by date
 
 ```bash
@@ -765,6 +778,44 @@ fields:
 
 ```text
 location_status,organization_fallback,latitude,longitude,city,state,country,gps_source,gps_field,gps_confidence,gps_raw_value,location_source,location_field,location_confidence,location_raw_value
+```
+
+## Explain report format
+
+`photo-organizer explain SOURCE --report explain.json` writes one JSON item per
+file with final choices and the trail of candidates:
+
+```json
+{
+  "summary": {
+    "explained_files": 1,
+    "date_resolved_files": 1,
+    "location_resolved_files": 1,
+    "date_conflict_files": 0
+  },
+  "files": [
+    {
+      "path": "/home/user/Photos/IMG_1034.jpg",
+      "chosen_date": {
+        "value": "2024-08-15T14:32:09",
+        "source": "EXIF",
+        "field": "DateTimeOriginal",
+        "confidence": "high"
+      },
+      "chosen_location": {
+        "city": "Sao Paulo",
+        "state": "Sao Paulo",
+        "country": "Brazil",
+        "source": "Reverse geocoding",
+        "confidence": "medium"
+      },
+      "candidates": {
+        "date": [],
+        "location": []
+      }
+    }
+  ]
+}
 ```
 
 ## Duplicate report format
