@@ -25,8 +25,8 @@ The project includes a tested v0.5.0 CLI workflow:
 - IPTC-IIM legacy dataset extraction;
 - PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata handling;
 - HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
-- HEIC/HEIF metadata opening through `pillow-heif` and native `libheif`
-  support;
+- HEIC/HEIF EXIF/XMP metadata extraction through `pillow-heif` and native
+  `libheif` support;
 - documented format/source/field compatibility matrix;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
@@ -232,6 +232,7 @@ Current support status:
 | WEBP (`.webp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | HEIF (`.heic`, `.heif`, `.hif`) | EXIF via HEIF backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed by `pillow-heif`/Pillow | Implemented |
+| HEIF (`.heic`, `.heif`, `.hif`) | XMP via HEIF backend | Embedded metadata | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
 
 Source classes used in reports and explanations:
 
@@ -349,8 +350,10 @@ report data.
 - RAW and manufacturer-specific formats such as CR2/CR3, NEF, ARW and ORF are
   not supported by the current metadata reader.
 - HEIF/HEIC containers (`.heic`, `.heif`, `.hif`) are detected and can enter
-  scan/hash/inspect/organize flows. Embedded HEIF metadata uses `pillow-heif`
-  and native `libheif` support; if the native backend is unavailable, the app
+  scan/hash/inspect/organize flows. Embedded HEIF EXIF/XMP metadata uses
+  `pillow-heif` and native `libheif` support. Date/time, orientation and GPS
+  are read when present in backend-exposed EXIF, and XMP date/GPS/location
+  fields are read when present. If the native backend is unavailable, the app
   logs an orientative warning and falls back to sidecars, heuristics or
   filesystem `mtime`.
 - WEBP and BMP are recognized as image files for scanning/hashing, but embedded
@@ -1351,8 +1354,8 @@ work delivered after the v0.4.0 workflow.
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections;
 - richer report analytics;
-- HEIC/HEIF detection and `pillow-heif` backend integration for iPhone and iPad
-  photo collections is implemented;
+- HEIC/HEIF detection and `pillow-heif` backend integration for EXIF/XMP in
+  iPhone and iPad photo collections is implemented;
 - continue validating metadata extraction behavior across the HEIF ecosystem,
   including Apple's `public.heic` type;
 - evaluate standard non-Apple decoding paths such as `libheif` and compatible

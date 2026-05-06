@@ -874,11 +874,7 @@ def test_extract_exif_metadata_warns_when_heif_backend_is_missing(
     def raise_missing_backend(_self, _path):
         raise HeifDependencyError("install with pip install -r requirements.txt")
 
-    monkeypatch.setattr(
-        metadata.PillowHeifBackend,
-        "open",
-        raise_missing_backend,
-    )
+    monkeypatch.setattr(metadata.PillowHeifBackend, "read_metadata", raise_missing_backend)
 
     with caplog.at_level(logging.WARNING):
         result = metadata.extract_exif_metadata(file_path)
@@ -891,28 +887,103 @@ def test_extract_exif_metadata_warns_when_heif_backend_is_missing(
 def test_extract_exif_metadata_reads_heif_through_backend(
     tmp_path: Path, monkeypatch
 ) -> None:
+    from PIL import Image
+    from photo_organizer.heif_backend import HeifMetadata
+
     file_path = tmp_path / "image.heic"
     file_path.write_text("x")
-
-    class FakeImage:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def getexif(self):
-            return {36867: "2024:01:02 03:04:05"}
+    exif = Image.Exif()
+    exif[274] = 6
+    exif[36867] = "2024:01:02 03:04:05"
 
     monkeypatch.setattr(
         metadata.PillowHeifBackend,
-        "open",
-        lambda _self, _path: FakeImage(),
+        "read_metadata",
+        lambda _self, _path: HeifMetadata(exif=exif.tobytes()),
     )
 
     result = metadata.extract_exif_metadata(file_path)
 
     assert result["DateTimeOriginal"] == "2024:01:02 03:04:05"
+    assert result["Orientation"] == 6
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        date_heuristics=False,
+    )
+    assert resolution.provenance is not None
+    assert resolution.provenance.source == "EXIF"
+    assert resolution.provenance.field == "DateTimeOriginal"
+
+
+def test_extract_gps_coordinates_reads_heif_exif_gps(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from PIL import Image
+    from photo_organizer.heif_backend import HeifMetadata
+
+    file_path = tmp_path / "image.heic"
+    file_path.write_text("x")
+    exif = Image.Exif()
+    exif[34853] = {
+        1: "S",
+        2: (23.0, 30.0, 0.0),
+        3: "W",
+        4: (46.0, 37.0, 30.0),
+    }
+    monkeypatch.setattr(
+        metadata.PillowHeifBackend,
+        "read_metadata",
+        lambda _self, _path: HeifMetadata(exif=exif.tobytes()),
+    )
+
+    result = metadata.extract_gps_coordinates(file_path)
+
+    assert result is not None
+    assert result.latitude == -23.5
+    assert result.longitude == -46.625
+    assert result.provenance is not None
+    assert result.provenance.source == "EXIF"
+    assert result.provenance.field == "GPSInfo"
+
+
+def test_extract_xmp_metadata_reads_heif_backend_xmp(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from photo_organizer.heif_backend import HeifMetadata
+
+    file_path = tmp_path / "image.heic"
+    file_path.write_text("x")
+    xmp_packet = b"""<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description
+      xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+      xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+      xmp:CreateDate="2024-08-15T14:32:09"
+      photoshop:City="Paraty"
+      photoshop:State="RJ"
+      photoshop:Country="Brasil" />
+  </rdf:RDF>
+</x:xmpmeta>"""
+    monkeypatch.setattr(
+        metadata.PillowHeifBackend,
+        "read_metadata",
+        lambda _self, _path: HeifMetadata(xmp=xmp_packet),
+    )
+
+    result = metadata.extract_xmp_metadata(file_path)
+
+    assert result["xmp:CreateDate"] == "2024-08-15T14:32:09"
+    assert result["photoshop:City"] == "Paraty"
+    assert result["XMPFieldSources"]["xmp:CreateDate"] == "embedded"
+
+    location = metadata.extract_xmp_textual_location(file_path)
+    assert location is not None
+    fields, provenance = location
+    assert fields == {"city": "Paraty", "state": "RJ", "country": "Brasil"}
+    assert provenance.source == "XMP"
 
 
 def test_extract_exif_metadata_handles_read_exceptions_safely(

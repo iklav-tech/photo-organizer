@@ -33,7 +33,11 @@ from photo_organizer.constants import (
     IMAGE_FILE_EXTENSIONS,
 )
 from photo_organizer.correction_manifest import CorrectionApplication
-from photo_organizer.heif_backend import HeifDependencyError, PillowHeifBackend
+from photo_organizer.heif_backend import (
+    HeifBackendError,
+    HeifDependencyError,
+    PillowHeifBackend,
+)
 from photo_organizer.text_normalization import normalize_text
 
 
@@ -871,6 +875,23 @@ def extract_embedded_xmp_metadata(path: str | Path) -> dict[str, Any]:
     issues never abort the organization flow.
     """
     file_path = Path(path)
+    if file_path.suffix.lower() in HEIF_IMAGE_FILE_EXTENSIONS:
+        try:
+            heif_metadata = PillowHeifBackend().read_metadata(file_path)
+        except HeifDependencyError as exc:
+            logger.warning("HEIF backend unavailable for file=%s: %s", file_path, exc)
+            return {}
+        except HeifBackendError as exc:
+            logger.warning("Failed to read HEIF metadata for file=%s error=%s", file_path, exc)
+            return {}
+        if not heif_metadata.xmp:
+            return {}
+        return _extract_xmp_metadata_from_bytes(
+            heif_metadata.xmp,
+            file_path,
+            "embedded",
+        )
+
     try:
         data = file_path.read_bytes()
     except OSError as exc:
@@ -1044,6 +1065,13 @@ def _read_pillow_exif_data(image: Any) -> tuple[Any, bool]:
         return tag, True
 
     return exif_data, False
+
+
+def _read_pillow_exif_bytes(image_module: Any, exif_bytes: bytes) -> Any:
+    """Convert raw EXIF bytes into a Pillow Exif object."""
+    exif_data = image_module.Exif()
+    exif_data.load(exif_bytes)
+    return exif_data
 
 
 def _extract_gps_coordinates_from_fields(fields: dict[str, Any]) -> GPSCoordinates | None:
@@ -1888,15 +1916,23 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         return {}
 
     try:
-        image_context = (
-            PillowHeifBackend().open(file_path)
-            if file_path.suffix.lower() in HEIF_IMAGE_FILE_EXTENSIONS
-            else Image.open(file_path)
-        )
-        with image_context as image:
-            exif_data, used_container_fallback = _read_pillow_exif_data(image)
+        used_container_fallback = False
+        if file_path.suffix.lower() in HEIF_IMAGE_FILE_EXTENSIONS:
+            heif_backend = PillowHeifBackend()
+            heif_metadata = heif_backend.read_metadata(file_path)
+            if heif_metadata.exif:
+                exif_data = _read_pillow_exif_bytes(Image, heif_metadata.exif)
+            else:
+                with heif_backend.open(file_path) as image:
+                    exif_data, used_container_fallback = _read_pillow_exif_data(image)
+        else:
+            with Image.open(file_path) as image:
+                exif_data, used_container_fallback = _read_pillow_exif_data(image)
     except HeifDependencyError as exc:
         logger.warning("HEIF backend unavailable for file=%s: %s", file_path, exc)
+        return {}
+    except HeifBackendError as exc:
+        logger.warning("Failed to read HEIF metadata for file=%s error=%s", file_path, exc)
         return {}
     except Exception as exc:
         logger.warning("Fatal EXIF read error for file=%s error=%s", file_path, exc)

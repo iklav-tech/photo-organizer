@@ -98,7 +98,12 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - HEIF/HEIC metadata backend abstraction:
   - `photo_organizer.heif_backend.HeifBackend`
   - `PillowHeifBackend`
+  - raw EXIF/XMP metadata access through `HeifMetadata`
   - clear dependency guidance when `pillow-heif`/`libheif` is unavailable
+- HEIF/HEIC EXIF extraction for backend-exposed date/time, orientation,
+  camera and GPS fields.
+- HEIF/HEIC XMP extraction for backend-exposed date, GPS and textual location
+  fields.
 - `pillow-heif` added as a project dependency for HEIF/HEIC support.
 - `requirements.txt` added with Python dependencies and native `libheif`
   installation guidance.
@@ -196,6 +201,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Tests cover XMP embedded metadata, XMP sidecars and sidecar precedence.
 - Tests cover IPTC-IIM date and textual metadata extraction.
 - Tests cover PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata paths.
+- Tests cover HEIF/HEIC backend EXIF date, GPS and XMP extraction.
 - Tests cover missing metadata and disabled date heuristics.
 - Tests cover metadata conflict recording and precedence winners.
 - Tests cover the synthetic legacy metadata corpus and compatibility matrix.
