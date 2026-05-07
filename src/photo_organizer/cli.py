@@ -12,7 +12,10 @@ from typing import Any
 
 from photo_organizer import __app_name__, __description__, __repository__, __version__
 from photo_organizer.config import ConfigurationError, load_organization_config
-from photo_organizer.constants import supported_image_extensions_text
+from photo_organizer.constants import (
+    HEIF_IMAGE_FILE_EXTENSIONS,
+    supported_image_extensions_text,
+)
 from photo_organizer.correction_manifest import (
     CORRECTION_PRIORITY_CHOICES,
     CorrectionApplication,
@@ -439,6 +442,126 @@ def _inspect_source_item(source: str, fields: dict[str, Any]) -> dict[str, objec
     }
 
 
+def _inspect_fields_for_source(
+    source_items: list[dict[str, object]],
+    source_name: str,
+) -> dict[str, object]:
+    for item in source_items:
+        if item.get("source") != source_name:
+            continue
+        fields = item.get("fields", {})
+        return fields if isinstance(fields, dict) else {}
+    return {}
+
+
+def _has_metadata_fields(fields: dict[str, object]) -> bool:
+    ignored_keys = {
+        "XMPFieldSources",
+        "XMPNamespaces",
+        "PNGFieldSources",
+        "status",
+        "error",
+    }
+    return any(
+        value not in (None, "", {}, [])
+        for key, value in fields.items()
+        if key not in ignored_keys
+    )
+
+
+def _date_evidence_kind(date_decision: dict[str, object]) -> str:
+    if date_decision.get("status") != "resolved":
+        return "missing"
+    source = str(date_decision.get("source") or "")
+    if date_decision.get("used_fallback") or source in {
+        "filesystem",
+        "filename",
+        "folder",
+        "sibling batch",
+    }:
+        return "inferred-or-fallback"
+    if source in {
+        "EXIF",
+        "XMP",
+        "IPTC-IIM",
+        "PNG metadata",
+        "Correction manifest",
+    }:
+        return "real-metadata"
+    return "inferred-or-fallback"
+
+
+def _location_evidence_kind(location_decision: dict[str, object]) -> str:
+    status = str(location_decision.get("status") or "")
+    kind = str(location_decision.get("kind") or "")
+    if status in {"resolved", "gps"} and location_decision.get("latitude") is not None:
+        return "real-gps"
+    if kind == "inferred" or status == "inferred":
+        return "inferred"
+    if status in {"missing", "missing-gps"}:
+        return "missing"
+    return status or "missing"
+
+
+def _heif_audit_item(
+    path: Path,
+    source_items: list[dict[str, object]],
+    date_decision: dict[str, object],
+    location_decision: dict[str, object],
+) -> dict[str, object] | None:
+    if path.suffix.lower() not in HEIF_IMAGE_FILE_EXTENSIONS:
+        return None
+
+    exif_fields = _inspect_fields_for_source(source_items, "EXIF")
+    xmp_fields = _inspect_fields_for_source(source_items, "XMP embedded")
+    sidecar_fields = _inspect_fields_for_source(source_items, "XMP sidecar")
+    container_fields = _inspect_fields_for_source(source_items, "HEIF container")
+    found_metadata = []
+    missing_metadata = []
+    for label, fields in (
+        ("EXIF", exif_fields),
+        ("XMP embedded", xmp_fields),
+        ("XMP sidecar", sidecar_fields),
+    ):
+        if _has_metadata_fields(fields):
+            found_metadata.append(label)
+        else:
+            missing_metadata.append(label)
+
+    if container_fields.get("status") in {"supported", "complex"}:
+        found_metadata.append("HEIF container")
+    else:
+        missing_metadata.append("HEIF container")
+
+    return {
+        "is_heif": True,
+        "format": "HEIF/HEIC",
+        "extension": path.suffix.lower(),
+        "container": container_fields,
+        "found_metadata": found_metadata,
+        "missing_metadata": missing_metadata,
+        "date_evidence": {
+            "kind": _date_evidence_kind(date_decision),
+            "source": date_decision.get("source") or "",
+            "field": date_decision.get("field") or "",
+            "value": date_decision.get("value"),
+        },
+        "location_evidence": {
+            "kind": _location_evidence_kind(location_decision),
+            "source": (
+                (location_decision.get("provenance") or {}).get("source", "")
+                if isinstance(location_decision.get("provenance"), dict)
+                else ""
+            ),
+            "latitude": location_decision.get("latitude"),
+            "longitude": location_decision.get("longitude"),
+            "city": location_decision.get("city"),
+            "state": location_decision.get("state"),
+            "country": location_decision.get("country"),
+        },
+    }
+
+
 def _inspect_candidate_item(candidate) -> dict[str, object]:
     return {
         "value": candidate.value.isoformat()
@@ -738,9 +861,16 @@ def _inspect_file(
             }
         )
 
+    heif_audit = _heif_audit_item(
+        path,
+        source_items,
+        date_decision,
+        location_decision,
+    )
     return {
         "path": str(path),
         "sources": source_items,
+        "heif": heif_audit,
         "date": {
             "decision": date_decision,
             "candidates": date_candidates,
@@ -787,6 +917,12 @@ def _write_inspect_report(
                 "date_confidence",
                 "date_kind",
                 "date_conflict",
+                "heif_format",
+                "heif_status",
+                "heif_found_metadata",
+                "heif_missing_metadata",
+                "heif_date_evidence",
+                "heif_location_evidence",
                 "location_status",
                 "location_kind",
                 "latitude",
@@ -800,6 +936,22 @@ def _write_inspect_report(
         for item in files:
             date_decision = item["date"]["decision"]  # type: ignore[index]
             location_decision = item["location"]["decision"]  # type: ignore[index]
+            heif_audit = item.get("heif")
+            heif_container = (
+                heif_audit.get("container", {})
+                if isinstance(heif_audit, dict)
+                else {}
+            )
+            heif_date_evidence = (
+                heif_audit.get("date_evidence", {})
+                if isinstance(heif_audit, dict)
+                else {}
+            )
+            heif_location_evidence = (
+                heif_audit.get("location_evidence", {})
+                if isinstance(heif_audit, dict)
+                else {}
+            )
             writer.writerow(
                 {
                     "path": item["path"],
@@ -815,6 +967,30 @@ def _write_inspect_report(
                     "date_confidence": date_decision["confidence"],
                     "date_kind": date_decision["date_kind"],
                     "date_conflict": date_decision["conflict"],
+                    "heif_format": heif_audit.get("format", "")
+                    if isinstance(heif_audit, dict)
+                    else "",
+                    "heif_status": heif_container.get("status", "")
+                    if isinstance(heif_container, dict)
+                    else "",
+                    "heif_found_metadata": ", ".join(
+                        str(value)
+                        for value in heif_audit.get("found_metadata", [])
+                    )
+                    if isinstance(heif_audit, dict)
+                    else "",
+                    "heif_missing_metadata": ", ".join(
+                        str(value)
+                        for value in heif_audit.get("missing_metadata", [])
+                    )
+                    if isinstance(heif_audit, dict)
+                    else "",
+                    "heif_date_evidence": heif_date_evidence.get("kind", "")
+                    if isinstance(heif_date_evidence, dict)
+                    else "",
+                    "heif_location_evidence": heif_location_evidence.get("kind", "")
+                    if isinstance(heif_location_evidence, dict)
+                    else "",
                     "location_status": location_decision["status"],
                     "location_kind": location_decision["kind"],
                     "latitude": location_decision["latitude"],
@@ -1579,20 +1755,37 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"File: {item['path']}")
             print(f"  Sources: {source_names or 'none'}")
-            for source in item["sources"]:  # type: ignore[index]
-                if source.get("source") != "HEIF container" or not source.get("exists"):
-                    continue
-                fields = source.get("fields", {})
-                if not isinstance(fields, dict):
-                    continue
+            heif_audit = item.get("heif")
+            if isinstance(heif_audit, dict):
+                fields = heif_audit.get("container", {})
+                fields = fields if isinstance(fields, dict) else {}
                 unsupported = fields.get("unsupported_features") or []
                 unsupported_text = ", ".join(str(value) for value in unsupported)
+                found_text = ", ".join(
+                    str(value) for value in heif_audit.get("found_metadata", [])
+                )
+                missing_text = ", ".join(
+                    str(value) for value in heif_audit.get("missing_metadata", [])
+                )
+                date_evidence = heif_audit.get("date_evidence", {})
+                location_evidence = heif_audit.get("location_evidence", {})
                 print(
                     "  HEIF: "
+                    f"format={heif_audit.get('format', 'HEIF/HEIC')} "
                     f"status={fields.get('status', 'unknown')} "
                     f"images={fields.get('image_count', '')} "
                     f"selected_image={fields.get('selected_image_index', '')}"
                     + (f" unsupported={unsupported_text}" if unsupported_text else "")
+                )
+                print(
+                    "  HEIF metadata: "
+                    f"found={found_text or 'none'} "
+                    f"missing={missing_text or 'none'}"
+                )
+                print(
+                    "  HEIF evidence: "
+                    f"date={date_evidence.get('kind', 'missing') if isinstance(date_evidence, dict) else 'missing'} "
+                    f"location={location_evidence.get('kind', 'missing') if isinstance(location_evidence, dict) else 'missing'}"
                 )
             print(
                 "  Date: "

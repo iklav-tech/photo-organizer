@@ -553,6 +553,23 @@ def test_inspect_prints_heif_container_complexity(
             },
         }
     )
+    item["heif"] = {
+        "is_heif": True,
+        "format": "HEIF/HEIC",
+        "extension": ".heic",
+        "container": {
+            "status": "complex",
+            "image_count": 2,
+            "selected_image_index": 1,
+            "unsupported_features": [
+                "multiple images or sequence: only the selected primary image is processed",
+            ],
+        },
+        "found_metadata": ["EXIF", "HEIF container"],
+        "missing_metadata": ["XMP embedded", "XMP sidecar"],
+        "date_evidence": {"kind": "real-metadata"},
+        "location_evidence": {"kind": "inferred"},
+    }
     monkeypatch.setattr(
         "photo_organizer.cli.find_image_files",
         lambda _source, recursive=True: [image],
@@ -567,7 +584,10 @@ def test_inspect_prints_heif_container_complexity(
     assert result == 0
     captured = capsys.readouterr()
     assert "Sources: EXIF, HEIF container" in captured.out
-    assert "HEIF: status=complex images=2 selected_image=1" in captured.out
+    assert "HEIF: format=HEIF/HEIC status=complex images=2 selected_image=1" in captured.out
+    assert "HEIF metadata: found=EXIF, HEIF container" in captured.out
+    assert "missing=XMP embedded, XMP sidecar" in captured.out
+    assert "HEIF evidence: date=real-metadata location=inferred" in captured.out
     assert "multiple images or sequence" in captured.out
 
 
@@ -596,6 +616,83 @@ def test_inspect_writes_json_report(tmp_path: Path, monkeypatch) -> None:
     }
     assert report["files"][0]["date"]["decision"]["source"] == "EXIF"
     assert report["files"][0]["location"]["decision"]["city"] == "Paraty"
+
+
+def test_inspect_report_includes_heif_audit_details(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    image = tmp_path / "a.heic"
+    image.write_text("x")
+    report_path = tmp_path / "metadata-audit.json"
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_exif_metadata",
+        lambda _path: {"DateTimeOriginal": "2020:06:15 10:00:00"},
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_embedded_xmp_metadata",
+        lambda _path: {},
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_xmp_sidecar_metadata",
+        lambda _path: {},
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_iptc_iim_metadata",
+        lambda _path: {},
+    )
+    monkeypatch.setattr("photo_organizer.cli.extract_png_metadata", lambda _path: {})
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_heif_container_metadata",
+        lambda _path: {
+            "status": "supported",
+            "mimetype": "image/heic",
+            "image_count": 1,
+            "selected_image_index": 0,
+        },
+    )
+    monkeypatch.setattr("photo_organizer.cli.extract_camera_profile", lambda _path: {})
+    monkeypatch.setattr(
+        "photo_organizer.cli.resolve_best_available_datetime",
+        lambda *_args, **_kwargs: type(
+            "Resolution",
+            (),
+            {
+                "value": datetime(2020, 6, 15, 10, 0, 0),
+                "provenance": MetadataProvenance(
+                    source="EXIF",
+                    field="DateTimeOriginal",
+                    confidence="high",
+                    raw_value="2020:06:15 10:00:00",
+                ),
+                "date_kind": "captured",
+                "used_fallback": False,
+                "reconciliation": None,
+            },
+        )(),
+    )
+    monkeypatch.setattr("photo_organizer.cli.extract_gps_coordinates", lambda _path: None)
+    monkeypatch.setattr(
+        "photo_organizer.cli.extract_external_location_manifest",
+        lambda _path: None,
+    )
+    monkeypatch.setattr("photo_organizer.cli.extract_xmp_textual_location", lambda _path: None)
+    monkeypatch.setattr("photo_organizer.cli.extract_iptc_iim_location", lambda _path: None)
+    monkeypatch.setattr("photo_organizer.cli.infer_location_from_folder", lambda _path: None)
+    monkeypatch.setattr("photo_organizer.cli.infer_location_from_batch", lambda _path: None)
+
+    result = main(["inspect", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    audit = report["files"][0]["heif"]
+    assert audit["format"] == "HEIF/HEIC"
+    assert audit["container"]["status"] == "supported"
+    assert audit["found_metadata"] == ["EXIF", "HEIF container"]
+    assert audit["missing_metadata"] == ["XMP embedded", "XMP sidecar"]
+    assert audit["date_evidence"]["kind"] == "real-metadata"
+    assert audit["location_evidence"]["kind"] == "missing"
 
 
 def test_inspect_writes_csv_report(tmp_path: Path, monkeypatch) -> None:
@@ -636,6 +733,8 @@ def test_inspect_accepts_heic_files_with_filesystem_fallback(tmp_path: Path) -> 
     assert report["summary"]["inspected_files"] == 1
     assert report["files"][0]["path"] == str(image)
     assert report["files"][0]["date"]["decision"]["source"] == "filesystem"
+    assert report["files"][0]["heif"]["format"] == "HEIF/HEIC"
+    assert report["files"][0]["heif"]["date_evidence"]["kind"] == "inferred-or-fallback"
 
 
 def test_inspect_rejects_unknown_report_extension(

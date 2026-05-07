@@ -781,7 +781,11 @@ photo-organizer audit-metadata ~/Photos --report metadata-audit.csv
 
 The inspect command is read-only. It lists available metadata sources per file
 and shows the final date and location decisions that would drive organization.
-Reports can be exported as JSON or CSV.
+For HEIC/HEIF files, `inspect` also emits a `HEIF container` source and a
+dedicated `heif` audit block in JSON reports with the detected format,
+container status, selected primary image, metadata found/missing, and whether
+the chosen date/location came from real embedded metadata/GPS or from
+fallback/inference. Reports can be exported as JSON or CSV.
 
 ### Example: explain decision trails
 
