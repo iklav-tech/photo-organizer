@@ -80,6 +80,105 @@ Alternative dependency installation:
 pip install -r requirements.txt
 ```
 
+### HEIC/HEIF support
+
+HEIC/HEIF support is enabled by installing the project dependencies, because
+`pillow-heif` is listed in both `pyproject.toml` and `requirements.txt`:
+
+```bash
+pip install -e .
+# or
+pip install -r requirements.txt
+```
+
+`pillow-heif` uses the native `libheif` stack underneath. On many common Linux,
+macOS and Windows Python environments, the wheel may already include the native
+bits needed to decode HEIC. If the wheel for your platform does not include
+them, install `libheif` with your operating system package manager and reinstall
+the Python dependencies.
+
+Common native dependency commands:
+
+```bash
+# Debian/Ubuntu
+sudo apt update
+sudo apt install libheif1
+
+# Fedora
+sudo dnf install libheif
+
+# Arch Linux
+sudo pacman -S libheif
+
+# macOS with Homebrew
+brew install libheif
+```
+
+Windows support depends on the `pillow-heif` wheel available for your Python
+version and architecture. Prefer a current 64-bit CPython and install with
+`pip install -e .`. If the wheel cannot load its native backend, use WSL2 with
+the Linux instructions above or install a compatible native `libheif` runtime
+for your environment.
+
+Validate local HEIC support:
+
+```bash
+python -c "import pillow_heif; pillow_heif.register_heif_opener(); print(pillow_heif.__version__)"
+photo-organizer inspect ./Photos --report heic-audit.json
+```
+
+HEIC/HEIF limitations by platform:
+
+- Linux: distribution packages may lag behind recent `libheif` features. Very
+  new iPhone HEIC variants, auxiliary images or sequence features may require a
+  newer distro package or a wheel that bundles a newer native library.
+- macOS: Homebrew installations are usually the simplest path when the wheel
+  cannot load native support. System Preview/Photos support does not guarantee
+  Python `libheif` support.
+- Windows: support is wheel-dependent. Microsoft HEIF/HEVC Store extensions
+  help Windows apps but do not necessarily satisfy Python native library
+  loading for `pillow-heif`.
+
+Current application limitations:
+
+- scan/hash/inspect/organize recognize `.heic`, `.heif` and `.hif`;
+- embedded EXIF/XMP is read only when exposed by `pillow-heif`/`libheif`;
+- `inspect` reports HEIF container details, metadata found/missing and whether
+  chosen date/location values came from real embedded metadata/GPS or from
+  fallback/inference;
+- containers with multiple images, image sequences, thumbnails, auxiliary
+  images or depth images are reported, but only one deterministic primary image
+  is used by the metadata pipeline;
+- optional HEIC preview generation writes JPEG previews only when the backend
+  can decode the source image; preview failures do not stop organization.
+
+#### HEIC troubleshooting
+
+If HEIC files are detected but metadata is missing, first run:
+
+```bash
+photo-organizer --log-level DEBUG inspect ./Photos --report heic-audit.json
+```
+
+Common symptoms and fixes:
+
+- `HEIF backend unavailable`: install project dependencies and the native
+  `libheif` package for your OS, then reinstall with `pip install -e .`.
+- `Failed to read HEIF container` or `Failed to read HEIF metadata`: the file
+  may be corrupt, encrypted, unsupported by the installed `libheif`, or using a
+  newer HEIF feature than the backend exposes. Update `pillow-heif` and
+  `libheif`, then rerun `inspect`.
+- Date falls back to `filesystem:mtime`: the HEIC file had no backend-exposed
+  EXIF/XMP capture date. Check the JSON report's `heif.found_metadata`,
+  `heif.missing_metadata` and `heif.date_evidence` fields.
+- GPS/location is missing or inferred: the file has no backend-exposed GPS
+  metadata, reverse geocoding is disabled, or only textual/folder sidecar
+  location hints were available. Check `heif.location_evidence` and the
+  `location` decision in the report.
+- Tests that generate synthetic HEIC are skipped: the local environment cannot
+  write HEIC through `pillow-heif`/`libheif`; install or update the native
+  backend and rerun `pytest`.
+
 Portuguese summary: Organizador de fotos em Python via linha de comando, com renomeacao e organizacao por data, hora e metadados.
 
 ## About the project
@@ -1015,8 +1114,9 @@ group_id,hash,quantity,role,path
 
 ## Libraries
 
-The project uses mostly Python standard library, plus Pillow for EXIF handling
-and PyYAML for YAML configuration files.
+The project uses mostly Python standard library, plus Pillow for EXIF handling,
+PyYAML for YAML configuration files and `pillow-heif`/`libheif` for HEIC/HEIF
+decoding.
 
 ### Standard library
 
@@ -1035,7 +1135,9 @@ and PyYAML for YAML configuration files.
 
 - `Pillow` for EXIF support;
 - `PyYAML` for YAML configuration support;
-- `pillow-heif` for HEIF/HEIC opening through `libheif`;
+- `pillow-heif` for Python HEIF/HEIC integration;
+- native `libheif` support, provided by the `pillow-heif` wheel or installed
+  through the operating system package manager;
 - `pytest` for development testing.
 
 ## Testing
