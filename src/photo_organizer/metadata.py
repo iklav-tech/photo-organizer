@@ -35,7 +35,9 @@ from photo_organizer.constants import (
 from photo_organizer.correction_manifest import CorrectionApplication
 from photo_organizer.heif_backend import (
     HeifBackendError,
+    HeifContainerInfo,
     HeifDependencyError,
+    HeifImageInfo,
     PillowHeifBackend,
 )
 from photo_organizer.text_normalization import normalize_text
@@ -866,6 +868,60 @@ def find_xmp_sidecar_path(path: str | Path) -> Path | None:
     if sidecar_path.is_file():
         return sidecar_path
     return None
+
+
+def _heif_image_info_fields(image: HeifImageInfo) -> dict[str, Any]:
+    return {
+        "index": image.index,
+        "width": image.width,
+        "height": image.height,
+        "mode": image.mode,
+        "primary": image.is_primary,
+        "bit_depth": image.bit_depth,
+        "metadata_count": image.metadata_count,
+        "thumbnail_count": image.thumbnail_count,
+        "auxiliary_count": image.auxiliary_count,
+        "depth_image_count": image.depth_image_count,
+    }
+
+
+def _heif_container_info_fields(container: HeifContainerInfo) -> dict[str, Any]:
+    return {
+        "mimetype": container.mimetype,
+        "image_count": container.image_count,
+        "primary_index": container.primary_index,
+        "selected_image_index": container.selected_image_index,
+        "is_complex": container.is_complex,
+        "unsupported_features": list(container.unsupported_features),
+        "warnings": list(container.warnings),
+        "images": [_heif_image_info_fields(image) for image in container.images],
+    }
+
+
+def extract_heif_container_metadata(path: str | Path) -> dict[str, Any]:
+    """Describe HEIF/HEIC container structure exposed by the backend."""
+    file_path = Path(path)
+    if file_path.suffix.lower() not in HEIF_IMAGE_FILE_EXTENSIONS:
+        return {}
+
+    try:
+        container = PillowHeifBackend().read_container_info(file_path)
+    except HeifDependencyError as exc:
+        logger.warning("HEIF backend unavailable for file=%s: %s", file_path, exc)
+        return {
+            "status": "unsupported",
+            "error": str(exc),
+        }
+    except HeifBackendError as exc:
+        logger.warning("Failed to read HEIF container for file=%s error=%s", file_path, exc)
+        return {
+            "status": "error",
+            "error": str(exc),
+        }
+
+    fields = _heif_container_info_fields(container)
+    fields["status"] = "complex" if container.is_complex else "supported"
+    return fields
 
 
 def extract_embedded_xmp_metadata(path: str | Path) -> dict[str, Any]:

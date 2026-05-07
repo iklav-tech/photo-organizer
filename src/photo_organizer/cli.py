@@ -34,6 +34,7 @@ from photo_organizer.metadata import (
     extract_camera_profile,
     extract_embedded_xmp_metadata,
     extract_exif_metadata,
+    extract_heif_container_metadata,
     extract_external_location_manifest,
     extract_gps_coordinates,
     extract_iptc_iim_location,
@@ -637,6 +638,7 @@ def _inspect_file(
     xmp_sidecar_fields = extract_xmp_sidecar_metadata(path)
     iptc_fields = extract_iptc_iim_metadata(path)
     png_fields = extract_png_metadata(path)
+    heif_container_fields = extract_heif_container_metadata(path)
     camera_profile = extract_camera_profile(path)
     correction = correction_for_file(
         correction_manifest,
@@ -657,6 +659,7 @@ def _inspect_file(
         _inspect_source_item("XMP sidecar", xmp_sidecar_fields),
         _inspect_source_item("IPTC-IIM", iptc_fields),
         _inspect_source_item("PNG metadata", png_fields),
+        _inspect_source_item("HEIF container", heif_container_fields),
         _inspect_source_item("Camera profile", camera_profile),
     ]
 
@@ -1576,6 +1579,21 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"File: {item['path']}")
             print(f"  Sources: {source_names or 'none'}")
+            for source in item["sources"]:  # type: ignore[index]
+                if source.get("source") != "HEIF container" or not source.get("exists"):
+                    continue
+                fields = source.get("fields", {})
+                if not isinstance(fields, dict):
+                    continue
+                unsupported = fields.get("unsupported_features") or []
+                unsupported_text = ", ".join(str(value) for value in unsupported)
+                print(
+                    "  HEIF: "
+                    f"status={fields.get('status', 'unknown')} "
+                    f"images={fields.get('image_count', '')} "
+                    f"selected_image={fields.get('selected_image_index', '')}"
+                    + (f" unsupported={unsupported_text}" if unsupported_text else "")
+                )
             print(
                 "  Date: "
                 f"{date_decision['status']} "

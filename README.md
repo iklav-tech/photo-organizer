@@ -367,6 +367,13 @@ report data.
   fields are read when present. If the native backend is unavailable, the app
   logs an orientative warning and falls back to sidecars, heuristics or
   filesystem `mtime`.
+- HEIF containers with multiple images, sequence-like structures, thumbnails,
+  auxiliary images or depth images are reported by `inspect` as a `HEIF
+  container` metadata source. The app deterministically selects one primary
+  image for metadata: backend `primary` flag, then backend `primary_index`,
+  then image index `0` with a warning. Non-primary images and auxiliary
+  structures are reported clearly and are not extracted by the current
+  pipeline.
 - WEBP and BMP are recognized as image files for scanning/hashing, but embedded
   metadata is not read from them; date organization falls back to heuristics or
   filesystem `mtime`.

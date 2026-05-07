@@ -986,6 +986,44 @@ def test_extract_xmp_metadata_reads_heif_backend_xmp(
     assert provenance.source == "XMP"
 
 
+def test_extract_heif_container_metadata_reports_complex_structure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from photo_organizer.heif_backend import HeifContainerInfo, HeifImageInfo
+
+    file_path = tmp_path / "image.heic"
+    file_path.write_text("x")
+    container = HeifContainerInfo(
+        mimetype="image/heic",
+        image_count=2,
+        primary_index=1,
+        selected_image_index=1,
+        images=(
+            HeifImageInfo(index=0, width=128, height=128),
+            HeifImageInfo(index=1, width=4000, height=3000, is_primary=True),
+        ),
+        unsupported_features=(
+            "multiple images or sequence: only the selected primary image is processed",
+        ),
+    )
+    monkeypatch.setattr(
+        metadata.PillowHeifBackend,
+        "read_container_info",
+        lambda _self, _path: container,
+    )
+
+    result = metadata.extract_heif_container_metadata(file_path)
+
+    assert result["status"] == "complex"
+    assert result["image_count"] == 2
+    assert result["selected_image_index"] == 1
+    assert result["unsupported_features"] == [
+        "multiple images or sequence: only the selected primary image is processed",
+    ]
+    assert result["images"][1]["primary"] is True
+
+
 def test_extract_exif_metadata_handles_read_exceptions_safely(
     tmp_path: Path, monkeypatch
 ) -> None:

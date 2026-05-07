@@ -531,6 +531,46 @@ def test_inspect_prints_sources_and_final_decisions(
     assert "Location: inferred Paraty, RJ, Brasil" in captured.out
 
 
+def test_inspect_prints_heif_container_complexity(
+    tmp_path: Path,
+    monkeypatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    image = tmp_path / "a.heic"
+    image.write_text("x")
+    item = _inspect_item(image)
+    item["sources"].append(  # type: ignore[index]
+        {
+            "source": "HEIF container",
+            "exists": True,
+            "fields": {
+                "status": "complex",
+                "image_count": 2,
+                "selected_image_index": 1,
+                "unsupported_features": [
+                    "multiple images or sequence: only the selected primary image is processed",
+                ],
+            },
+        }
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: item,
+    )
+
+    result = main(["inspect", str(tmp_path)])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "Sources: EXIF, HEIF container" in captured.out
+    assert "HEIF: status=complex images=2 selected_image=1" in captured.out
+    assert "multiple images or sequence" in captured.out
+
+
 def test_inspect_writes_json_report(tmp_path: Path, monkeypatch) -> None:
     image = tmp_path / "a.jpg"
     image.write_text("x")
