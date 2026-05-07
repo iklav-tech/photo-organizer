@@ -169,6 +169,65 @@ def test_organize_accepts_name_pattern_from_cli(monkeypatch) -> None:
     assert captured["naming_pattern"] == "{date:%Y%m%d}_{stem}{ext}"
 
 
+def test_organize_accepts_heic_preview_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: [],
+    )
+
+    def fake_apply(_operations, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--heic-preview",
+    ])
+
+    assert result == 0
+    assert captured["heic_preview"] is True
+
+
+def test_organize_accepts_heic_preview_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "preview": {"heic": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: [],
+    )
+
+    def fake_apply(_operations, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured["heic_preview"] is True
+
+
 def test_organize_accepts_reconciliation_policy_from_cli(monkeypatch) -> None:
     captured = {}
 

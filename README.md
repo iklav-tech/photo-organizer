@@ -133,6 +133,7 @@ Example use cases:
 - `photo-organizer organize SOURCE --output Organized --name-pattern "{date:%Y%m%d}_{stem}{ext}"`
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
 - `photo-organizer organize SOURCE --output Organized --correction-manifest corrections.yaml`
+- `photo-organizer organize SOURCE --output Organized --heic-preview`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters, invalid report
@@ -197,6 +198,16 @@ EXIF from that format.
   `precedence`, `newest`, `oldest` or `filesystem` policy;
 - missing GPS data handled safely without interrupting the run;
 - reverse geocoding failures are treated as unresolved location data.
+
+### HEIC preview behavior
+
+- `organize --heic-preview` generates optional JPEG previews for HEIC/HEIF
+  files after the main copy or move succeeds;
+- previews are written next to the organized file under a `.previews` directory;
+- preview generation uses the optional HEIF backend and only runs when enabled;
+- preview failures are logged as warnings and do not make the file organization
+  fail;
+- config files can enable the same feature with `preview.heic: true`.
 
 ### Metadata precedence and compatibility matrix
 

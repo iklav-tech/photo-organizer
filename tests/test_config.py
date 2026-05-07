@@ -28,6 +28,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "correction_manifest": "corrections.csv",
                     "correction_priority": "metadata",
                 },
+                "preview": {"heic": True},
             }
         ),
         encoding="utf-8",
@@ -48,6 +49,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.location_inference is False
     assert config.correction_manifest == "corrections.csv"
     assert config.correction_priority == "metadata"
+    assert config.heic_preview is True
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
@@ -177,3 +179,16 @@ def test_load_organization_config_accepts_day_clock_offset(tmp_path: Path) -> No
     config = load_organization_config(config_path)
 
     assert config.clock_offset == "-1d"
+
+
+def test_load_organization_config_rejects_invalid_heic_preview(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"preview": {"heic": "yes"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="preview.heic"):
+        load_organization_config(config_path)

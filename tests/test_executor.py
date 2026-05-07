@@ -1131,6 +1131,64 @@ def test_apply_operations_copy_creates_missing_destination_directories(
     assert logs == [f"[INFO] COPY {source} -> {destination}"]
 
 
+def test_apply_operations_generates_heic_preview_when_enabled(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "source.heic"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "source.heic"
+    generated = {}
+
+    def fake_generate(source_path, preview_path):
+        generated["source"] = source_path
+        generated["preview"] = preview_path
+        preview_path.parent.mkdir(parents=True, exist_ok=True)
+        preview_path.write_text("preview")
+        return preview_path
+
+    monkeypatch.setattr("photo_organizer.executor.generate_heic_preview", fake_generate)
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        dry_run=False,
+        heic_preview=True,
+    )
+
+    assert destination.exists()
+    assert generated["source"] == destination
+    assert generated["preview"] == tmp_path / "out" / ".previews" / "source.jpg"
+    assert generated["preview"].read_text() == "preview"
+    assert logs == [f"[INFO] COPY {source} -> {destination}"]
+
+
+def test_apply_operations_keeps_success_when_heic_preview_fails(
+    tmp_path: Path,
+    monkeypatch,
+    caplog,
+) -> None:
+    source = tmp_path / "source.heic"
+    source.write_text("image-data")
+    destination = tmp_path / "out" / "source.heic"
+
+    def raise_preview(_source_path, _preview_path):
+        raise RuntimeError("decoder unavailable")
+
+    monkeypatch.setattr("photo_organizer.executor.generate_heic_preview", raise_preview)
+
+    with caplog.at_level(logging.WARNING):
+        logs = apply_operations(
+            [FileOperation(source=source, destination=destination, mode="copy")],
+            dry_run=False,
+            heic_preview=True,
+        )
+
+    assert destination.exists()
+    assert source.exists()
+    assert "decoder unavailable" in caplog.text
+    assert logs == [f"[INFO] COPY {source} -> {destination}"]
+
+
 def test_apply_operations_is_idempotent_when_destination_directory_exists(
     tmp_path: Path,
 ) -> None:

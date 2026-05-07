@@ -1280,6 +1280,20 @@ def build_parser() -> argparse.ArgumentParser:
             "Per-file offsets in a correction manifest take precedence."
         ),
     )
+    preview_group = execution_group.add_mutually_exclusive_group()
+    preview_group.add_argument(
+        "--heic-preview",
+        action="store_true",
+        dest="heic_preview",
+        help="Generate optional JPEG previews for HEIC/HEIF files after organizing.",
+    )
+    preview_group.add_argument(
+        "--no-heic-preview",
+        action="store_false",
+        dest="heic_preview",
+        help="Disable optional HEIC/HEIF preview generation.",
+    )
+    organize_parser.set_defaults(heic_preview=None)
     heuristics_group = execution_group.add_mutually_exclusive_group()
     heuristics_group.add_argument(
         "--date-heuristics",
@@ -1697,6 +1711,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.clock_offset is not None
             else None
         )
+        heic_preview = (
+            args.heic_preview
+            if args.heic_preview is not None
+            else config.heic_preview
+            if config is not None and config.heic_preview is not None
+            else False
+        )
 
         if not output:
             parser.error(
@@ -1821,7 +1842,11 @@ def main(argv: list[str] | None = None) -> int:
         if dry_run:
             logger.info("DRY-RUN enabled: no files will be changed")
 
-        logs = apply_operations(operations, dry_run=dry_run)
+        logs = apply_operations(
+            operations,
+            dry_run=dry_run,
+            heic_preview=heic_preview,
+        )
         for line in logs:
             if line.startswith("[ERROR]"):
                 logger.error(line)

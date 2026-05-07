@@ -41,6 +41,7 @@ from photo_organizer.planner import (
     build_pattern_destination,
     describe_location_part_normalization,
 )
+from photo_organizer.preview import build_heic_preview_destination, generate_heic_preview
 from photo_organizer.scanner import find_image_files
 from photo_organizer.text_normalization import normalize_text
 
@@ -410,6 +411,7 @@ def plan_organization_operations(
 def apply_operations(
     operations: list[FileOperation],
     dry_run: bool = False,
+    heic_preview: bool = False,
 ) -> list[str]:
     """Apply planned operations or simulate them when dry_run is True.
 
@@ -452,6 +454,27 @@ def apply_operations(
             )
             logs.append(f"[ERROR] {line_suffix} (error: {exc})")
             continue
+
+        if heic_preview:
+            preview_destination = build_heic_preview_destination(destination)
+            try:
+                preview_path = generate_heic_preview(
+                    destination,
+                    preview_destination,
+                )
+                if preview_path is not None:
+                    logger.info(
+                        "HEIC preview generated: source=%s preview=%s",
+                        destination,
+                        preview_path,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "HEIC preview generation failed: source=%s preview=%s error=%s",
+                    destination,
+                    preview_destination,
+                    exc,
+                )
 
         logs.append(f"[INFO] {line_suffix}")
 

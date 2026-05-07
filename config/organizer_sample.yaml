@@ -21,3 +21,8 @@ behavior:
   # For camera-specific offsets, add correction manifest rules with camera,
   # camera_make or camera_model selectors.
   # clock_offset: "+01:00"
+preview:
+  # Generate JPEG previews for HEIC/HEIF files when pillow-heif/libheif can
+  # decode the source image. Preview failures are logged and do not stop copy
+  # or move operations.
+  heic: false

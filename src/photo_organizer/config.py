@@ -35,6 +35,7 @@ class OrganizationConfig:
     correction_manifest: str | None = None
     correction_priority: str | None = None
     clock_offset: str | None = None
+    heic_preview: bool | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -218,6 +219,12 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "clock_offset",
         "behavior.clock_offset",
     )
+    preview = _expect_mapping(config.get("preview", {}), "preview")
+    heic_preview = _optional_bool(
+        preview,
+        "heic",
+        "preview.heic",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -284,4 +291,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         correction_manifest=correction_manifest,
         correction_priority=correction_priority,
         clock_offset=clock_offset,
+        heic_preview=heic_preview,
     )
