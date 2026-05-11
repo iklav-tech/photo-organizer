@@ -16,6 +16,14 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
     (tmp_path / "h.heic").write_text("x")
     (tmp_path / "i.heif").write_text("x")
     (tmp_path / "j.hif").write_text("x")
+    (tmp_path / "k.cr2").write_text("x")
+    (tmp_path / "l.cr3").write_text("x")
+    (tmp_path / "m.crw").write_text("x")
+    (tmp_path / "n.nef").write_text("x")
+    (tmp_path / "o.arw").write_text("x")
+    (tmp_path / "p.rw2").write_text("x")
+    (tmp_path / "q.orf").write_text("x")
+    (tmp_path / "r.raf").write_text("x")
 
     result = find_image_files(tmp_path)
 
@@ -30,6 +38,14 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
         tmp_path / "h.heic",
         tmp_path / "i.heif",
         tmp_path / "j.hif",
+        tmp_path / "k.cr2",
+        tmp_path / "l.cr3",
+        tmp_path / "m.crw",
+        tmp_path / "n.nef",
+        tmp_path / "o.arw",
+        tmp_path / "p.rw2",
+        tmp_path / "q.orf",
+        tmp_path / "r.raf",
     ]
 
 
@@ -61,6 +77,9 @@ def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> 
     (tmp_path / "bitmap.BMP").write_text("x")
     (tmp_path / "heic.HEIC").write_text("x")
     (tmp_path / "heif.HeIf").write_text("x")
+    (tmp_path / "canon.CR3").write_text("x")
+    (tmp_path / "nikon.NEF").write_text("x")
+    (tmp_path / "sony.ArW").write_text("x")
     (tmp_path / "web.WEBP").write_text("x")
     (tmp_path / "ignored.GIF").write_text("x")
 
@@ -68,10 +87,13 @@ def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> 
 
     assert result == [
         tmp_path / "bitmap.BMP",
+        tmp_path / "canon.CR3",
         tmp_path / "heic.HEIC",
         tmp_path / "heif.HeIf",
         tmp_path / "lower.png",
         tmp_path / "mixed.JpEg",
+        tmp_path / "nikon.NEF",
+        tmp_path / "sony.ArW",
         tmp_path / "upper.JPG",
         tmp_path / "web.WEBP",
     ]

@@ -840,14 +840,15 @@ def test_extract_exif_metadata_returns_empty_when_no_exif(
     assert "Fatal EXIF read error" not in caplog.text
 
 
+@pytest.mark.parametrize("filename", ["image.bmp", "image.cr3"])
 def test_extract_exif_metadata_skips_formats_without_real_exif_support(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, filename: str
 ) -> None:
-    file_path = tmp_path / "image.bmp"
+    file_path = tmp_path / filename
     file_path.write_text("x")
 
     def fail_if_opened(_path):
-        raise AssertionError("BMP should not be opened for EXIF extraction")
+        raise AssertionError("File should not be opened for EXIF extraction")
 
     fake_image_module = types.SimpleNamespace(open=fail_if_opened)
     fake_exif_tags_module = types.SimpleNamespace(TAGS={})

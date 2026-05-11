@@ -43,6 +43,8 @@ def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
+    assert ".cr2" in captured.out
+    assert ".nef" in captured.out
     assert ".heic" in captured.out
     assert ".heif" in captured.out
     assert "Examples:" in captured.out
@@ -57,6 +59,7 @@ def test_inspect_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out
     assert "SOURCE" in captured.out
     assert "--report" in captured.out
+    assert ".arw" in captured.out
     assert ".heic" in captured.out
     assert "Examples:" in captured.out
 
@@ -71,6 +74,7 @@ def test_dedupe_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "SOURCE" in captured.out
     assert "--read-only" in captured.out
     assert "--report" in captured.out
+    assert ".rw2" in captured.out
     assert "Examples:" in captured.out
 
 
@@ -85,6 +89,8 @@ def test_organize_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--name-pattern" in captured.out
     assert "{date}" in captured.out
     assert "city-state-month" in captured.out
+    assert ".orf" in captured.out
+    assert ".raf" in captured.out
     assert ".heic" in captured.out
     assert "Paths:" in captured.out
     assert "Audit report:" in captured.out

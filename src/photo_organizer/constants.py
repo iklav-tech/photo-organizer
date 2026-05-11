@@ -23,6 +23,12 @@ IMAGE_FORMATS = (
     ImageFormat("WEBP", frozenset({".webp"})),
     ImageFormat("BMP", frozenset({".bmp"})),
     ImageFormat("HEIF", frozenset({".heic", ".heif", ".hif"}), supports_exif=True),
+    ImageFormat("Canon RAW", frozenset({".cr2", ".cr3", ".crw"})),
+    ImageFormat("Nikon RAW", frozenset({".nef"})),
+    ImageFormat("Sony RAW", frozenset({".arw"})),
+    ImageFormat("Panasonic RAW", frozenset({".rw2"})),
+    ImageFormat("Olympus/OM System RAW", frozenset({".orf"})),
+    ImageFormat("Fujifilm RAW", frozenset({".raf"})),
 )
 
 IMAGE_FILE_EXTENSIONS = frozenset(

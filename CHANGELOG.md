@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and follows semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Initial proprietary RAW format recognition scope:
+  - Canon `.cr2`, `.cr3`, `.crw`
+  - Nikon `.nef`
+  - Sony `.arw`
+  - Panasonic `.rw2`
+  - Olympus/OM System `.orf`
+  - Fujifilm `.raf`
+- RAW extensions added to the centralized `IMAGE_FORMATS` list so scanner,
+  hash, dedupe, inspect and organize flows share the same initial scope.
+- README documentation for the first supported RAW wave and its current
+  metadata limitations.
+
+### Changed
+
+- CLI help for scan, dedupe, inspect and organize now reflects the RAW
+  extensions automatically through the centralized supported extension list.
+- Roadmap now distinguishes initial RAW file recognition from future
+  proprietary RAW metadata extraction.
+
+### Behavior guarantees
+
+- RAW extensions in the initial scope are recognized case-insensitively.
+- RAW files are discoverable, hashable and eligible for organization planning.
+- Embedded proprietary RAW metadata is not parsed by the current metadata
+  reader; RAW organization uses sidecars, correction manifests, heuristics or
+  filesystem `mtime` fallback.
+
+### Validation
+
+- Tests cover scanner recognition for the initial RAW extension set.
+- Tests cover case-insensitive scanner matching for RAW extensions.
+- CLI help tests cover RAW extension visibility.
+- Metadata tests cover RAW formats being skipped by the current EXIF reader.
+
 ## [0.6.0] - 2026-05-11
 
 ### Added

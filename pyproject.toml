@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "photo-organizer"
-version = "0.6.0"
+version = "0.7.0"
 description = "CLI tool to organize photos by metadata and date."
 readme = "README.md"
 requires-python = ">=3.10"
