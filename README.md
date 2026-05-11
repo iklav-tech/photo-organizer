@@ -27,8 +27,8 @@ The project includes a tested v0.6.0 CLI workflow:
 - HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
 - HEIC/HEIF EXIF/XMP metadata extraction through `pillow-heif` and native
   `libheif` support;
-- initial proprietary RAW format recognition for Canon, Nikon, Sony,
-  Panasonic, Olympus/OM System and Fujifilm files;
+- initial proprietary RAW format recognition and metadata reading for Canon,
+  Nikon, Sony, Panasonic, Olympus/OM System and Fujifilm files;
 - documented format/source/field compatibility matrix, including HEIF/HEIC;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
@@ -318,10 +318,9 @@ EXIF from that format.
 
 ### Initial RAW format scope
 
-The first RAW support wave is explicit and intentionally limited to file
-recognition. These formats are accepted by scan, hash, dedupe, inspect and
-organize flows, and they appear in CLI help through the centralized supported
-extension list:
+The first RAW support wave is explicit. These formats are accepted by scan,
+hash, dedupe, inspect and organize flows, and they appear in CLI help through
+the centralized supported extension list:
 
 | Manufacturer | Extensions |
 | --- | --- |
@@ -332,10 +331,13 @@ extension list:
 | Olympus/OM System | `.orf` |
 | Fujifilm | `.raf` |
 
-The current application does not parse proprietary RAW embedded metadata yet.
-RAW files can still be discovered, hashed, reported and organized through
-sidecars, correction manifests, filename/folder heuristics or filesystem
-`mtime` fallback.
+The current RAW metadata reader focuses on safe EXIF/TIFF metadata extraction:
+capture date/time, camera manufacturer, camera model and GPS coordinates when
+those tags are exposed by the RAW file. It does not decode RAW image pixels and
+does not aim to be a complete manufacturer-specific RAW parser. When RAW
+metadata is missing or cannot be parsed safely, files can still be discovered,
+hashed, reported and organized through sidecars, correction manifests,
+filename/folder heuristics or filesystem `mtime` fallback.
 
 ### Metadata precedence and compatibility matrix
 
@@ -372,12 +374,12 @@ Current support status:
 | BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | HEIF (`.heic`, `.heif`, `.hif`) | EXIF via HEIF backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed by `pillow-heif`/Pillow | Implemented |
 | HEIF (`.heic`, `.heif`, `.hif`) | XMP via HEIF backend | Embedded metadata | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
-| Canon RAW (`.cr2`, `.cr3`, `.crw`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
-| Nikon RAW (`.nef`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
-| Sony RAW (`.arw`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
-| Panasonic RAW (`.rw2`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
-| Olympus/OM System RAW (`.orf`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
-| Fujifilm RAW (`.raf`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
+| Canon RAW (`.cr2`, `.cr3`, `.crw`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+| Nikon RAW (`.nef`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+| Sony RAW (`.arw`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+| Panasonic RAW (`.rw2`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+| Olympus/OM System RAW (`.orf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+| Fujifilm RAW (`.raf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
 
 Source classes used in reports and explanations:
 
@@ -494,8 +496,9 @@ report data.
 
 - Proprietary RAW formats in the initial scope (`.cr2`, `.cr3`, `.crw`, `.nef`,
   `.arw`, `.rw2`, `.orf`, `.raf`) are recognized by scanner/hash/inspect/
-  organize flows, but embedded RAW metadata is not parsed by the current
-  metadata reader.
+  organize flows. The current RAW backend reads TIFF-style EXIF metadata for
+  capture date/time, camera make/model and GPS when available, but it is not a
+  full manufacturer-specific RAW decoder.
 - HEIF/HEIC containers (`.heic`, `.heif`, `.hif`) are detected and can enter
   scan/hash/inspect/organize flows. Embedded HEIF EXIF/XMP metadata uses
   `pillow-heif` and native `libheif` support. Date/time, orientation and GPS
@@ -511,9 +514,8 @@ report data.
   structures are reported clearly and are not extracted by the current
   pipeline.
 - WEBP and BMP are recognized as image files for scanning/hashing, but embedded
-  metadata is not read from them; the same fallback behavior applies to
-  recognized RAW formats. Date organization falls back to heuristics or
-  filesystem `mtime`.
+  metadata is not read from them. RAW files with missing or unsupported metadata
+  fall back to sidecars, correction manifests, heuristics or filesystem `mtime`.
 - The reader depends on Pillow for EXIF/TIFF/eXIf extraction. Tags not exposed
   by Pillow or malformed IFDs may be unavailable, although known date/GPS tags
   are recovered when possible.
@@ -725,6 +727,7 @@ photo-organizer/
       metadata.py
       hashing.py
       preview.py
+      raw_backend.py
       text_normalization.py
       naming.py
       planner.py
@@ -770,6 +773,8 @@ photo-organizer/
 - `planner.py`: destination folder planning by date, location and custom patterns;
 - `executor.py`: operation planning and execution/simulation;
 - `preview.py`: optional JPEG preview generation for organized HEIC/HEIF files;
+- `raw_backend.py`: safe TIFF-style EXIF metadata reader for proprietary RAW
+  files in the initial RAW scope;
 - `text_normalization.py`: Unicode/path-safe text normalization and
   report-friendly normalization observations;
 - `logging_config.py`: logging setup and level control;
@@ -1617,11 +1622,13 @@ metadata workflow.
   Sony ARW, Panasonic RW2, Olympus/OM System ORF and Fujifilm RAF;
 - scanner, hash, dedupe, inspect and organize flows recognize the initial RAW
   extension set through `IMAGE_FORMATS`;
+- initial RAW metadata backend implemented for TIFF-style EXIF capture date,
+  camera make/model and GPS extraction;
 - support for more media types (including videos);
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections;
 - richer report analytics;
-- proprietary RAW metadata extraction support;
+- broader proprietary RAW metadata extraction support;
 - evaluate manufacturer-specific metadata behavior for Canon CR2/CR3/CRW,
   Nikon NEF, Sony ARW, Panasonic RW2, Olympus/OM System ORF and Fujifilm RAF;
 - investigate ExifTool integration for broad metadata extraction across RAW

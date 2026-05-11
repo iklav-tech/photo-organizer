@@ -17,6 +17,11 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - Fujifilm `.raf`
 - RAW extensions added to the centralized `IMAGE_FORMATS` list so scanner,
   hash, dedupe, inspect and organize flows share the same initial scope.
+- RAW metadata backend for safe TIFF-style EXIF extraction:
+  - capture date/time
+  - camera manufacturer
+  - camera model
+  - GPS coordinates
 - README documentation for the first supported RAW wave and its current
   metadata limitations.
 
@@ -25,22 +30,28 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - CLI help for scan, dedupe, inspect and organize now reflects the RAW
   extensions automatically through the centralized supported extension list.
 - Roadmap now distinguishes initial RAW file recognition from future
-  proprietary RAW metadata extraction.
+  broader proprietary RAW metadata extraction.
+- Date resolution, GPS extraction and camera-profile matching can use RAW
+  EXIF/TIFF metadata when available.
 
 ### Behavior guarantees
 
 - RAW extensions in the initial scope are recognized case-insensitively.
 - RAW files are discoverable, hashable and eligible for organization planning.
-- Embedded proprietary RAW metadata is not parsed by the current metadata
-  reader; RAW organization uses sidecars, correction manifests, heuristics or
-  filesystem `mtime` fallback.
+- RAW parsing failures are handled per file and do not stop the full batch.
+- When TIFF-style EXIF metadata is available, RAW files can provide capture
+  date/time, camera make/model and GPS.
+- RAW files with missing or unsupported embedded metadata can still use
+  sidecars, correction manifests, heuristics or filesystem `mtime` fallback.
 
 ### Validation
 
 - Tests cover scanner recognition for the initial RAW extension set.
 - Tests cover case-insensitive scanner matching for RAW extensions.
 - CLI help tests cover RAW extension visibility.
-- Metadata tests cover RAW formats being skipped by the current EXIF reader.
+- Metadata tests cover RAW capture date/time, camera make/model and GPS
+  extraction.
+- Metadata tests cover safe handling of malformed RAW files.
 
 ## [0.6.0] - 2026-05-11
 

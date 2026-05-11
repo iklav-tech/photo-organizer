@@ -31,6 +31,7 @@ from photo_organizer.constants import (
     EXIF_IMAGE_FILE_EXTENSIONS,
     HEIF_IMAGE_FILE_EXTENSIONS,
     IMAGE_FILE_EXTENSIONS,
+    RAW_IMAGE_FILE_EXTENSIONS,
 )
 from photo_organizer.correction_manifest import CorrectionApplication
 from photo_organizer.heif_backend import (
@@ -40,6 +41,7 @@ from photo_organizer.heif_backend import (
     HeifImageInfo,
     PillowHeifBackend,
 )
+from photo_organizer.raw_backend import RawMetadataError, TiffRawMetadataBackend
 from photo_organizer.text_normalization import normalize_text
 
 
@@ -1965,6 +1967,9 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         )
         return {}
 
+    if file_path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS:
+        return _extract_raw_exif_metadata(file_path)
+
     try:
         from PIL import ExifTags, Image
     except ImportError:
@@ -2031,6 +2036,32 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
         fields["GPSLongitudeDecimal"] = gps_coordinates.longitude
 
     return fields
+
+
+def _extract_raw_exif_metadata(file_path: Path) -> dict[str, Any]:
+    """Extract EXIF-compatible metadata from a proprietary RAW file."""
+    try:
+        fields = TiffRawMetadataBackend().read_metadata(file_path).fields
+    except RawMetadataError as exc:
+        logger.warning("Failed to read RAW metadata for file=%s error=%s", file_path, exc)
+        return {}
+
+    normalized_fields: dict[str, Any] = {}
+    for key, value in fields.items():
+        if value in (None, {}, ""):
+            continue
+        if isinstance(value, (str, bytes)):
+            value = normalize_text(value).value
+        normalized_fields[key] = value
+
+    gps_coordinates = _extract_gps_coordinates_from_fields(normalized_fields)
+    if gps_coordinates is not None:
+        normalized_fields["GPSLatitudeDecimal"] = gps_coordinates.latitude
+        normalized_fields["GPSLongitudeDecimal"] = gps_coordinates.longitude
+
+    if not normalized_fields:
+        logger.debug("RAW metadata absent for file=%s", file_path)
+    return normalized_fields
 
 
 def _metadata_text(value: Any) -> str | None:

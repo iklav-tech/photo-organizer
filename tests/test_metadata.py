@@ -1,6 +1,7 @@
 import binascii
 from datetime import datetime
 from pathlib import Path
+import struct
 import zlib
 import sys
 import types
@@ -47,6 +48,89 @@ def _minimal_png_with_chunks(*chunks: tuple[bytes, bytes]) -> bytes:
     png += _png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
     png += _png_chunk(b"IEND", b"")
     return png
+
+
+def _write_tiff_entry(
+    data: bytearray,
+    entry_offset: int,
+    tag: int,
+    type_id: int,
+    count: int,
+    value_or_offset: int,
+) -> None:
+    struct.pack_into("<HHII", data, entry_offset, tag, type_id, count, value_or_offset)
+
+
+def _append_tiff_ascii(data: bytearray, value: str) -> tuple[int, int]:
+    raw = value.encode("utf-8") + b"\x00"
+    offset = len(data)
+    data.extend(raw)
+    return offset, len(raw)
+
+
+def _append_tiff_rationals(
+    data: bytearray,
+    values: tuple[tuple[int, int], ...],
+) -> tuple[int, int]:
+    offset = len(data)
+    for numerator, denominator in values:
+        data.extend(struct.pack("<II", numerator, denominator))
+    return offset, len(values)
+
+
+def _minimal_raw_tiff_bytes() -> bytes:
+    data = bytearray(b"II*\x00\x08\x00\x00\x00")
+
+    main_ifd_offset = 8
+    main_entries = 5
+    main_ifd_size = 2 + main_entries * 12 + 4
+    data.extend(b"\x00" * main_ifd_size)
+    struct.pack_into("<H", data, main_ifd_offset, main_entries)
+
+    make_offset, make_count = _append_tiff_ascii(data, "Canon")
+    model_offset, model_count = _append_tiff_ascii(data, "EOS 5D")
+    datetime_offset, datetime_count = _append_tiff_ascii(data, "2024:01:02 03:04:05")
+
+    exif_ifd_offset = len(data)
+    exif_entries = 1
+    exif_ifd_size = 2 + exif_entries * 12 + 4
+    data.extend(b"\x00" * exif_ifd_size)
+    struct.pack_into("<H", data, exif_ifd_offset, exif_entries)
+    original_offset, original_count = _append_tiff_ascii(data, "2024:05:06 07:08:09")
+    _write_tiff_entry(
+        data,
+        exif_ifd_offset + 2,
+        36867,
+        2,
+        original_count,
+        original_offset,
+    )
+
+    gps_ifd_offset = len(data)
+    gps_entries = 4
+    gps_ifd_size = 2 + gps_entries * 12 + 4
+    data.extend(b"\x00" * gps_ifd_size)
+    struct.pack_into("<H", data, gps_ifd_offset, gps_entries)
+    latitude_offset, latitude_count = _append_tiff_rationals(
+        data,
+        ((23, 1), (30, 1), (0, 1)),
+    )
+    longitude_offset, longitude_count = _append_tiff_rationals(
+        data,
+        ((46, 1), (37, 1), (30, 1)),
+    )
+    _write_tiff_entry(data, gps_ifd_offset + 2, 1, 2, 2, ord("S"))
+    _write_tiff_entry(data, gps_ifd_offset + 14, 2, 5, latitude_count, latitude_offset)
+    _write_tiff_entry(data, gps_ifd_offset + 26, 3, 2, 2, ord("W"))
+    _write_tiff_entry(data, gps_ifd_offset + 38, 4, 5, longitude_count, longitude_offset)
+
+    _write_tiff_entry(data, main_ifd_offset + 2, 271, 2, make_count, make_offset)
+    _write_tiff_entry(data, main_ifd_offset + 14, 272, 2, model_count, model_offset)
+    _write_tiff_entry(data, main_ifd_offset + 26, 306, 2, datetime_count, datetime_offset)
+    _write_tiff_entry(data, main_ifd_offset + 38, 34665, 4, 1, exif_ifd_offset)
+    _write_tiff_entry(data, main_ifd_offset + 50, 34853, 4, 1, gps_ifd_offset)
+
+    return bytes(data)
 
 
 def test_metadata_precedence_policy_covers_required_fields() -> None:
@@ -840,11 +924,10 @@ def test_extract_exif_metadata_returns_empty_when_no_exif(
     assert "Fatal EXIF read error" not in caplog.text
 
 
-@pytest.mark.parametrize("filename", ["image.bmp", "image.cr3"])
 def test_extract_exif_metadata_skips_formats_without_real_exif_support(
-    tmp_path: Path, monkeypatch, filename: str
+    tmp_path: Path, monkeypatch
 ) -> None:
-    file_path = tmp_path / filename
+    file_path = tmp_path / "image.bmp"
     file_path.write_text("x")
 
     def fail_if_opened(_path):
@@ -862,6 +945,83 @@ def test_extract_exif_metadata_skips_formats_without_real_exif_support(
     result = metadata.extract_exif_metadata(file_path)
 
     assert result == {}
+
+
+def test_extract_exif_metadata_reads_raw_tiff_capture_camera_and_gps(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.cr2"
+    file_path.write_bytes(_minimal_raw_tiff_bytes())
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["Make"] == "Canon"
+    assert result["Model"] == "EOS 5D"
+    assert result["DateTimeOriginal"] == "2024:05:06 07:08:09"
+    assert result["DateTime"] == "2024:01:02 03:04:05"
+    assert result["GPSLatitudeDecimal"] == -23.5
+    assert result["GPSLongitudeDecimal"] == -46.625
+
+
+def test_resolve_best_available_datetime_uses_raw_capture_date(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.nef"
+    file_path.write_bytes(_minimal_raw_tiff_bytes())
+
+    resolution = metadata.resolve_best_available_datetime(
+        file_path,
+        date_heuristics=False,
+    )
+
+    assert resolution.value == datetime(2024, 5, 6, 7, 8, 9)
+    assert resolution.provenance is not None
+    assert resolution.provenance.source == "EXIF"
+    assert resolution.provenance.field == "DateTimeOriginal"
+
+
+def test_extract_gps_coordinates_reads_raw_gps(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.arw"
+    file_path.write_bytes(_minimal_raw_tiff_bytes())
+
+    result = metadata.extract_gps_coordinates(file_path)
+
+    assert result is not None
+    assert result.latitude == -23.5
+    assert result.longitude == -46.625
+    assert result.provenance is not None
+    assert result.provenance.source == "EXIF"
+
+
+def test_extract_camera_profile_reads_raw_make_and_model(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.rw2"
+    file_path.write_bytes(_minimal_raw_tiff_bytes())
+
+    result = metadata.extract_camera_profile(file_path)
+
+    assert result == {
+        "make": "Canon",
+        "model": "EOS 5D",
+        "profile": "Canon EOS 5D",
+    }
+
+
+def test_extract_exif_metadata_handles_malformed_raw_safely(
+    tmp_path: Path,
+    caplog,
+) -> None:
+    file_path = tmp_path / "broken.orf"
+    file_path.write_bytes(b"not a raw file")
+
+    with caplog.at_level(logging.WARNING):
+        result = metadata.extract_exif_metadata(file_path)
+
+    assert result == {}
+    assert "Failed to read RAW metadata" in caplog.text
 
 
 def test_extract_exif_metadata_warns_when_heif_backend_is_missing(
