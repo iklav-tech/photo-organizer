@@ -4,6 +4,129 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and follows semantic versioning.
 
+## [0.6.0] - 2026-05-11
+
+### Added
+
+- HEIC/HEIF container detection for scan, hash, dedupe, inspect and organize
+  pipelines:
+  - `.heic`
+  - `.heif`
+  - `.hif`
+- HEIF/HEIC metadata backend abstraction:
+  - `photo_organizer.heif_backend.HeifBackend`
+  - `PillowHeifBackend`
+  - raw EXIF/XMP metadata access through `HeifMetadata`
+  - container structure access through `HeifContainerInfo`
+  - clear dependency guidance when `pillow-heif`/`libheif` is unavailable
+- HEIF/HEIC EXIF extraction for backend-exposed:
+  - date/time fields
+  - orientation
+  - camera make/model fields
+  - GPS fields
+- HEIF/HEIC XMP extraction for backend-exposed:
+  - date fields
+  - GPS fields
+  - textual location fields
+- HEIF container audit fields in `inspect` JSON and CSV reports:
+  - format
+  - container status
+  - found metadata
+  - missing metadata
+  - date evidence
+  - location evidence
+- Complex HEIF container reporting for:
+  - multiple images or sequence-like structures
+  - embedded thumbnails
+  - auxiliary images
+  - depth images
+  - selected primary image index
+  - backend selection warnings
+- Optional HEIC/HEIF JPEG preview generation:
+  - `photo-organizer organize SOURCE --output DIR --heic-preview`
+  - `photo-organizer organize SOURCE --output DIR --no-heic-preview`
+  - configuration through `preview.heic`
+  - previews written under `.previews` next to organized HEIC/HEIF files
+- `pillow-heif` added as a project dependency for HEIF/HEIC support.
+- `requirements.txt` added with Python dependencies and native `libheif`
+  installation guidance.
+- Synthetic HEIC corpus fixtures covering:
+  - iPhone-like HEIC with EXIF date and GPS
+  - iPhone-like HEIC with EXIF date and no GPS
+  - HEIC without EXIF
+  - malformed `.HEIC` input
+- Automated tests for:
+  - HEIC extension support
+  - HEIF backend metadata extraction
+  - primary image selection
+  - complex container reporting
+  - HEIC inspect report fields
+  - HEIC filesystem fallback
+  - HEIC organize dry-run planning
+  - optional JPEG preview generation
+
+### Changed
+
+- Supported image formats now include `.heic`, `.heif` and `.hif` in the
+  centralized format list.
+- Scan, hash, dedupe, inspect and organize flows now share HEIC/HEIF extension
+  support.
+- HEIC/HEIF files preserve the original extension in generated destination
+  names.
+- HEIF metadata extraction now uses the same date reconciliation and GPS
+  normalization paths used by JPEG, TIFF and PNG metadata.
+- `inspect` now emits a `HEIF container` metadata source for HEIC/HEIF files.
+- `inspect` output now classifies HEIC date/location evidence as real metadata,
+  real GPS, inferred, missing or fallback.
+- HEIF primary image selection is deterministic:
+  - backend primary flag
+  - backend `primary_index`
+  - image index `0` with a warning
+- README updated to consolidate the delivered v0.6.0 workflow, HEIC/HEIF
+  dependency setup, platform limitations, troubleshooting, compatibility matrix
+  entries, preview behavior, project structure and roadmap.
+
+### Fixed
+
+- Missing HEIF native/backend dependencies now produce a clear warning with
+  installation guidance instead of an opaque decoder failure.
+- HEIF backend read errors are handled per file and do not stop unrelated files
+  from being scanned, audited or organized.
+- HEIC files with missing embedded metadata can fall back to sidecars,
+  heuristics or filesystem `mtime`.
+- Preview generation failures are logged as warnings and do not make the main
+  copy/move operation fail.
+- Malformed `.HEIC` inputs are handled safely during metadata extraction and
+  audit reporting.
+
+### Behavior guarantees in v0.6.0
+
+- `.heic`, `.heif` and `.hif` are supported by scan, hash, dedupe, inspect and
+  organize flows.
+- HEIC/HEIF metadata extraction depends on `pillow-heif` and native `libheif`
+  capability exposed in the local environment.
+- If the HEIF backend cannot expose EXIF/XMP metadata, organization can still
+  use sidecars, correction manifests, heuristics or filesystem `mtime`.
+- Complex HEIF structures are reported, but only one deterministic primary
+  image is used by the metadata pipeline.
+- Optional HEIC previews are generated only when explicitly enabled.
+- Preview failures do not roll back or fail successful organization operations.
+- `inspect` and `explain` remain read-only for HEIC/HEIF files.
+
+### Validation
+
+- Tests cover HEIC/HEIF extension recognition in CLI help, scan and organize
+  paths.
+- Tests cover HEIF backend EXIF date, GPS and XMP extraction.
+- Tests cover HEIF container inspection, complex container feature reporting
+  and primary image selection fallback.
+- Tests cover HEIC-specific `inspect` JSON and CSV report fields.
+- Tests cover filesystem fallback for HEIC files without readable embedded
+  metadata.
+- Tests cover optional preview destination planning and JPEG preview generation.
+- Generated HEIC corpus tests run when the local `pillow-heif`/`libheif` stack
+  can write HEIC files; otherwise they are skipped with an explicit reason.
+
 ## [0.5.0] - 2026-05-05
 
 ### Added
@@ -91,22 +214,6 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - `metadata`
   - `heuristic`
 - Global `--clock-offset` support.
-- HEIC/HEIF container detection for scan, hash, inspect and organize pipelines:
-  - `.heic`
-  - `.heif`
-  - `.hif`
-- HEIF/HEIC metadata backend abstraction:
-  - `photo_organizer.heif_backend.HeifBackend`
-  - `PillowHeifBackend`
-  - raw EXIF/XMP metadata access through `HeifMetadata`
-  - clear dependency guidance when `pillow-heif`/`libheif` is unavailable
-- HEIF/HEIC EXIF extraction for backend-exposed date/time, orientation,
-  camera and GPS fields.
-- HEIF/HEIC XMP extraction for backend-exposed date, GPS and textual location
-  fields.
-- `pillow-heif` added as a project dependency for HEIF/HEIC support.
-- `requirements.txt` added with Python dependencies and native `libheif`
-  installation guidance.
 - Config support for:
   - `behavior.reconciliation_policy`
   - `behavior.date_heuristics`
@@ -151,8 +258,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Location-based organization can infer non-GPS location metadata when
   configured.
 - README updated to consolidate the delivered v0.5.0 workflow, explain
-  reports, compatibility matrix, HEIF backend guidance, known limitations and
-  metadata test corpus.
+  reports, compatibility matrix, known limitations and metadata test corpus.
 - Project structure documentation now includes:
   - `correction_manifest.py`
   - `text_normalization.py`
@@ -165,8 +271,6 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   safely in explain JSON reports.
 - `pytest` and `.venv/bin/python -m pytest` both collect the metadata corpus
   tests correctly.
-- Missing HEIF native/backend dependencies now produce a clear warning with
-  installation guidance instead of an opaque decoder failure.
 - Malformed XMP parse errors are handled without interrupting metadata audits.
 - Missing date metadata can be reported as an expected absence when heuristics
   are disabled.
@@ -187,7 +291,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Inferred dates use low confidence.
 - Files without usable metadata fail clearly when date heuristics are disabled.
 - Unknown IPTC-IIM datasets are ignored safely.
-- WEBP, BMP and HEIF remain supported for scan/hash flows but embedded metadata
+- WEBP and BMP remain supported for scan/hash flows but embedded metadata
   is not read by the current metadata reader.
 
 ### Validation
@@ -201,7 +305,6 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Tests cover XMP embedded metadata, XMP sidecars and sidecar precedence.
 - Tests cover IPTC-IIM date and textual metadata extraction.
 - Tests cover PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata paths.
-- Tests cover HEIF/HEIC backend EXIF date, GPS and XMP extraction.
 - Tests cover missing metadata and disabled date heuristics.
 - Tests cover metadata conflict recording and precedence winners.
 - Tests cover the synthetic legacy metadata corpus and compatibility matrix.
