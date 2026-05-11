@@ -4,7 +4,12 @@ import logging
 import os
 
 from photo_organizer.correction_manifest import CorrectionManifest, CorrectionRule
-from photo_organizer.executor import FileOperation, apply_operations, plan_organization_operations
+from photo_organizer.executor import (
+    FileOperation,
+    apply_operations,
+    find_related_sidecars,
+    plan_organization_operations,
+)
 from photo_organizer.geocoding import ReverseGeocodedLocation
 from photo_organizer.metadata import GPSCoordinates
 from photo_organizer.metadata import DateTimeResolution
@@ -48,6 +53,121 @@ def test_apply_operations_dry_run_copy_does_not_modify_files(tmp_path: Path) -> 
     assert source.exists()
     assert not destination.exists()
     assert logs == [f"[DRY-RUN] COPY {source} -> {destination}"]
+
+
+def test_find_related_sidecars_detects_raw_same_basename_xmp(tmp_path: Path) -> None:
+    raw = tmp_path / "IMG_0001.CR2"
+    sidecar = tmp_path / "IMG_0001.xmp"
+    unrelated = tmp_path / "IMG_0002.xmp"
+    raw.write_text("raw")
+    sidecar.write_text("xmp")
+    unrelated.write_text("other")
+
+    assert find_related_sidecars(raw) == (sidecar,)
+
+
+def test_plan_organization_operations_links_raw_sidecar(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    raw = source_dir / "IMG_0001.cr2"
+    sidecar = source_dir / "IMG_0001.xmp"
+    raw.write_text("raw")
+    sidecar.write_text("xmp")
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p, **_kwargs: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+
+    operations = plan_organization_operations(source_dir, output_dir, mode="copy")
+
+    assert len(operations) == 1
+    assert operations[0].source == raw
+    assert operations[0].related_sidecars == (sidecar,)
+
+
+def test_apply_operations_copies_raw_sidecar_with_destination_basename(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "IMG_0001.cr2"
+    sidecar = tmp_path / "IMG_0001.xmp"
+    raw.write_text("raw")
+    sidecar.write_text("xmp")
+    destination = tmp_path / "out" / "2024-08-15_14-32-09.cr2"
+
+    logs = apply_operations([
+        FileOperation(
+            source=raw,
+            destination=destination,
+            mode="copy",
+            related_sidecars=(sidecar,),
+        )
+    ])
+
+    assert logs == [f"[INFO] COPY {raw} -> {destination}"]
+    assert raw.exists()
+    assert sidecar.exists()
+    assert destination.read_text() == "raw"
+    assert destination.with_suffix(".xmp").read_text() == "xmp"
+
+
+def test_apply_operations_avoids_raw_sidecar_destination_collision(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "IMG_0001.cr2"
+    sidecar = tmp_path / "IMG_0001.xmp"
+    raw.write_text("raw")
+    sidecar.write_text("xmp")
+    destination = tmp_path / "out" / "2024-08-15_14-32-09.cr2"
+    destination.parent.mkdir(parents=True)
+    destination.with_suffix(".xmp").write_text("existing-sidecar")
+
+    logs = apply_operations([
+        FileOperation(
+            source=raw,
+            destination=destination,
+            mode="copy",
+            related_sidecars=(sidecar,),
+        )
+    ])
+
+    resolved_destination = destination.with_name("2024-08-15_14-32-09_01.cr2")
+    assert logs == [f"[INFO] COPY {raw} -> {resolved_destination}"]
+    assert destination.with_suffix(".xmp").read_text() == "existing-sidecar"
+    assert resolved_destination.read_text() == "raw"
+    assert resolved_destination.with_suffix(".xmp").read_text() == "xmp"
+
+
+def test_apply_operations_moves_raw_sidecar_with_destination_basename(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "IMG_0001.nef"
+    sidecar = tmp_path / "IMG_0001.xmp"
+    raw.write_text("raw")
+    sidecar.write_text("xmp")
+    destination = tmp_path / "out" / "2024-08-15_14-32-09.nef"
+
+    logs = apply_operations([
+        FileOperation(
+            source=raw,
+            destination=destination,
+            mode="move",
+            related_sidecars=(sidecar,),
+        )
+    ])
+
+    assert logs == [f"[INFO] MOVE {raw} -> {destination}"]
+    assert not raw.exists()
+    assert not sidecar.exists()
+    assert destination.read_text() == "raw"
+    assert destination.with_suffix(".xmp").read_text() == "xmp"
 
 
 def test_apply_operations_real_and_dry_run_share_same_planned_behavior(

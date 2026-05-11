@@ -344,6 +344,13 @@ metadata is missing or cannot be parsed safely, files can still be discovered,
 hashed, reported and organized through sidecars, correction manifests,
 filename/folder heuristics or filesystem `mtime` fallback.
 
+When a RAW file has a same-basename `.xmp` sidecar, organization treats the
+sidecar as linked data for that RAW file. Copy and move operations apply to both
+files, using the RAW destination basename for the sidecar as well. For example,
+`IMG_0001.cr2` organized as `2024-08-15_14-32-09.cr2` carries
+`IMG_0001.xmp` to `2024-08-15_14-32-09.xmp`. Reports include the sidecar count,
+source path and destination path so the relationship is visible after the run.
+
 ### Metadata precedence and compatibility matrix
 
 When multiple metadata sources can describe the same logical field, the
@@ -676,7 +683,8 @@ date path.
 ### Plan and execution separation
 
 - operations are planned first into an intermediate structure;
-- each plan item contains source, destination, action (`move`/`copy`) and fallback metadata;
+- each plan item contains source, destination, action (`move`/`copy`), fallback
+  metadata and linked RAW sidecars when present;
 - plan can be inspected without execution using `--plan`.
 
 ### Dry-run and operation modes
@@ -687,6 +695,8 @@ date path.
 - `--copy` and `--move` are supported (`move` is default);
 - destination directories are created automatically for real operations;
 - move operations are implemented safely: copy first, then remove source after success.
+- same-basename RAW `.xmp` sidecars are copied or moved with the RAW file and
+  renamed to match the organized RAW basename.
 
 ### Reporting and audit
 
@@ -695,6 +705,8 @@ date path.
 - `--report path.json` exports a structured JSON report;
 - `--report path.csv` exports a CSV report;
 - report rows include source, destination, action, status and observations;
+- report rows include RAW sidecar linkage fields: `sidecar_count`,
+  `sidecar_sources` and `sidecar_destinations`;
 - execution reports include provenance fields for selected date and, when
   location is enabled, GPS/location source, confidence and raw values.
 
@@ -1115,7 +1127,7 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations
 ```
 
 When reverse geocoding is enabled, execution reports also include location

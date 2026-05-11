@@ -13,6 +13,7 @@ from photo_organizer.correction_manifest import (
     CorrectionPriority,
     correction_for_file,
 )
+from photo_organizer.constants import RAW_IMAGE_FILE_EXTENSIONS
 from photo_organizer.geocoding import (
     ReverseGeocodedLocation,
     reverse_geocode_coordinates,
@@ -48,18 +49,66 @@ from photo_organizer.text_normalization import normalize_text
 
 logger = logging.getLogger(__name__)
 
+SIDECAR_EXTENSIONS = frozenset({".xmp"})
 
-def _resolve_available_destination(destination: Path, reserved: set[Path]) -> Path:
-    """Return a destination path that does not overwrite existing or reserved files."""
-    if not destination.exists() and destination not in reserved:
-        return destination
 
-    counter = 1
+def find_related_sidecars(path: str | Path) -> tuple[Path, ...]:
+    """Return same-basename sidecars that should follow a RAW file."""
+    raw_path = Path(path)
+    if raw_path.suffix.lower() not in RAW_IMAGE_FILE_EXTENSIONS:
+        return ()
+    if not raw_path.parent.is_dir():
+        return ()
+
+    sidecars: list[Path] = []
+    try:
+        siblings = list(raw_path.parent.iterdir())
+    except OSError as exc:
+        logger.warning("Failed to inspect RAW sidecars: source=%s error=%s", raw_path, exc)
+        return ()
+
+    for candidate in siblings:
+        if (
+            candidate.is_file()
+            and candidate.stem == raw_path.stem
+            and candidate.suffix.lower() in SIDECAR_EXTENSIONS
+        ):
+            sidecars.append(candidate)
+    return tuple(sorted(sidecars, key=lambda item: str(item)))
+
+
+def _sidecar_destination(primary_destination: Path, sidecar: Path) -> Path:
+    return primary_destination.with_suffix(sidecar.suffix)
+
+
+def _resolve_available_operation_destination(
+    destination: Path,
+    related_sidecars: tuple[Path, ...],
+    reserved: set[Path],
+) -> Path:
+    """Return a destination that also leaves room for linked sidecars."""
+    counter = 0
     while True:
-        candidate = destination.with_name(
-            f"{destination.stem}_{counter:02d}{destination.suffix}"
+        candidate = (
+            destination
+            if counter == 0
+            else destination.with_name(
+                f"{destination.stem}_{counter:02d}{destination.suffix}"
+            )
         )
-        if not candidate.exists() and candidate not in reserved:
+        linked_destinations = {
+            _sidecar_destination(candidate, sidecar)
+            for sidecar in related_sidecars
+        }
+        if (
+            not candidate.exists()
+            and candidate not in reserved
+            and all(
+                not sidecar_destination.exists()
+                and sidecar_destination not in reserved
+                for sidecar_destination in linked_destinations
+            )
+        ):
             return candidate
         counter += 1
 
@@ -105,6 +154,7 @@ class FileOperation:
     organization_fallback: bool = False
     text_normalization_observations: tuple[str, ...] = ()
     correction_manifest: CorrectionApplication | None = None
+    related_sidecars: tuple[Path, ...] = ()
 
 
 def plan_organization_operations(
@@ -385,6 +435,7 @@ def plan_organization_operations(
             continue
 
         destination_file = destination_dir / filename
+        related_sidecars = find_related_sidecars(image_path)
         operations.append(
             FileOperation(
                 source=image_path,
@@ -402,6 +453,7 @@ def plan_organization_operations(
                 organization_fallback=organization_fallback,
                 text_normalization_observations=tuple(text_normalization_observations),
                 correction_manifest=correction,
+                related_sidecars=related_sidecars,
             )
         )
 
@@ -423,11 +475,14 @@ def apply_operations(
 
     for operation in operations:
         action = operation.mode.upper()
-        destination = _resolve_available_destination(
+        destination = _resolve_available_operation_destination(
             operation.destination,
+            operation.related_sidecars,
             reserved_destinations,
         )
         reserved_destinations.add(destination)
+        for sidecar in operation.related_sidecars:
+            reserved_destinations.add(_sidecar_destination(destination, sidecar))
         line_suffix = f"{action} {operation.source} -> {destination}"
 
         if dry_run:
@@ -444,6 +499,12 @@ def apply_operations(
                     operation.source,
                     destination,
                 )
+            for sidecar in operation.related_sidecars:
+                sidecar_destination = _sidecar_destination(destination, sidecar)
+                if operation.mode == "copy":
+                    shutil.copy2(sidecar, sidecar_destination)
+                else:
+                    _move_file_after_successful_copy(sidecar, sidecar_destination)
         except Exception as exc:
             logger.error(
                 "Failed to execute operation: action=%s source=%s destination=%s error=%s",

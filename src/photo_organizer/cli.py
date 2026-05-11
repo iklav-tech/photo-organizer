@@ -153,6 +153,30 @@ def _write_execution_report(
     }
     for operation in operations:
         planned_operation = planned_operation_by_source.get(operation["source"])
+        if planned_operation is not None and planned_operation.related_sidecars:
+            sidecar_destinations = [
+                str(Path(operation["destination"]).with_suffix(sidecar.suffix))
+                for sidecar in planned_operation.related_sidecars
+            ]
+            operation["sidecar_count"] = len(planned_operation.related_sidecars)
+            operation["sidecar_sources"] = "; ".join(
+                str(sidecar) for sidecar in planned_operation.related_sidecars
+            )
+            operation["sidecar_destinations"] = "; ".join(sidecar_destinations)
+            sidecar_note = (
+                "linked sidecars: "
+                f"sources={operation['sidecar_sources']}; "
+                f"destinations={operation['sidecar_destinations']}"
+            )
+            operation["observations"] = (
+                f"{operation['observations']}; {sidecar_note}"
+                if operation["observations"]
+                else sidecar_note
+            )
+        else:
+            operation["sidecar_count"] = 0
+            operation["sidecar_sources"] = ""
+            operation["sidecar_destinations"] = ""
         if (
             planned_operation is not None
             and planned_operation.text_normalization_observations
@@ -281,6 +305,9 @@ def _write_execution_report(
             "date_raw_value",
             "date_kind",
             "event_name",
+            "sidecar_count",
+            "sidecar_sources",
+            "sidecar_destinations",
         ]
         if include_location_fields:
             fieldnames.extend(

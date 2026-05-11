@@ -1495,6 +1495,9 @@ def test_organize_writes_valid_structured_execution_report(
             "date_raw_value": json.dumps(expected_ts),
             "date_kind": "inferred",
             "event_name": "",
+            "sidecar_count": 0,
+            "sidecar_sources": "",
+            "sidecar_destinations": "",
         }
     ]
 
@@ -1549,8 +1552,58 @@ def test_organize_report_includes_error_status_and_observation(
             "date_raw_value": "",
             "date_kind": "captured",
             "event_name": "",
+            "sidecar_count": 0,
+            "sidecar_sources": "",
+            "sidecar_destinations": "",
         }
     ]
+
+
+def test_organize_report_includes_linked_raw_sidecar(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    report_path = tmp_path / "execution.json"
+    planned = [
+        FileOperation(
+            source=Path("input/IMG_0001.cr2"),
+            destination=Path("out/2024-08-15_14-32-09.cr2"),
+            mode="copy",
+            related_sidecars=(Path("input/IMG_0001.xmp"),),
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/IMG_0001.cr2 -> out/2024-08-15_14-32-09.cr2",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    operation = report["operations"][0]
+    assert operation["sidecar_count"] == 1
+    assert operation["sidecar_sources"] == "input/IMG_0001.xmp"
+    assert operation["sidecar_destinations"] == "out/2024-08-15_14-32-09.xmp"
+    assert operation["observations"] == (
+        "linked sidecars: sources=input/IMG_0001.xmp; "
+        "destinations=out/2024-08-15_14-32-09.xmp"
+    )
 
 
 def test_organize_report_includes_text_normalization_observations(
@@ -1985,6 +2038,9 @@ def test_organize_writes_valid_csv_execution_report(
             "date_raw_value": "",
             "date_kind": "captured",
             "event_name": "",
+            "sidecar_count": "0",
+            "sidecar_sources": "",
+            "sidecar_destinations": "",
         },
         {
             "source": "input/bad.jpg",
@@ -1998,6 +2054,9 @@ def test_organize_writes_valid_csv_execution_report(
             "date_raw_value": "",
             "date_kind": "captured",
             "event_name": "",
+            "sidecar_count": "0",
+            "sidecar_sources": "",
+            "sidecar_destinations": "",
         },
     ]
 

@@ -27,6 +27,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - `camera_make`
   - `camera_model`
   - GPS coordinates
+- RAW sidecar organization support for same-basename `.xmp` files.
 - README documentation for the first supported RAW wave and its current
   metadata limitations.
 
@@ -42,6 +43,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   normalized metadata fields instead of source-specific tag names.
 - Equivalent fields from EXIF, XMP sidecars, RAW TIFF-style metadata and common
   vendor aliases are mapped before organization decisions are made.
+- RAW organization planning now links same-basename `.xmp` sidecars to the RAW
+  operation.
+- Execution reports now include `sidecar_count`, `sidecar_sources` and
+  `sidecar_destinations`.
 
 ### Behavior guarantees
 
@@ -54,6 +59,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   `CameraManufacturer`, `tiff:Make` or another supported alias.
 - Original source tags remain available through `MetadataProvenance` for
   inspect, explain and debug output.
+- Same-basename RAW `.xmp` sidecars are copied or moved with the RAW file and
+  renamed to match the organized RAW basename.
+- Sidecar destination collision handling follows the RAW destination suffix so
+  linked files do not overwrite existing files.
 - RAW files with missing or unsupported embedded metadata can still use
   sidecars, correction manifests, heuristics or filesystem `mtime` fallback.
 
@@ -66,6 +75,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   extraction.
 - Metadata tests cover safe handling of malformed RAW files.
 - Metadata tests cover vendor alias normalization and provenance preservation.
+- Tests cover RAW sidecar detection, copy, move and execution report linkage.
 
 ## [0.6.0] - 2026-05-11
 
