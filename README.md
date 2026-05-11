@@ -7,11 +7,11 @@ Repository: https://github.com/iklav-tech/photo-organizer
 ## Changelog
 
 Release history is tracked in [CHANGELOG.md](CHANGELOG.md). This README also
-consolidates the delivered v0.1.0 through v0.5.0 scope below.
+consolidates the delivered v0.1.0 through v0.6.0 scope below.
 
 ## Current status
 
-The project includes a tested v0.5.0 CLI workflow:
+The project includes a tested v0.6.0 CLI workflow:
 
 - CLI with `scan` and `organize` commands;
 - `dedupe` command for read-only duplicate discovery;
@@ -27,7 +27,7 @@ The project includes a tested v0.5.0 CLI workflow:
 - HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
 - HEIC/HEIF EXIF/XMP metadata extraction through `pillow-heif` and native
   `libheif` support;
-- documented format/source/field compatibility matrix;
+- documented format/source/field compatibility matrix, including HEIF/HEIC;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
@@ -59,11 +59,14 @@ The project includes a tested v0.5.0 CLI workflow:
   confidence in JSON;
 - external JSON/YAML organization config with custom naming, destination and
   behavior rules;
+- optional JPEG preview generation for organized HEIC/HEIF files;
 - improved CLI help with examples and grouped arguments;
 - structured logging with configurable log level;
 - friendly error messages for invalid/missing source directory;
 - synthetic legacy metadata corpus covering success, absence and conflict
-  scenarios.
+  scenarios;
+- synthetic HEIC corpus covering iPhone-like EXIF/GPS samples, missing metadata
+  and malformed container behavior when the local HEIF writer is available.
 
 Quick local setup:
 
@@ -265,8 +268,10 @@ EXIF from that format.
 ### Metadata behavior
 
 - EXIF extraction for compatible JPEG, PNG `eXIf` and TIFF images;
-- formats without real EXIF support in the current reader, such as WEBP, BMP
-  and HEIF/HEIC, safely skip EXIF extraction and use file `mtime` fallback;
+- formats without real EXIF support in the current reader, such as WEBP and BMP,
+  safely skip EXIF extraction and use file `mtime` fallback;
+- HEIF/HEIC EXIF and XMP are read through the HEIF backend when
+  `pillow-heif`/`libheif` exposes the embedded metadata;
 - safe handling when EXIF is missing;
 - safe handling of EXIF read exceptions;
 - safe handling of malformed EXIF data without interrupting the whole run;
@@ -532,6 +537,9 @@ behavior:
   location_inference: true
   correction_manifest: corrections.yaml
   correction_priority: highest
+  clock_offset: "+01:00"
+preview:
+  heic: false
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -552,7 +560,11 @@ The same structure is accepted as JSON. Supported fields:
 - `behavior.location_inference`: boolean to enable or disable non-GPS location
   inference;
 - `behavior.correction_manifest`: CSV, JSON, YAML or YML correction manifest;
-- `behavior.correction_priority`: `highest`, `metadata` or `heuristic`.
+- `behavior.correction_priority`: `highest`, `metadata` or `heuristic`;
+- `behavior.clock_offset`: global camera clock correction, using formats such
+  as `+3h`, `-1d`, `+00:30` or `-5:45`;
+- `preview.heic`: boolean to generate optional JPEG previews for organized
+  HEIC/HEIF files.
 
 Example correction manifest:
 
@@ -675,9 +687,11 @@ photo-organizer/
       correction_manifest.py
       constants.py
       geocoding.py
+      heif_backend.py
       scanner.py
       metadata.py
       hashing.py
+      preview.py
       text_normalization.py
       naming.py
       planner.py
@@ -687,6 +701,7 @@ photo-organizer/
     fixtures/
       README.md
       metadata_corpus.py
+      heic_corpus.py
     test_import.py
     test_cli.py
     test_config.py
@@ -698,8 +713,11 @@ photo-organizer/
     test_naming.py
     test_metadata.py
     test_metadata_corpus.py
+    test_heif_backend.py
+    test_heic_corpus.py
     test_hashing.py
     test_planner.py
+    test_preview.py
 ```
 
 ## Module responsibilities
@@ -712,10 +730,13 @@ photo-organizer/
 - `metadata.py`: EXIF, XMP, IPTC-IIM, PNG metadata extraction, GPS extraction,
   provenance and best-date reconciliation;
 - `geocoding.py`: reverse geocoding from GPS coordinates to city, state and country;
+- `heif_backend.py`: optional `pillow-heif`/`libheif` integration, HEIF metadata
+  access and container inspection;
 - `hashing.py`: deterministic file/image hashes, safe digest comparison and duplicate grouping;
 - `naming.py`: deterministic and pattern-based filename generation;
 - `planner.py`: destination folder planning by date, location and custom patterns;
 - `executor.py`: operation planning and execution/simulation;
+- `preview.py`: optional JPEG preview generation for organized HEIC/HEIF files;
 - `text_normalization.py`: Unicode/path-safe text normalization and
   report-friendly normalization observations;
 - `logging_config.py`: logging setup and level control;
@@ -940,6 +961,9 @@ behavior:
   location_inference: true
   correction_manifest: corrections.yaml
   correction_priority: highest
+  clock_offset: "+01:00"
+preview:
+  heic: true
 ```
 
 ### Example: simulation mode
@@ -1029,14 +1053,14 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name
 ```
 
 When reverse geocoding is enabled, execution reports also include location
 fields:
 
 ```text
-location_status,organization_fallback,latitude,longitude,city,state,country,gps_source,gps_field,gps_confidence,gps_raw_value,location_source,location_field,location_confidence,location_raw_value
+location_status,location_kind,organization_fallback,latitude,longitude,city,state,country,gps_source,gps_field,gps_confidence,gps_raw_value,location_source,location_field,location_confidence,location_raw_value
 ```
 
 ## Explain report format
@@ -1165,6 +1189,14 @@ checked-in binary photo collection. The metadata corpus in
 Corpus tests cover successful extraction, missing metadata behavior,
 conflicting candidates and the automated date precedence matrix.
 
+When the local `pillow-heif`/`libheif` stack can write HEIC files, the HEIC
+corpus in `tests/fixtures/heic_corpus.py` also generates:
+
+- iPhone-like HEIC with EXIF date and GPS;
+- iPhone-like HEIC with EXIF date and no GPS;
+- HEIC without EXIF;
+- malformed `.HEIC` input for read-error coverage.
+
 ## Best practices adopted
 
 - separation of responsibilities;
@@ -1183,6 +1215,7 @@ conflicting candidates and the automated date precedence matrix.
 - GPS and reverse-geocoding workflows with fallback behavior;
 - metadata compatibility and limitation documentation;
 - synthetic legacy metadata corpus tests;
+- HEIF/HEIC backend, audit and preview coverage;
 - deterministic chunked hashing for large files;
 - safe digest comparison;
 - test-ready code;
@@ -1456,6 +1489,75 @@ work delivered after the v0.4.0 workflow.
 - automated corpus tests cover success, absence, conflict and precedence
   behavior.
 
+## Version v0.6.0 delivered scope
+
+This section consolidates the HEIC/HEIF work delivered after the v0.5.0
+metadata workflow.
+
+### HEIC/HEIF format support
+
+- `.heic`, `.heif` and `.hif` are part of the centralized supported format
+  list;
+- scan, hash, dedupe, inspect and organize flows recognize HEIC/HEIF files
+  case-insensitively;
+- HEIC/HEIF files preserve their original extension in generated destination
+  names;
+- unsupported or unreadable HEIC metadata falls back to sidecars, heuristics or
+  filesystem `mtime` instead of aborting the run.
+
+### HEIF backend integration
+
+- `pillow-heif` is a project dependency and is documented together with native
+  `libheif` installation guidance;
+- `PillowHeifBackend` provides backend-neutral methods for opening images,
+  reading raw EXIF/XMP metadata and inspecting HEIF container structure;
+- missing native/backend dependencies produce a clear guidance message instead
+  of an opaque decoder error;
+- backend read errors are logged with context and do not stop unrelated files
+  from being processed.
+
+### HEIC metadata extraction
+
+- backend-exposed EXIF date/time fields feed the same reconciliation pipeline
+  used by JPEG, TIFF and PNG;
+- backend-exposed EXIF GPS fields are normalized into decimal coordinates;
+- backend-exposed XMP date, GPS and textual location fields are parsed;
+- camera fields such as make/model are available for camera-profile correction
+  rules when exposed by the backend.
+
+### HEIF container audit
+
+- `inspect` reports a `HEIF container` source for HEIC/HEIF files;
+- JSON and CSV audit reports include HEIF format/status, metadata found/missing
+  and date/location evidence classification;
+- multiple images, sequences, thumbnails, auxiliary images and depth images are
+  detected and reported as complex container features;
+- primary image selection is deterministic: backend primary flag, then backend
+  `primary_index`, then image index `0` with a warning.
+
+### HEIC previews
+
+- `organize --heic-preview` generates optional JPEG previews for HEIC/HEIF
+  files after the main copy/move succeeds;
+- config files can enable the same behavior with `preview.heic: true`;
+- previews are written under `.previews` next to the organized file;
+- preview generation resizes to a bounded JPEG and logs failures as warnings
+  without failing organization.
+
+### HEIC tests and documentation
+
+- tests cover HEIC extension support in scan/CLI flows;
+- tests cover backend metadata extraction, container selection and complex
+  container reporting;
+- tests cover HEIC inspect reports, filesystem fallback and organize dry-run
+  planning;
+- tests cover optional preview destination and JPEG generation;
+- when local HEIF writing is available, generated HEIC corpus tests cover
+  iPhone-like EXIF/GPS samples, missing GPS, missing EXIF and malformed input;
+- README documents dependencies, platform limitations, troubleshooting,
+  compatibility matrix entries and current application limitations for
+  HEIC/HEIF.
+
 ## Roadmap
 
 ### Version 0.1.0
@@ -1474,20 +1576,14 @@ work delivered after the v0.4.0 workflow.
 - implemented and stabilized (see Version v0.5.0 delivered scope section).
 
 ### Version 0.6.0
+- implemented and stabilized for HEIC/HEIF support (see Version v0.6.0
+  delivered scope section).
+
+### Version 0.7.0
 - support for more media types (including videos);
 - richer filtering (include/exclude and depth controls);
 - performance improvements for large collections;
 - richer report analytics;
-- HEIC/HEIF detection and `pillow-heif` backend integration for EXIF/XMP in
-  iPhone and iPad photo collections is implemented;
-- continue validating metadata extraction behavior across the HEIF ecosystem,
-  including Apple's `public.heic` type;
-- evaluate standard non-Apple decoding paths such as `libheif` and compatible
-  Python bindings;
-- define install and fallback behavior for environments without HEIF decoding
-  libraries.
-
-### Version 0.7.0
 - proprietary RAW format support;
 - evaluate manufacturer-specific formats such as Canon CR2/CR3, Nikon NEF,
   Sony ARW and Panasonic RW2;
@@ -1499,7 +1595,7 @@ work delivered after the v0.4.0 workflow.
 
 ## Project status
 
-In active development, with a stable tested v0.5.0 workflow for scan, dedupe,
+In active development, with a stable tested v0.6.0 workflow for scan, dedupe,
 inspect, explain and organize flows.
 
 ## Motivation
