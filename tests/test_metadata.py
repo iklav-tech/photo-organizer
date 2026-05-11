@@ -190,6 +190,61 @@ def test_location_policy_distinguishes_gps_source_and_reverse_geocoding() -> Non
     ]
 
 
+def test_normalize_metadata_fields_maps_vendor_aliases_to_internal_schema() -> None:
+    normalized = metadata.normalize_metadata_fields(
+        exif_fields={
+            "CaptureDate": "2024:05:06 07:08:09",
+            "CameraManufacturer": "Canon",
+            "CameraModelName": "EOS R5",
+            "GPSLatitudeDecimal": -23.5,
+            "GPSLongitudeDecimal": -46.625,
+        }
+    )
+
+    assert normalized.date_taken_candidates[0].value == datetime(2024, 5, 6, 7, 8, 9)
+    assert normalized.date_taken_candidates[0].provenance.field == "CaptureDate"
+    assert normalized.date_taken_candidates[0].provenance.source == "EXIF"
+    assert normalized.camera_make is not None
+    assert normalized.camera_make.field == "camera_make"
+    assert normalized.camera_make.value == "Canon"
+    assert normalized.camera_make.provenance.field == "CameraManufacturer"
+    assert normalized.camera_model is not None
+    assert normalized.camera_model.field == "camera_model"
+    assert normalized.camera_model.value == "EOS R5"
+    assert normalized.camera_model.provenance.field == "CameraModelName"
+    assert normalized.gps_coordinates is not None
+    assert normalized.gps_coordinates.latitude == -23.5
+    assert normalized.gps_coordinates.longitude == -46.625
+    assert normalized.gps_coordinates.provenance is not None
+    assert normalized.gps_coordinates.provenance.field == (
+        "GPSLatitudeDecimal,GPSLongitudeDecimal"
+    )
+
+
+def test_normalize_metadata_fields_preserves_xmp_sidecar_provenance() -> None:
+    normalized = metadata.normalize_metadata_fields(
+        xmp_fields={
+            "xmp:CreateDate": "2024-05-06T07:08:09",
+            "tiff:Make": "FUJIFILM",
+            "tiff:Model": "X100V",
+            "XMPFieldSources": {
+                "xmp:CreateDate": "sidecar",
+                "tiff:Make": "sidecar",
+                "tiff:Model": "sidecar",
+            },
+        }
+    )
+
+    assert normalized.date_taken_candidates[0].provenance.source == "XMP sidecar"
+    assert normalized.date_taken_candidates[0].provenance.field == "xmp:CreateDate"
+    assert normalized.camera_make is not None
+    assert normalized.camera_make.value == "FUJIFILM"
+    assert normalized.camera_make.provenance.source == "XMP sidecar"
+    assert normalized.camera_make.provenance.field == "tiff:Make"
+    assert normalized.camera_model is not None
+    assert normalized.camera_model.provenance.field == "tiff:Model"
+
+
 def test_extract_exif_metadata_reads_compatible_jpeg_exif(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1007,6 +1062,31 @@ def test_extract_camera_profile_reads_raw_make_and_model(
         "make": "Canon",
         "model": "EOS 5D",
         "profile": "Canon EOS 5D",
+    }
+
+
+def test_extract_camera_profile_uses_normalized_vendor_aliases(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    file_path = tmp_path / "image.raf"
+    file_path.write_text("x")
+    monkeypatch.setattr(
+        metadata,
+        "extract_exif_metadata",
+        lambda _path: {
+            "CameraManufacturer": "FUJIFILM",
+            "CameraModelName": "X-T5",
+        },
+    )
+    monkeypatch.setattr(metadata, "extract_xmp_metadata", lambda _path: {})
+
+    result = metadata.extract_camera_profile(file_path)
+
+    assert result == {
+        "make": "FUJIFILM",
+        "model": "X-T5",
+        "profile": "FUJIFILM X-T5",
     }
 
 

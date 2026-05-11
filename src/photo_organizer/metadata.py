@@ -360,6 +360,25 @@ class GPSCoordinates:
     )
 
 
+@dataclass(frozen=True)
+class NormalizedMetadataValue:
+    """One logical metadata value with original-field provenance."""
+
+    field: str
+    value: Any
+    provenance: MetadataProvenance
+
+
+@dataclass(frozen=True)
+class NormalizedImageMetadata:
+    """Schema consumed by organization logic regardless of source tag names."""
+
+    date_taken_candidates: tuple[MetadataCandidate, ...] = ()
+    camera_make: NormalizedMetadataValue | None = None
+    camera_model: NormalizedMetadataValue | None = None
+    gps_coordinates: GPSCoordinates | None = None
+
+
 XMP_NAMESPACE_PREFIXES = {
     "http://ns.adobe.com/xap/1.0/": "xmp",
     "http://ns.adobe.com/exif/1.0/": "exif",
@@ -401,6 +420,19 @@ IPTC_IIM_DATASETS = {
     (2, 120): "Caption-Abstract",
     (2, 122): "Writer-Editor",
 }
+
+EXIF_DATE_FIELD_ALIASES: tuple[tuple[str, MetadataConfidence, str], ...] = (
+    ("DateTimeOriginal", "high", "DateTimeOriginal"),
+    ("CaptureDate", "high", "DateTimeOriginal"),
+    ("DateCreated", "medium", "CreateDate"),
+    ("CreateDate", "medium", "CreateDate"),
+    ("DateTime", "medium", "CreateDate"),
+    ("DateTimeDigitized", "medium", "CreateDate"),
+)
+EXIF_CAMERA_MAKE_FIELDS = ("Make", "CameraMake", "CameraManufacturer", "Manufacturer")
+EXIF_CAMERA_MODEL_FIELDS = ("Model", "CameraModel", "CameraModelName")
+XMP_CAMERA_MAKE_FIELDS = ("tiff:Make", "exif:Make")
+XMP_CAMERA_MODEL_FIELDS = ("tiff:Model", "exif:Model")
 
 
 def _parse_exif_datetime(value: Any) -> datetime | None:
@@ -1209,6 +1241,234 @@ def _extract_xmp_gps_coordinates_from_fields(
             },
         ),
     )
+
+
+def _xmp_source_for_field(fields: dict[str, Any], field_name: str) -> str:
+    field_sources = fields.get("XMPFieldSources", {})
+    source_kind = (
+        field_sources.get(field_name)
+        if isinstance(field_sources, dict)
+        else None
+    )
+    return "XMP sidecar" if source_kind == "sidecar" else "XMP"
+
+
+def _normalized_date_candidates_from_exif(
+    fields: dict[str, Any],
+) -> tuple[MetadataCandidate, ...]:
+    candidates: list[MetadataCandidate] = []
+    seen_values: set[tuple[datetime, str]] = set()
+    for field_name, confidence, precedence_field in EXIF_DATE_FIELD_ALIASES:
+        raw_value = fields.get(field_name)
+        parsed = _parse_exif_datetime(raw_value)
+        if parsed is None:
+            continue
+        dedupe_key = (parsed, precedence_field)
+        if dedupe_key in seen_values:
+            continue
+        seen_values.add(dedupe_key)
+        candidates.append(_datetime_candidate(
+            value=parsed,
+            source="EXIF",
+            field_name=field_name,
+            confidence=confidence,
+            raw_value=raw_value,
+            precedence_field=precedence_field,
+        ))
+    return tuple(candidates)
+
+
+def _normalized_date_candidates_from_xmp(
+    fields: dict[str, Any],
+) -> tuple[MetadataCandidate, ...]:
+    candidates: list[MetadataCandidate] = []
+    for field_name in ("exif:DateTimeOriginal", "xmp:CreateDate"):
+        raw_value = fields.get(field_name)
+        parsed = _parse_exif_datetime(raw_value)
+        if parsed is None:
+            continue
+        candidates.append(_datetime_candidate(
+            value=parsed,
+            source=_xmp_source_for_field(fields, field_name),
+            field_name=field_name,
+            confidence="medium",
+            raw_value=raw_value,
+            precedence_source="XMP",
+        ))
+    return tuple(candidates)
+
+
+def _normalized_camera_value(
+    logical_field: str,
+    source: str,
+    source_field: str,
+    value: Any,
+    confidence: MetadataConfidence,
+) -> NormalizedMetadataValue | None:
+    text = _metadata_text(value)
+    if text is None:
+        return None
+    return NormalizedMetadataValue(
+        field=logical_field,
+        value=text,
+        provenance=MetadataProvenance(
+            source=source,
+            field=source_field,
+            confidence=confidence,
+            raw_value=value,
+        ),
+    )
+
+
+def _first_normalized_camera_value(
+    logical_field: str,
+    source: str,
+    fields: dict[str, Any],
+    source_fields: tuple[str, ...],
+    confidence: MetadataConfidence,
+) -> NormalizedMetadataValue | None:
+    for source_field in source_fields:
+        value = fields.get(source_field)
+        source_label = (
+            _xmp_source_for_field(fields, source_field)
+            if source.startswith("XMP")
+            else source
+        )
+        normalized = _normalized_camera_value(
+            logical_field,
+            source_label,
+            source_field,
+            value,
+            confidence,
+        )
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def _extract_decimal_gps_coordinates_from_fields(
+    fields: dict[str, Any],
+    *,
+    source: str,
+    confidence: MetadataConfidence,
+) -> GPSCoordinates | None:
+    latitude_field = next(
+        (
+            field_name
+            for field_name in ("GPSLatitudeDecimal", "GPSLatitude")
+            if field_name in fields
+        ),
+        None,
+    )
+    longitude_field = next(
+        (
+            field_name
+            for field_name in ("GPSLongitudeDecimal", "GPSLongitude")
+            if field_name in fields
+        ),
+        None,
+    )
+    if latitude_field is None or longitude_field is None:
+        return None
+
+    latitude = _xmp_gps_to_decimal(fields.get(latitude_field), fields.get("GPSLatitudeRef"))
+    longitude = _xmp_gps_to_decimal(
+        fields.get(longitude_field),
+        fields.get("GPSLongitudeRef"),
+    )
+    if latitude is None or longitude is None:
+        return None
+
+    return GPSCoordinates(
+        latitude=latitude,
+        longitude=longitude,
+        provenance=MetadataProvenance(
+            source=source,
+            field=f"{latitude_field},{longitude_field}",
+            confidence=confidence,
+            raw_value={
+                latitude_field: fields.get(latitude_field),
+                longitude_field: fields.get(longitude_field),
+                "GPSLatitudeRef": fields.get("GPSLatitudeRef"),
+                "GPSLongitudeRef": fields.get("GPSLongitudeRef"),
+            },
+        ),
+    )
+
+
+def normalize_metadata_fields(
+    *,
+    exif_fields: dict[str, Any] | None = None,
+    xmp_fields: dict[str, Any] | None = None,
+) -> NormalizedImageMetadata:
+    """Map heterogeneous source fields to the internal metadata schema.
+
+    The returned values use logical field names such as ``camera_make`` while
+    keeping the original source tag in ``MetadataProvenance`` for reports and
+    debugging.
+    """
+    exif_fields = exif_fields or {}
+    xmp_fields = xmp_fields or {}
+
+    date_candidates = (
+        *_normalized_date_candidates_from_exif(exif_fields),
+        *_normalized_date_candidates_from_xmp(xmp_fields),
+    )
+    camera_make = _first_normalized_camera_value(
+        "camera_make",
+        "EXIF",
+        exif_fields,
+        EXIF_CAMERA_MAKE_FIELDS,
+        "high",
+    )
+    camera_model = _first_normalized_camera_value(
+        "camera_model",
+        "EXIF",
+        exif_fields,
+        EXIF_CAMERA_MODEL_FIELDS,
+        "high",
+    )
+    if camera_make is None:
+        camera_make = _first_normalized_camera_value(
+            "camera_make",
+            "XMP",
+            xmp_fields,
+            XMP_CAMERA_MAKE_FIELDS,
+            "medium",
+        )
+    if camera_model is None:
+        camera_model = _first_normalized_camera_value(
+            "camera_model",
+            "XMP",
+            xmp_fields,
+            XMP_CAMERA_MODEL_FIELDS,
+            "medium",
+        )
+
+    gps_coordinates = _extract_gps_coordinates_from_fields(exif_fields)
+    if gps_coordinates is None:
+        gps_coordinates = _extract_decimal_gps_coordinates_from_fields(
+            exif_fields,
+            source="EXIF",
+            confidence="high",
+        )
+    if gps_coordinates is None:
+        gps_coordinates = _extract_xmp_gps_coordinates_from_fields(xmp_fields)
+
+    return NormalizedImageMetadata(
+        date_taken_candidates=date_candidates,
+        camera_make=camera_make,
+        camera_model=camera_model,
+        gps_coordinates=gps_coordinates,
+    )
+
+
+def extract_normalized_metadata(path: str | Path) -> NormalizedImageMetadata:
+    """Extract metadata and expose it through the internal canonical schema."""
+    file_path = Path(path)
+    exif_fields = _read_exif_datetime_fields(file_path)
+    xmp_fields = extract_xmp_metadata(file_path)
+    return normalize_metadata_fields(exif_fields=exif_fields, xmp_fields=xmp_fields)
 
 
 def validate_reconciliation_policy(policy: str) -> ReconciliationPolicy:
@@ -2075,14 +2335,20 @@ def _metadata_text(value: Any) -> str | None:
 def extract_camera_profile(path: str | Path) -> dict[str, str]:
     """Return camera make/model metadata for correction manifest matching."""
     file_path = Path(path)
-    exif_fields = extract_exif_metadata(file_path)
-    make = _metadata_text(exif_fields.get("Make"))
-    model = _metadata_text(exif_fields.get("Model"))
-
-    if make is None or model is None:
-        xmp_fields = extract_xmp_metadata(file_path)
-        make = make or _metadata_text(xmp_fields.get("tiff:Make"))
-        model = model or _metadata_text(xmp_fields.get("tiff:Model"))
+    normalized = normalize_metadata_fields(
+        exif_fields=extract_exif_metadata(file_path),
+        xmp_fields=extract_xmp_metadata(file_path),
+    )
+    make = (
+        str(normalized.camera_make.value)
+        if normalized.camera_make is not None
+        else None
+    )
+    model = (
+        str(normalized.camera_model.value)
+        if normalized.camera_model is not None
+        else None
+    )
 
     profile = " ".join(part for part in (make, model) if part)
     result: dict[str, str] = {}
@@ -2097,10 +2363,11 @@ def extract_camera_profile(path: str | Path) -> dict[str, str]:
 
 def extract_gps_coordinates(path: str | Path) -> GPSCoordinates | None:
     """Extract GPS coordinates in decimal degrees when available."""
-    exif_coordinates = _extract_gps_coordinates_from_fields(extract_exif_metadata(path))
-    if exif_coordinates is not None:
-        return exif_coordinates
-    return _extract_xmp_gps_coordinates_from_fields(extract_xmp_metadata(path))
+    normalized = normalize_metadata_fields(
+        exif_fields=extract_exif_metadata(path),
+        xmp_fields=extract_xmp_metadata(path),
+    )
+    return normalized.gps_coordinates
 
 
 def resolve_best_available_datetime(
@@ -2120,41 +2387,12 @@ def resolve_best_available_datetime(
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
     candidates: list[MetadataCandidate] = []
     exif_fields = _read_exif_datetime_fields(file_path)
-
-    for field_name in ("DateTimeOriginal", "CreateDate"):
-        raw_value = exif_fields.get(field_name)
-        parsed = _parse_exif_datetime(raw_value)
-        if parsed is not None:
-            confidence: MetadataConfidence = (
-                "high" if field_name == "DateTimeOriginal" else "medium"
-            )
-            candidates.append(_datetime_candidate(
-                value=parsed,
-                source="EXIF",
-                field_name=field_name,
-                confidence=confidence,
-                raw_value=raw_value,
-            ))
-
     xmp_fields = extract_xmp_metadata(file_path)
-    for field_name in ("exif:DateTimeOriginal", "xmp:CreateDate"):
-        raw_value = xmp_fields.get(field_name)
-        parsed = _parse_exif_datetime(raw_value)
-        if parsed is not None:
-            field_sources = xmp_fields.get("XMPFieldSources", {})
-            source_kind = (
-                field_sources.get(field_name)
-                if isinstance(field_sources, dict)
-                else None
-            )
-            candidates.append(_datetime_candidate(
-                value=parsed,
-                source="XMP sidecar" if source_kind == "sidecar" else "XMP",
-                field_name=field_name,
-                confidence="medium",
-                raw_value=raw_value,
-                precedence_source="XMP",
-            ))
+    normalized = normalize_metadata_fields(
+        exif_fields=exif_fields,
+        xmp_fields=xmp_fields,
+    )
+    candidates.extend(normalized.date_taken_candidates)
 
     iptc_fields = extract_iptc_iim_metadata(file_path)
     raw_date = iptc_fields.get("DateCreated")

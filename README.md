@@ -280,6 +280,11 @@ EXIF from that format.
 - safe handling of malformed EXIF data without interrupting the whole run;
 - partially inconsistent JPEG/TIFF IFDs are recovered from known tags when
   possible, while truly absent EXIF is logged separately from fatal read errors;
+- heterogeneous source tags are normalized into an internal schema for
+  `date_taken`, `camera_make`, `camera_model` and GPS coordinates before
+  organization logic consumes them;
+- original metadata source, field and raw value remain available through
+  provenance for inspect, explain and debug reports;
 - primary date resolution priority:
   1. `DateTimeOriginal`
   2. `CreateDate`
@@ -380,6 +385,25 @@ Current support status:
 | Panasonic RAW (`.rw2`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
 | Olympus/OM System RAW (`.orf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
 | Fujifilm RAW (`.raf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+
+#### Internal normalized metadata schema
+
+Metadata extraction can produce brand- or backend-specific field names. Before
+organization decisions consume those values, the app maps supported equivalents
+to a common internal schema:
+
+| Internal field | Source aliases |
+| --- | --- |
+| `date_taken` | `DateTimeOriginal`, `CaptureDate`, `DateCreated`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `exif:DateTimeOriginal`, `xmp:CreateDate` |
+| `camera_make` | `Make`, `CameraMake`, `CameraManufacturer`, `Manufacturer`, `tiff:Make`, `exif:Make` |
+| `camera_model` | `Model`, `CameraModel`, `CameraModelName`, `tiff:Model`, `exif:Model` |
+| `gps` | `GPSInfo`, `GPSLatitudeDecimal`, `GPSLongitudeDecimal`, `GPSLatitude`, `GPSLongitude`, `exif:GPSLatitude`, `exif:GPSLongitude` |
+
+Consumers such as date resolution, GPS extraction and camera-profile matching
+use these normalized fields instead of checking manufacturer-specific tags. The
+selected values still carry original provenance, so reports can show where a
+normalized value came from, for example `EXIF:CameraManufacturer` or
+`XMP sidecar:tiff:Model`.
 
 Source classes used in reports and explanations:
 
@@ -763,8 +787,8 @@ photo-organizer/
 - `correction_manifest.py`: batch date/location correction manifest parsing,
   matching and validation;
 - `scanner.py`: recursive file scanning and extension filtering;
-- `metadata.py`: EXIF, XMP, IPTC-IIM, PNG metadata extraction, GPS extraction,
-  provenance and best-date reconciliation;
+- `metadata.py`: EXIF, XMP, IPTC-IIM, PNG metadata extraction, normalized
+  metadata schema, GPS extraction, provenance and best-date reconciliation;
 - `geocoding.py`: reverse geocoding from GPS coordinates to city, state and country;
 - `heif_backend.py`: optional `pillow-heif`/`libheif` integration, HEIF metadata
   access and container inspection;

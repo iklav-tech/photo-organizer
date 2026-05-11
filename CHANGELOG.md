@@ -22,6 +22,11 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - camera manufacturer
   - camera model
   - GPS coordinates
+- Internal normalized metadata schema for:
+  - `date_taken`
+  - `camera_make`
+  - `camera_model`
+  - GPS coordinates
 - README documentation for the first supported RAW wave and its current
   metadata limitations.
 
@@ -33,6 +38,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   broader proprietary RAW metadata extraction.
 - Date resolution, GPS extraction and camera-profile matching can use RAW
   EXIF/TIFF metadata when available.
+- Date resolution, GPS extraction and camera-profile matching now consume
+  normalized metadata fields instead of source-specific tag names.
+- Equivalent fields from EXIF, XMP sidecars, RAW TIFF-style metadata and common
+  vendor aliases are mapped before organization decisions are made.
 
 ### Behavior guarantees
 
@@ -41,6 +50,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - RAW parsing failures are handled per file and do not stop the full batch.
 - When TIFF-style EXIF metadata is available, RAW files can provide capture
   date/time, camera make/model and GPS.
+- Consumers do not need to know whether camera metadata came from `Make`,
+  `CameraManufacturer`, `tiff:Make` or another supported alias.
+- Original source tags remain available through `MetadataProvenance` for
+  inspect, explain and debug output.
 - RAW files with missing or unsupported embedded metadata can still use
   sidecars, correction manifests, heuristics or filesystem `mtime` fallback.
 
@@ -52,6 +65,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Metadata tests cover RAW capture date/time, camera make/model and GPS
   extraction.
 - Metadata tests cover safe handling of malformed RAW files.
+- Metadata tests cover vendor alias normalization and provenance preservation.
 
 ## [0.6.0] - 2026-05-11
 
