@@ -238,6 +238,7 @@ Example use cases:
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
 - `photo-organizer organize SOURCE --output Organized --correction-manifest corrections.yaml`
 - `photo-organizer organize SOURCE --output Organized --heic-preview`
+- `photo-organizer organize SOURCE --output Organized --dng-candidates --report audit.json`
 - grouped `organize` help sections for paths, execution, reports and mode;
 - examples shown directly in help output;
 - clear argument errors for missing required parameters, invalid report
@@ -350,6 +351,19 @@ files, using the RAW destination basename for the sidecar as well. For example,
 `IMG_0001.cr2` organized as `2024-08-15_14-32-09.cr2` carries
 `IMG_0001.xmp` to `2024-08-15_14-32-09.xmp`. Reports include the sidecar count,
 source path and destination path so the relationship is visible after the run.
+
+### Optional DNG interoperability marking
+
+The app can optionally mark RAW files as candidates for a DNG interoperability
+workflow with `--dng-candidates` or `interop.dng_candidates: true`. This is a
+non-destructive marker only: photo-organizer does not run a converter, does not
+rewrite RAW files and does not require DNG output to exist.
+
+This path helps when a camera-specific RAW file is recognized but downstream
+tools have better support for DNG than for that proprietary RAW variant. The
+report then highlights which organized RAW files should be considered for an
+external conversion/interop step, while preserving the original RAW and any
+linked `.xmp` sidecar behavior.
 
 ### Metadata precedence and compatibility matrix
 
@@ -606,6 +620,8 @@ behavior:
   clock_offset: "+01:00"
 preview:
   heic: false
+interop:
+  dng_candidates: false
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -630,7 +646,9 @@ The same structure is accepted as JSON. Supported fields:
 - `behavior.clock_offset`: global camera clock correction, using formats such
   as `+3h`, `-1d`, `+00:30` or `-5:45`;
 - `preview.heic`: boolean to generate optional JPEG previews for organized
-  HEIC/HEIF files.
+  HEIC/HEIF files;
+- `interop.dng_candidates`: boolean to mark RAW files in reports as candidates
+  for an optional external DNG interoperability workflow.
 
 Example correction manifest:
 
@@ -1038,6 +1056,8 @@ behavior:
   clock_offset: "+01:00"
 preview:
   heic: true
+interop:
+  dng_candidates: true
 ```
 
 ### Example: simulation mode
@@ -1127,7 +1147,7 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,dng_candidate,dng_candidate_reason
 ```
 
 When reverse geocoding is enabled, execution reports also include location

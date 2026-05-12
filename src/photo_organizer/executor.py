@@ -155,6 +155,8 @@ class FileOperation:
     text_normalization_observations: tuple[str, ...] = ()
     correction_manifest: CorrectionApplication | None = None
     related_sidecars: tuple[Path, ...] = ()
+    dng_candidate: bool = False
+    dng_candidate_reason: str = ""
 
 
 def plan_organization_operations(
@@ -171,6 +173,7 @@ def plan_organization_operations(
     correction_manifest: CorrectionManifest | None = None,
     correction_priority: CorrectionPriority | None = None,
     clock_offset: str | None = None,
+    dng_candidates: bool = False,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir.
 
@@ -436,6 +439,9 @@ def plan_organization_operations(
 
         destination_file = destination_dir / filename
         related_sidecars = find_related_sidecars(image_path)
+        dng_candidate = (
+            dng_candidates and image_path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS
+        )
         operations.append(
             FileOperation(
                 source=image_path,
@@ -454,6 +460,12 @@ def plan_organization_operations(
                 text_normalization_observations=tuple(text_normalization_observations),
                 correction_manifest=correction,
                 related_sidecars=related_sidecars,
+                dng_candidate=dng_candidate,
+                dng_candidate_reason=(
+                    "RAW file selected for optional DNG interoperability workflow"
+                    if dng_candidate
+                    else ""
+                ),
             )
         )
 

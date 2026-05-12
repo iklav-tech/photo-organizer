@@ -26,3 +26,8 @@ preview:
   # decode the source image. Preview failures are logged and do not stop copy
   # or move operations.
   heic: false
+interop:
+  # Mark RAW files in reports as candidates for an optional external DNG
+  # interoperability workflow. This does not convert files and does not change
+  # organization behavior.
+  dng_candidates: false

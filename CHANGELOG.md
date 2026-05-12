@@ -28,6 +28,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - `camera_model`
   - GPS coordinates
 - RAW sidecar organization support for same-basename `.xmp` files.
+- Optional DNG interoperability candidate marking:
+  - `--dng-candidates`
+  - `--no-dng-candidates`
+  - `interop.dng_candidates`
 - README documentation for the first supported RAW wave and its current
   metadata limitations.
 
@@ -47,6 +51,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   operation.
 - Execution reports now include `sidecar_count`, `sidecar_sources` and
   `sidecar_destinations`.
+- Execution reports now include `dng_candidate` and `dng_candidate_reason`
+  when optional DNG interoperability marking is enabled.
 
 ### Behavior guarantees
 
@@ -63,6 +69,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   renamed to match the organized RAW basename.
 - Sidecar destination collision handling follows the RAW destination suffix so
   linked files do not overwrite existing files.
+- DNG candidate marking is optional and non-destructive; the app does not run
+  conversion or require DNG files to be created.
 - RAW files with missing or unsupported embedded metadata can still use
   sidecars, correction manifests, heuristics or filesystem `mtime` fallback.
 
@@ -76,6 +84,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Metadata tests cover safe handling of malformed RAW files.
 - Metadata tests cover vendor alias normalization and provenance preservation.
 - Tests cover RAW sidecar detection, copy, move and execution report linkage.
+- Tests cover DNG candidate marking from CLI/config, default disabled behavior
+  and report fields.
 
 ## [0.6.0] - 2026-05-11
 

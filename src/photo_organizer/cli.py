@@ -177,6 +177,18 @@ def _write_execution_report(
             operation["sidecar_count"] = 0
             operation["sidecar_sources"] = ""
             operation["sidecar_destinations"] = ""
+        if planned_operation is not None and planned_operation.dng_candidate:
+            operation["dng_candidate"] = True
+            operation["dng_candidate_reason"] = planned_operation.dng_candidate_reason
+            dng_note = f"DNG candidate: {planned_operation.dng_candidate_reason}"
+            operation["observations"] = (
+                f"{operation['observations']}; {dng_note}"
+                if operation["observations"]
+                else dng_note
+            )
+        else:
+            operation["dng_candidate"] = False
+            operation["dng_candidate_reason"] = ""
         if (
             planned_operation is not None
             and planned_operation.text_normalization_observations
@@ -308,6 +320,8 @@ def _write_execution_report(
             "sidecar_count",
             "sidecar_sources",
             "sidecar_destinations",
+            "dng_candidate",
+            "dng_candidate_reason",
         ]
         if include_location_fields:
             fieldnames.extend(
@@ -1403,6 +1417,7 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --config organizer.yaml
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by city-state-month
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by location-date
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --dng-candidates --report audit.json
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
 """,
     )
@@ -1486,6 +1501,23 @@ def build_parser() -> argparse.ArgumentParser:
             "Per-file offsets in a correction manifest take precedence."
         ),
     )
+    dng_group = execution_group.add_mutually_exclusive_group()
+    dng_group.add_argument(
+        "--dng-candidates",
+        action="store_true",
+        dest="dng_candidates",
+        help=(
+            "Mark RAW files as candidates for an optional external DNG "
+            "interoperability workflow."
+        ),
+    )
+    dng_group.add_argument(
+        "--no-dng-candidates",
+        action="store_false",
+        dest="dng_candidates",
+        help="Disable DNG interoperability candidate marking.",
+    )
+    organize_parser.set_defaults(dng_candidates=None)
     preview_group = execution_group.add_mutually_exclusive_group()
     preview_group.add_argument(
         "--heic-preview",
@@ -1956,6 +1988,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.heic_preview is not None
             else False
         )
+        dng_candidates = (
+            args.dng_candidates
+            if args.dng_candidates is not None
+            else config.dng_candidates
+            if config is not None and config.dng_candidates is not None
+            else False
+        )
 
         if not output:
             parser.error(
@@ -2010,6 +2049,7 @@ def main(argv: list[str] | None = None) -> int:
                 correction_manifest=correction_manifest,
                 correction_priority=correction_priority,
                 clock_offset=clock_offset,
+                dng_candidates=dng_candidates,
             )
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:

@@ -29,6 +29,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "correction_priority": "metadata",
                 },
                 "preview": {"heic": True},
+                "interop": {"dng_candidates": True},
             }
         ),
         encoding="utf-8",
@@ -50,6 +51,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.correction_manifest == "corrections.csv"
     assert config.correction_priority == "metadata"
     assert config.heic_preview is True
+    assert config.dng_candidates is True
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
@@ -191,4 +193,17 @@ def test_load_organization_config_rejects_invalid_heic_preview(
     )
 
     with pytest.raises(ConfigurationError, match="preview.heic"):
+        load_organization_config(config_path)
+
+
+def test_load_organization_config_rejects_invalid_dng_candidates(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"interop": {"dng_candidates": "yes"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="interop.dng_candidates"):
         load_organization_config(config_path)
