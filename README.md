@@ -27,9 +27,13 @@ The project includes a tested v0.6.0 CLI workflow:
 - HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
 - HEIC/HEIF EXIF/XMP metadata extraction through `pillow-heif` and native
   `libheif` support;
-- initial RAW format recognition and metadata reading for Apple ProRAW/DNG,
-  Canon, Nikon, Sony, Panasonic, Olympus/OM System and Fujifilm files;
-- documented format/source/field compatibility matrix, including HEIF/HEIC;
+- initial RAW format recognition and range-based metadata reading for Apple
+  ProRAW/DNG, Canon, Nikon, Sony, Panasonic, Olympus/OM System and Fujifilm
+  files;
+- technical RAW audit output in `inspect`, including detected format, support
+  status, workflow, field origins and partial-support warnings;
+- documented format/source/field compatibility matrix, including HEIF/HEIC and
+  a dedicated RAW compatibility matrix by manufacturer/container;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
 - safe hash comparison for duplicate detection workflows;
@@ -68,7 +72,10 @@ The project includes a tested v0.6.0 CLI workflow:
 - synthetic legacy metadata corpus covering success, absence and conflict
   scenarios;
 - synthetic HEIC corpus covering iPhone-like EXIF/GPS samples, missing metadata
-  and malformed container behavior when the local HEIF writer is available.
+  and malformed container behavior when the local HEIF writer is available;
+- synthetic RAW corpus covering every supported RAW-family extension, no-GPS
+  files, corrupted input, cross-manufacturer normalization and large-file
+  metadata performance behavior.
 
 Quick local setup:
 
@@ -775,8 +782,25 @@ date path.
 - report rows include source, destination, action, status and observations;
 - report rows include RAW sidecar linkage fields: `sidecar_count`,
   `sidecar_sources` and `sidecar_destinations`;
+- execution reports identify RAW-family operations with `raw_family`,
+  `raw_format` and `raw_flow`, and DNG interoperability markers with
+  `dng_candidate` and `dng_candidate_reason`;
 - execution reports include provenance fields for selected date and, when
   location is enabled, GPS/location source, confidence and raw values.
+
+Inspect/audit reports:
+
+- `photo-organizer inspect SOURCE --report metadata-audit.json` writes one item
+  per inspected file with source evidence, chosen date/location and
+  format-specific audit blocks;
+- HEIC/HEIF files include a `heif` audit block with container status, selected
+  image, found/missing metadata and date/location evidence classification;
+- RAW-family files include a `raw` audit block with `is_raw`, `format`,
+  `extension`, `flow`, `status`, field-level make/model/datetime/GPS entries,
+  `found_fields`, `missing_fields` and partial-support warnings;
+- CSV inspect reports include `raw_family`, `raw_format`, `raw_flow`,
+  `raw_status`, `raw_found_fields` and `raw_missing_fields` for spreadsheet
+  analysis.
 
 Explain reports:
 
@@ -842,6 +866,7 @@ photo-organizer/
       README.md
       metadata_corpus.py
       heic_corpus.py
+      raw_corpus.py
     test_import.py
     test_cli.py
     test_config.py
@@ -855,6 +880,7 @@ photo-organizer/
     test_metadata_corpus.py
     test_heif_backend.py
     test_heic_corpus.py
+    test_raw_corpus.py
     test_hashing.py
     test_planner.py
     test_preview.py
@@ -1194,7 +1220,12 @@ JSON reports include a summary and operation rows:
       "destination": "/home/user/OrganizedPhotos/2024/08/15/2024-08-15_14-32-09.jpg",
       "action": "move",
       "status": "success",
-      "observations": ""
+      "observations": "",
+      "raw_family": false,
+      "raw_format": "",
+      "raw_flow": "",
+      "dng_candidate": false,
+      "dng_candidate_reason": ""
     }
   ]
 }
@@ -1719,6 +1750,49 @@ metadata workflow.
   compatibility matrix entries and current application limitations for
   HEIC/HEIF.
 
+## Version v0.7.0 RAW delivered scope
+
+This section consolidates the RAW-family work delivered after the HEIC/HEIF
+scope.
+
+### RAW format support
+
+- `.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`, `.rw2`, `.orf` and `.raf`
+  are part of the centralized supported format list;
+- Apple ProRAW is treated as RAW-family input through the `.dng` / Linear DNG
+  workflow, not as HEIC/JPEG output;
+- scan, hash, dedupe, inspect and organize flows recognize RAW-family files
+  case-insensitively;
+- same-basename RAW `.xmp` sidecars are copied or moved with the RAW file and
+  renamed to match the organized basename;
+- optional `--dng-candidates` / `interop.dng_candidates` report marking remains
+  non-destructive and never converts or rewrites RAW files.
+
+### RAW metadata and inspect
+
+- the RAW backend reads TIFF-style EXIF metadata for capture date/time, camera
+  make, camera model and GPS when those fields are exposed by the file;
+- metadata reads are range-based and bounded so large RAW files are not loaded
+  fully into memory;
+- generic embedded XMP/IPTC full-file scans are skipped for RAW-family files to
+  keep large batches responsive; same-basename `.xmp` sidecars still apply;
+- `inspect` prints and reports a dedicated RAW audit block with detected
+  format, workflow, support status, field origins and partial-support warnings;
+- execution reports include RAW classification fields (`raw_family`,
+  `raw_format`, `raw_flow`) alongside sidecar and DNG-candidate fields.
+
+### RAW tests and documentation
+
+- synthetic RAW corpus fixtures cover every supported RAW-family extension;
+- tests cover valid RAW metadata, corrupted RAW files, valid RAW without GPS and
+  cross-manufacturer normalization;
+- large sparse RAW tests verify range-based metadata reads and responsive batch
+  planning without full RAW reads;
+- optional real-file performance validation can run with
+  `PHOTO_ORGANIZER_REAL_RAW_DIR`;
+- README documents a RAW compatibility matrix by manufacturer/container with
+  full, partial and experimental status, supported fields and known limitations.
+
 ## Roadmap
 
 ### Version 0.1.0
@@ -1746,25 +1820,26 @@ metadata workflow.
   Fujifilm RAF;
 - scanner, hash, dedupe, inspect and organize flows recognize the initial RAW
   extension set through `IMAGE_FORMATS`;
-- initial RAW metadata backend implemented for TIFF-style EXIF capture date,
-  camera make/model and GPS extraction;
+- RAW metadata backend implemented for range-based TIFF-style EXIF capture
+  date, camera make/model and GPS extraction;
+- RAW inspect audit, RAW execution report fields, RAW corpus tests, large-file
+  performance policy and compatibility matrix are implemented;
+
+### Future work
 - support for more media types (including videos);
 - richer filtering (include/exclude and depth controls);
-- performance improvements for large collections;
 - richer report analytics;
-- broader proprietary RAW metadata extraction support;
-- evaluate manufacturer-specific metadata behavior for Canon CR2/CR3/CRW,
-  Nikon NEF, Sony ARW, Panasonic RW2, Olympus/OM System ORF and Fujifilm RAF;
+- broader manufacturer-specific RAW metadata extraction support;
 - investigate ExifTool integration for broad metadata extraction across RAW
   formats;
-- evaluate Adobe DNG as a more universal RAW interchange/conversion target;
-- define extension handling, metadata reliability and fallback behavior for
-  camera-specific RAW files.
+- expand real-camera RAW validation beyond the synthetic corpus and optional
+  `PHOTO_ORGANIZER_REAL_RAW_DIR` test hook.
 
 ## Project status
 
-In active development, with a stable tested v0.6.0 workflow for scan, dedupe,
-inspect, explain and organize flows.
+In active development, with stable tested workflows for scan, dedupe, inspect,
+explain and organize across JPEG/PNG/TIFF, HEIC/HEIF and the current RAW-family
+scope.
 
 ## Motivation
 
