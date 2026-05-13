@@ -34,6 +34,9 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - RAW metadata extraction now uses bounded TIFF range reads instead of loading
   full RAW files, and RAW organization planning skips generic full-file
   embedded XMP/IPTC scans to keep large batches responsive.
+- README now includes a formal RAW compatibility matrix by manufacturer and
+  container, with full, partial and experimental support status, supported
+  fields and known limitations.
 - Internal normalized metadata schema for:
   - `date_taken`
   - `camera_make`

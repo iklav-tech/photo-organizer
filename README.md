@@ -338,6 +338,35 @@ the centralized supported extension list:
 | Olympus/OM System | `.orf` |
 | Fujifilm | `.raf` |
 
+#### RAW compatibility matrix
+
+Support status in this matrix is scoped to the current RAW layer: discovery,
+hashing, inspect/organize participation, range-based TIFF-style metadata reads,
+sidecar handling and reports. It does not imply RAW pixel decoding.
+
+| Manufacturer / container | Extensions | Support status | Supported fields | Known limitations |
+| --- | --- | --- | --- | --- |
+| Apple ProRAW / Linear DNG | `.dng` | Full for DNG/TIFF metadata workflow | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields | No RAW pixel decoding; embedded XMP/IPTC full-file scans are skipped for performance; only TIFF/DNG-exposed metadata is read |
+| Canon CR2 | `.cr2` | Full for TIFF-style EXIF metadata workflow | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields | Maker notes and camera-specific proprietary blocks are not decoded; fields missing from TIFF-style EXIF are reported as partial |
+| Canon CR3 | `.cr3` | Experimental | Discovery, hashing, organization, sidecar linkage, DNG-candidate reporting, RAW audit shell; TIFF-style EXIF fields when exposed in a readable TIFF-like header | Real CR3 files commonly use newer container layouts; metadata extraction may be partial or unavailable without a broader parser/ExifTool integration |
+| Canon CRW | `.crw` | Experimental | Discovery, hashing, organization, sidecar linkage, DNG-candidate reporting, RAW audit shell; TIFF-style EXIF fields when exposed in a readable TIFF-like header | Older Canon layouts can differ from TIFF-style IFDs; metadata extraction may be partial or unavailable |
+| Nikon NEF | `.nef` | Partial | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields when TIFF-style metadata is exposed | Nikon maker notes and proprietary structures are not decoded; embedded XMP/IPTC full-file scans are skipped |
+| Sony ARW | `.arw` | Partial | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields when TIFF-style metadata is exposed | Sony maker notes and proprietary structures are not decoded; unsupported embedded metadata falls back to sidecars/heuristics/filesystem |
+| Panasonic RW2 | `.rw2` | Partial | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields when TIFF-style metadata is exposed | Panasonic maker notes and proprietary structures are not decoded; metadata can be partial on files with nonstandard tags |
+| Olympus / OM System ORF | `.orf` | Partial | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields when TIFF-style metadata is exposed | Olympus/OM maker notes and proprietary structures are not decoded; metadata can be partial on files with nonstandard tags |
+| Fujifilm RAF | `.raf` | Partial | `Make`, `Model`, `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, decimal GPS derived from EXIF GPS, same-basename `.xmp` sidecar linkage, RAW audit/report fields when TIFF-style metadata is exposed | Fujifilm-specific RAF structures and maker notes are not decoded; metadata can be partial on files with nonstandard tags |
+
+Status meanings:
+
+- Full: the app has an explicit RAW workflow for the format and the supported
+  TIFF-style metadata fields are expected to be readable when present.
+- Partial: the app recognizes and organizes the format, and reads the supported
+  fields when they are exposed through TIFF-style metadata, but it does not
+  decode manufacturer-specific metadata structures.
+- Experimental: the app recognizes and organizes the format, but real-world
+  metadata extraction may be incomplete because the container is not reliably
+  represented by the current TIFF-style reader.
+
 The current RAW metadata reader focuses on safe EXIF/TIFF metadata extraction:
 capture date/time, camera manufacturer, camera model and GPS coordinates when
 those tags are exposed by the RAW file. Apple ProRAW is included here because
@@ -423,13 +452,7 @@ Current support status:
 | BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | HEIF (`.heic`, `.heif`, `.hif`) | EXIF via HEIF backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed by `pillow-heif`/Pillow | Implemented |
 | HEIF (`.heic`, `.heif`, `.hif`) | XMP via HEIF backend | Embedded metadata | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
-| Apple ProRAW / DNG (`.dng`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
-| Canon RAW (`.cr2`, `.cr3`, `.crw`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
-| Nikon RAW (`.nef`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
-| Sony RAW (`.arw`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
-| Panasonic RAW (`.rw2`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
-| Olympus/OM System RAW (`.orf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
-| Fujifilm RAW (`.raf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
+| RAW family (`.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`, `.rw2`, `.orf`, `.raf`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata; see the RAW compatibility matrix for per-format status | Implemented with full/partial/experimental status by format |
 
 #### Internal normalized metadata schema
 
@@ -565,11 +588,12 @@ report data.
 
 - RAW formats in the initial scope (`.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`,
   `.arw`, `.rw2`, `.orf`, `.raf`) are recognized by scanner/hash/inspect/
-  organize flows. `inspect` reports their detected RAW format plus TIFF-style
-  EXIF make, model, capture date/time and GPS field origins when available. The
-  current RAW backend is not a full manufacturer-specific RAW decoder, so files
-  with incomplete readable metadata are marked as partially supported and list
-  the missing RAW audit fields.
+  organize flows. The RAW compatibility matrix documents each format as full,
+  partial or experimental. `inspect` reports the detected RAW format plus
+  TIFF-style EXIF make, model, capture date/time and GPS field origins when
+  available. The current RAW backend is not a full manufacturer-specific RAW
+  decoder, so files with incomplete readable metadata are marked as partially
+  supported and list the missing RAW audit fields.
 - HEIF/HEIC containers (`.heic`, `.heif`, `.hif`) are detected and can enter
   scan/hash/inspect/organize flows. Embedded HEIF EXIF/XMP metadata uses
   `pillow-heif` and native `libheif` support. Date/time, orientation and GPS
