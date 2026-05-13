@@ -124,6 +124,20 @@ def _minimal_raw_tiff_bytes(
     return bytes(data)
 
 
+def minimal_raw_tiff_bytes(
+    *,
+    make: str = "Canon",
+    model: str = "EOS R5",
+    include_gps: bool = True,
+) -> bytes:
+    """Return a minimal TIFF-style RAW byte stream for performance tests."""
+    return _minimal_raw_tiff_bytes(
+        make=make,
+        model=model,
+        include_gps=include_gps,
+    )
+
+
 def _write_valid_raw(path: Path, case: RawCorpusCase) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_minimal_raw_tiff_bytes(make=case.make, model=case.model))

@@ -774,6 +774,10 @@ def extract_iptc_iim_metadata(path: str | Path) -> dict[str, Any]:
     raising so legacy metadata never interrupts processing.
     """
     file_path = Path(path)
+    if file_path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS:
+        logger.debug("IPTC-IIM full-file scan skipped for RAW file=%s", file_path)
+        return {}
+
     try:
         data = file_path.read_bytes()
     except OSError as exc:
@@ -981,6 +985,10 @@ def extract_embedded_xmp_metadata(path: str | Path) -> dict[str, Any]:
             file_path,
             "embedded",
         )
+
+    if file_path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS:
+        logger.debug("Embedded XMP scan skipped for RAW file=%s", file_path)
+        return {}
 
     try:
         data = file_path.read_bytes()

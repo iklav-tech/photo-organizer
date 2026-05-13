@@ -40,3 +40,6 @@ streams for every RAW-family extension supported by the app:
 
 The RAW corpus covers manufacturer-specific make/model values while keeping the
 normalized date, GPS and camera-profile behavior comparable across formats.
+Large sparse RAW-family files are used by performance tests to assert that
+metadata reads stay range-based. Set `PHOTO_ORGANIZER_REAL_RAW_DIR` to a local
+directory of camera RAW samples to run the optional real-file performance check.

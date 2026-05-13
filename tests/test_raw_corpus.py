@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 from photo_organizer.constants import RAW_IMAGE_FILE_EXTENSIONS, raw_format_name_for_extension
+from photo_organizer.executor import plan_organization_operations
 import photo_organizer.metadata as metadata
+from photo_organizer.raw_backend import RawMetadataError, TiffRawMetadataBackend
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 if str(FIXTURES_DIR) not in sys.path:
@@ -20,6 +23,7 @@ from raw_corpus import (  # noqa: E402
     RAW_CORPUS_VALID_CASES,
     RawCorpusCase,
     build_raw_corpus,
+    minimal_raw_tiff_bytes,
 )
 
 
@@ -144,3 +148,91 @@ def test_raw_corpus_builder_generates_all_declared_cases(
 ) -> None:
     assert set(raw_corpus) == {case.case_id for case in RAW_CORPUS_CASES}
     assert all(path.is_file() for path in raw_corpus.values())
+
+
+def test_raw_metadata_backend_reads_large_raw_without_full_file_load(
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "large.cr2"
+    metadata_prefix = minimal_raw_tiff_bytes(make="Canon", model="EOS R5")
+    with raw_path.open("wb") as raw_file:
+        raw_file.write(metadata_prefix)
+        raw_file.truncate(256 * 1024 * 1024)
+
+    result = TiffRawMetadataBackend().read_metadata(raw_path)
+
+    assert raw_path.stat().st_size == 256 * 1024 * 1024
+    assert result.fields["Make"] == "Canon"
+    assert result.fields["Model"] == "EOS R5"
+    assert result.fields["DateTimeOriginal"] == "2024:05:06 07:08:09"
+    assert result.bytes_read < 64 * 1024
+
+
+def test_raw_xmp_extraction_skips_full_embedded_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw_path = tmp_path / "large.nef"
+    raw_path.write_bytes(minimal_raw_tiff_bytes(make="NIKON CORPORATION", model="Z 6"))
+
+    def fail_if_raw_read_bytes(path: Path) -> bytes:
+        if path == raw_path:
+            raise AssertionError("RAW file should not be read fully for XMP scan")
+        return b""
+
+    monkeypatch.setattr(Path, "read_bytes", fail_if_raw_read_bytes)
+
+    assert metadata.extract_xmp_metadata(raw_path) == {}
+
+
+def test_organization_plans_large_raw_batch_without_full_raw_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "organized"
+    source_dir.mkdir()
+    metadata_prefix = minimal_raw_tiff_bytes(make="Canon", model="EOS R5")
+    for index in range(25):
+        raw_path = source_dir / f"IMG_{index:04d}.cr2"
+        with raw_path.open("wb") as raw_file:
+            raw_file.write(metadata_prefix)
+            raw_file.truncate(64 * 1024 * 1024)
+
+    def fail_if_raw_read_bytes(path: Path) -> bytes:
+        if path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS:
+            raise AssertionError("RAW batch planning should not read full files")
+        return b""
+
+    monkeypatch.setattr(Path, "read_bytes", fail_if_raw_read_bytes)
+
+    operations = plan_organization_operations(source_dir, output_dir, mode="copy")
+
+    assert len(operations) == 25
+    assert all(operation.source.suffix.lower() == ".cr2" for operation in operations)
+
+
+@pytest.mark.skipif(
+    "PHOTO_ORGANIZER_REAL_RAW_DIR" not in os.environ,
+    reason="Set PHOTO_ORGANIZER_REAL_RAW_DIR to validate local camera RAW samples",
+)
+def test_real_raw_samples_do_not_require_full_file_load() -> None:
+    raw_dir = Path(os.environ["PHOTO_ORGANIZER_REAL_RAW_DIR"])
+    samples = [
+        path
+        for path in sorted(raw_dir.iterdir())
+        if path.is_file() and path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS
+    ]
+    assert samples, "PHOTO_ORGANIZER_REAL_RAW_DIR has no supported RAW samples"
+
+    backend = TiffRawMetadataBackend()
+    readable_samples = 0
+    for sample in samples:
+        try:
+            result = backend.read_metadata(sample)
+        except RawMetadataError:
+            continue
+        readable_samples += 1
+        assert result.bytes_read < min(sample.stat().st_size, 2 * 1024 * 1024)
+    if readable_samples == 0:
+        pytest.skip("No local RAW sample exposed TIFF-style metadata readable by backend")

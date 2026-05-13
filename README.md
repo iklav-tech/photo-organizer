@@ -362,6 +362,12 @@ TIFF-style EXIF. Each field carries its source, original field name and
 confidence. If only part of that technical metadata is available, the status is
 `partial` and the missing fields are listed explicitly.
 
+RAW metadata reads are range-based. The RAW backend reads only the TIFF header,
+IFD entries and referenced metadata values needed for audit and organization;
+it does not decode RAW pixels and does not load the full file into memory. For
+large RAW batches, generic full-file scans such as embedded XMP/IPTC search are
+skipped for RAW-family files, while same-basename sidecars remain supported.
+
 When a RAW file has a same-basename `.xmp` sidecar, organization treats the
 sidecar as linked data for that RAW file. Copy and move operations apply to both
 files, using the RAW destination basename for the sidecar as well. For example,
@@ -1322,6 +1328,11 @@ RAW-family samples for `.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`, `.rw2`,
 `.orf` and `.raf`, plus no-GPS and corrupted-file cases. These fixtures verify
 valid extraction, safe handling of malformed RAW input and normalized camera,
 date and GPS behavior across manufacturers.
+
+RAW performance tests also create large sparse RAW-family files to verify that
+metadata extraction and organization planning stay range-based. To validate the
+same behavior against local camera RAW samples, set `PHOTO_ORGANIZER_REAL_RAW_DIR`
+to a directory containing supported RAW files before running the test suite.
 
 ## Best practices adopted
 

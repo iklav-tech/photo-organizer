@@ -31,6 +31,9 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Synthetic RAW corpus fixtures cover every supported RAW-family extension,
   corrupted RAW input, valid RAW without GPS and cross-manufacturer metadata
   normalization.
+- RAW metadata extraction now uses bounded TIFF range reads instead of loading
+  full RAW files, and RAW organization planning skips generic full-file
+  embedded XMP/IPTC scans to keep large batches responsive.
 - Internal normalized metadata schema for:
   - `date_taken`
   - `camera_make`
