@@ -25,6 +25,9 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - GPS coordinates
 - Inspect and organize reports identify RAW-family files, including the
   Apple ProRAW / Linear DNG flow for `.dng`.
+- `inspect` now emits a technical RAW audit with detected format, support
+  status, make, model, capture date/time, GPS, field origins and explicit
+  partial-support warnings.
 - Internal normalized metadata schema for:
   - `date_taken`
   - `camera_make`

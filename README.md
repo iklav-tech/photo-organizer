@@ -355,6 +355,13 @@ can optionally produce JPEG previews. Apple ProRAW (`.dng`) is handled by the
 RAW layer as a DNG/Linear DNG file, participates in RAW sidecar handling and can
 be marked for the optional DNG interoperability workflow.
 
+`inspect` includes a dedicated RAW audit block for RAW-family files. It reports
+the detected RAW format, workflow, support status, camera make, camera model,
+capture date/time and GPS coordinates when those fields are available from
+TIFF-style EXIF. Each field carries its source, original field name and
+confidence. If only part of that technical metadata is available, the status is
+`partial` and the missing fields are listed explicitly.
+
 When a RAW file has a same-basename `.xmp` sidecar, organization treats the
 sidecar as linked data for that RAW file. Copy and move operations apply to both
 files, using the RAW destination basename for the sidecar as well. For example,
@@ -552,9 +559,11 @@ report data.
 
 - RAW formats in the initial scope (`.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`,
   `.arw`, `.rw2`, `.orf`, `.raf`) are recognized by scanner/hash/inspect/
-  organize flows. The current RAW backend reads TIFF-style EXIF metadata for
-  capture date/time, camera make/model and GPS when available, but it is not a
-  full manufacturer-specific RAW decoder.
+  organize flows. `inspect` reports their detected RAW format plus TIFF-style
+  EXIF make, model, capture date/time and GPS field origins when available. The
+  current RAW backend is not a full manufacturer-specific RAW decoder, so files
+  with incomplete readable metadata are marked as partially supported and list
+  the missing RAW audit fields.
 - HEIF/HEIC containers (`.heic`, `.heif`, `.hif`) are detected and can enter
   scan/hash/inspect/organize flows. Embedded HEIF EXIF/XMP metadata uses
   `pillow-heif` and native `libheif` support. Date/time, orientation and GPS
@@ -1009,6 +1018,12 @@ dedicated `heif` audit block in JSON reports with the detected format,
 container status, selected primary image, metadata found/missing, and whether
 the chosen date/location came from real embedded metadata/GPS or from
 fallback/inference. Reports can be exported as JSON or CSV.
+
+For RAW-family files, `inspect` emits a dedicated `raw` audit block in JSON
+reports and prints the same technical summary in terminal output: detected RAW
+format, workflow, support status, make, model, capture date/time, GPS and field
+origin. Partially readable RAW files are marked as `partial` with clear missing
+field warnings.
 
 ### Example: explain decision trails
 

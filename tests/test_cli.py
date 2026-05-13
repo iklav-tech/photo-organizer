@@ -768,6 +768,20 @@ def test_inspect_report_includes_apple_proraw_raw_audit(
         "format": "Apple ProRAW",
         "extension": ".dng",
         "flow": "Apple ProRAW / Linear DNG",
+        "status": "supported",
+        "fields": {
+            "make": {
+                "status": "found",
+                "value": "Apple",
+                "source": "EXIF",
+                "field": "Make",
+                "confidence": "high",
+                "raw_value": "Apple",
+            }
+        },
+        "found_fields": ["make"],
+        "missing_fields": [],
+        "warnings": [],
     }
 
     monkeypatch.setattr(
@@ -787,6 +801,131 @@ def test_inspect_report_includes_apple_proraw_raw_audit(
     assert raw_audit["is_raw"] is True
     assert raw_audit["format"] == "Apple ProRAW"
     assert raw_audit["flow"] == "Apple ProRAW / Linear DNG"
+    assert raw_audit["status"] == "supported"
+
+
+def test_raw_audit_reports_field_origins_and_partial_support() -> None:
+    path = Path("IMG_0001.dng")
+    source_items = [
+        {
+            "source": "EXIF",
+            "exists": True,
+            "fields": {
+                "Make": "Apple",
+                "DateTimeOriginal": "2024:05:06 07:08:09",
+                "GPSLatitude": [[23, 1], [30, 1], [0, 1]],
+                "GPSLatitudeDecimal": -23.5,
+                "GPSLatitudeRef": "S",
+                "GPSLongitude": [[46, 1], [37, 1], [30, 1]],
+                "GPSLongitudeDecimal": -46.625,
+                "GPSLongitudeRef": "W",
+            },
+        }
+    ]
+    date_decision = {
+        "status": "resolved",
+        "value": "2024-05-07T07:08:09",
+        "source": "Correction manifest",
+        "field": "manual",
+        "confidence": "high",
+    }
+    location_decision = {
+        "status": "missing",
+        "kind": "none",
+        "latitude": None,
+        "longitude": None,
+        "provenance": None,
+    }
+
+    audit = cli._raw_audit_item(
+        path,
+        source_items,
+        date_decision,
+        location_decision,
+    )
+
+    assert audit is not None
+    assert audit["format"] == "Apple ProRAW"
+    assert audit["status"] == "partial"
+    assert audit["found_fields"] == ["make", "datetime", "gps"]
+    assert audit["missing_fields"] == ["model"]
+    fields = audit["fields"]
+    assert fields["make"]["source"] == "EXIF"
+    assert fields["make"]["field"] == "Make"
+    assert fields["datetime"]["field"] == "DateTimeOriginal"
+    assert fields["datetime"]["value"] == "2024:05:06 07:08:09"
+    assert fields["gps"]["field"] == "GPSLatitudeDecimal,GPSLongitudeDecimal"
+    assert fields["gps"]["value"] == {"latitude": -23.5, "longitude": -46.625}
+    assert "missing model" in audit["warnings"][0]
+
+
+def test_inspect_prints_raw_metadata_and_warnings(
+    tmp_path: Path,
+    monkeypatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    image = tmp_path / "a.dng"
+    image.write_text("x")
+    item = _inspect_item(image)
+    item["raw"] = {
+        "is_raw": True,
+        "format": "Apple ProRAW",
+        "extension": ".dng",
+        "flow": "Apple ProRAW / Linear DNG",
+        "status": "partial",
+        "fields": {
+            "make": {
+                "status": "found",
+                "value": "Apple",
+                "source": "EXIF",
+                "field": "Make",
+                "confidence": "high",
+                "raw_value": "Apple",
+            },
+            "model": {
+                "status": "found",
+                "value": "iPhone 15 Pro",
+                "source": "EXIF",
+                "field": "Model",
+                "confidence": "high",
+                "raw_value": "iPhone 15 Pro",
+            },
+            "datetime": {
+                "status": "found",
+                "value": "2024-05-06T07:08:09",
+                "source": "EXIF",
+                "field": "DateTimeOriginal",
+                "confidence": "high",
+                "raw_value": "2024:05:06 07:08:09",
+            },
+            "gps": {"status": "missing"},
+        },
+        "found_fields": ["make", "model", "datetime"],
+        "missing_fields": ["gps"],
+        "warnings": [
+            "RAW metadata partially supported: missing gps from TIFF-style EXIF"
+        ],
+    }
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: item,
+    )
+
+    result = main(["inspect", str(tmp_path)])
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "RAW: format=Apple ProRAW status=partial flow=Apple ProRAW / Linear DNG" in captured.out
+    assert "make=Apple [EXIF:Make confidence=high]" in captured.out
+    assert "model=iPhone 15 Pro [EXIF:Model confidence=high]" in captured.out
+    assert "datetime=2024-05-06T07:08:09 [EXIF:DateTimeOriginal confidence=high]" in captured.out
+    assert "gps=missing" in captured.out
+    assert "RAW warning: RAW metadata partially supported: missing gps" in captured.out
 
 
 def test_inspect_writes_csv_report(tmp_path: Path, monkeypatch) -> None:

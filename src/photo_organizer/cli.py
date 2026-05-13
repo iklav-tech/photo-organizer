@@ -618,15 +618,162 @@ def _heif_audit_item(
     }
 
 
-def _raw_audit_item(path: Path) -> dict[str, object] | None:
+def _raw_field_item(
+    value: object,
+    *,
+    source: str,
+    field: str,
+    confidence: str,
+    raw_value: object,
+) -> dict[str, object]:
+    return {
+        "status": "found",
+        "value": _inspect_serializable(value),
+        "source": source,
+        "field": field,
+        "confidence": confidence,
+        "raw_value": _inspect_serializable(raw_value),
+    }
+
+
+def _missing_raw_field_item() -> dict[str, object]:
+    return {
+        "status": "missing",
+        "value": None,
+        "source": "",
+        "field": "",
+        "confidence": "",
+        "raw_value": None,
+    }
+
+
+def _raw_date_item(exif_fields: dict[str, object]) -> dict[str, object]:
+    for field_name, confidence in (
+        ("DateTimeOriginal", "high"),
+        ("CreateDate", "medium"),
+        ("DateTime", "medium"),
+        ("DateTimeDigitized", "medium"),
+    ):
+        value = exif_fields.get(field_name)
+        if value in (None, ""):
+            continue
+        return _raw_field_item(
+            value,
+            source="EXIF",
+            field=field_name,
+            confidence=confidence,
+            raw_value=value,
+        )
+    return _missing_raw_field_item()
+
+
+def _raw_gps_item(exif_fields: dict[str, object]) -> dict[str, object]:
+    if (
+        exif_fields.get("GPSLatitudeDecimal") is not None
+        and exif_fields.get("GPSLongitudeDecimal") is not None
+    ):
+        return _raw_field_item(
+            {
+                "latitude": exif_fields.get("GPSLatitudeDecimal"),
+                "longitude": exif_fields.get("GPSLongitudeDecimal"),
+            },
+            source="EXIF",
+            field="GPSLatitudeDecimal,GPSLongitudeDecimal",
+            confidence="high",
+            raw_value={
+                "GPSLatitude": exif_fields.get("GPSLatitude"),
+                "GPSLatitudeRef": exif_fields.get("GPSLatitudeRef"),
+                "GPSLongitude": exif_fields.get("GPSLongitude"),
+                "GPSLongitudeRef": exif_fields.get("GPSLongitudeRef"),
+            },
+        )
+    return _missing_raw_field_item()
+
+
+def _raw_audit_item(
+    path: Path,
+    source_items: list[dict[str, object]],
+    _date_decision: dict[str, object],
+    _location_decision: dict[str, object],
+) -> dict[str, object] | None:
     if path.suffix.lower() not in RAW_IMAGE_FILE_EXTENSIONS:
         return None
+
+    exif_fields = _inspect_fields_for_source(source_items, "EXIF")
+    make = exif_fields.get("Make")
+    model = exif_fields.get("Model")
+    fields = {
+        "make": _raw_field_item(
+            make,
+            source="EXIF",
+            field="Make",
+            confidence="high",
+            raw_value=make,
+        )
+        if make
+        else _missing_raw_field_item(),
+        "model": _raw_field_item(
+            model,
+            source="EXIF",
+            field="Model",
+            confidence="high",
+            raw_value=model,
+        )
+        if model
+        else _missing_raw_field_item(),
+        "datetime": _raw_date_item(exif_fields),
+        "gps": _raw_gps_item(exif_fields),
+    }
+    found_fields = [
+        name for name, item in fields.items() if item.get("status") == "found"
+    ]
+    missing_fields = [
+        name for name, item in fields.items() if item.get("status") == "missing"
+    ]
+    status = "supported" if not missing_fields else "partial"
+    warnings = (
+        [
+            "RAW metadata partially supported: "
+            f"missing {', '.join(missing_fields)} from TIFF-style EXIF"
+        ]
+        if missing_fields
+        else []
+    )
     return {
         "is_raw": True,
         "format": raw_format_name_for_extension(path.suffix),
         "extension": path.suffix.lower(),
         "flow": raw_flow_name_for_extension(path.suffix),
+        "status": status,
+        "fields": fields,
+        "found_fields": found_fields,
+        "missing_fields": missing_fields,
+        "warnings": warnings,
     }
+
+
+def _raw_field_summary(label: str, item: object) -> str:
+    if not isinstance(item, dict) or item.get("status") != "found":
+        return f"{label}=missing"
+    value = item.get("value")
+    if isinstance(value, dict):
+        value_text = ", ".join(
+            f"{key}={value[key]}"
+            for key in sorted(value)
+            if value.get(key) not in (None, "")
+        )
+    else:
+        value_text = str(value)
+    origin = ":".join(
+        part
+        for part in (str(item.get("source") or ""), str(item.get("field") or ""))
+        if part
+    )
+    confidence = str(item.get("confidence") or "")
+    suffix = f" [{origin}" if origin else ""
+    suffix += f" confidence={confidence}" if suffix and confidence else ""
+    suffix += "]" if suffix else ""
+    return f"{label}={value_text}{suffix}"
 
 
 def _inspect_candidate_item(candidate) -> dict[str, object]:
@@ -934,7 +1081,12 @@ def _inspect_file(
         date_decision,
         location_decision,
     )
-    raw_audit = _raw_audit_item(path)
+    raw_audit = _raw_audit_item(
+        path,
+        source_items,
+        date_decision,
+        location_decision,
+    )
     return {
         "path": str(path),
         "sources": source_items,
@@ -995,6 +1147,9 @@ def _write_inspect_report(
                 "raw_family",
                 "raw_format",
                 "raw_flow",
+                "raw_status",
+                "raw_found_fields",
+                "raw_missing_fields",
                 "location_status",
                 "location_kind",
                 "latitude",
@@ -1071,6 +1226,19 @@ def _write_inspect_report(
                     if isinstance(raw_audit, dict)
                     else "",
                     "raw_flow": raw_audit.get("flow", "")
+                    if isinstance(raw_audit, dict)
+                    else "",
+                    "raw_status": raw_audit.get("status", "")
+                    if isinstance(raw_audit, dict)
+                    else "",
+                    "raw_found_fields": ", ".join(
+                        str(value) for value in raw_audit.get("found_fields", [])
+                    )
+                    if isinstance(raw_audit, dict)
+                    else "",
+                    "raw_missing_fields": ", ".join(
+                        str(value) for value in raw_audit.get("missing_fields", [])
+                    )
                     if isinstance(raw_audit, dict)
                     else "",
                     "location_status": location_decision["status"],
@@ -1889,11 +2057,29 @@ def main(argv: list[str] | None = None) -> int:
                 )
             raw_audit = item.get("raw")
             if isinstance(raw_audit, dict):
+                raw_fields = raw_audit.get("fields", {})
+                raw_fields = raw_fields if isinstance(raw_fields, dict) else {}
+                raw_warnings = raw_audit.get("warnings", [])
+                raw_warning_text = "; ".join(str(value) for value in raw_warnings)
                 print(
                     "  RAW: "
                     f"format={raw_audit.get('format', '')} "
+                    f"status={raw_audit.get('status', 'unknown')} "
                     f"flow={raw_audit.get('flow', '') or 'manufacturer RAW'}"
                 )
+                print(
+                    "  RAW metadata: "
+                    + "; ".join(
+                        (
+                            _raw_field_summary("make", raw_fields.get("make")),
+                            _raw_field_summary("model", raw_fields.get("model")),
+                            _raw_field_summary("datetime", raw_fields.get("datetime")),
+                            _raw_field_summary("gps", raw_fields.get("gps")),
+                        )
+                    )
+                )
+                if raw_warning_text:
+                    print(f"  RAW warning: {raw_warning_text}")
             print(
                 "  Date: "
                 f"{date_decision['status']} "
