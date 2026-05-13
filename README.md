@@ -1317,6 +1317,12 @@ corpus in `tests/fixtures/heic_corpus.py` also generates:
 - HEIC without EXIF;
 - malformed `.HEIC` input for read-error coverage.
 
+The RAW corpus in `tests/fixtures/raw_corpus.py` generates minimal TIFF-style
+RAW-family samples for `.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`, `.rw2`,
+`.orf` and `.raf`, plus no-GPS and corrupted-file cases. These fixtures verify
+valid extraction, safe handling of malformed RAW input and normalized camera,
+date and GPS behavior across manufacturers.
+
 ## Best practices adopted
 
 - separation of responsibilities;

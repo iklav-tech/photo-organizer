@@ -28,6 +28,9 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - `inspect` now emits a technical RAW audit with detected format, support
   status, make, model, capture date/time, GPS, field origins and explicit
   partial-support warnings.
+- Synthetic RAW corpus fixtures cover every supported RAW-family extension,
+  corrupted RAW input, valid RAW without GPS and cross-manufacturer metadata
+  normalization.
 - Internal normalized metadata schema for:
   - `date_taken`
   - `camera_make`
