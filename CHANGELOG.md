@@ -8,7 +8,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 
 ### Added
 
-- Initial proprietary RAW format recognition scope:
+- Initial RAW format recognition scope:
+  - Apple ProRAW / DNG `.dng`
   - Canon `.cr2`, `.cr3`, `.crw`
   - Nikon `.nef`
   - Sony `.arw`
@@ -22,6 +23,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   - camera manufacturer
   - camera model
   - GPS coordinates
+- Inspect and organize reports identify RAW-family files, including the
+  Apple ProRAW / Linear DNG flow for `.dng`.
 - Internal normalized metadata schema for:
   - `date_taken`
   - `camera_make`

@@ -125,6 +125,32 @@ def test_plan_organization_operations_marks_raw_dng_candidate_when_enabled(
     )
 
 
+def test_plan_organization_operations_classifies_apple_proraw_dng_flow(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    raw = source_dir / "IMG_0001.dng"
+    raw.write_text("raw")
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p, **_kwargs: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+
+    operations = plan_organization_operations(source_dir, output_dir, mode="copy")
+
+    assert len(operations) == 1
+    assert operations[0].raw_format == "Apple ProRAW"
+    assert operations[0].raw_flow == "Apple ProRAW / Linear DNG"
+    assert operations[0].dng_candidate is False
+
+
 def test_plan_organization_operations_does_not_mark_dng_candidate_by_default(
     tmp_path: Path,
     monkeypatch,

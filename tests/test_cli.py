@@ -45,6 +45,7 @@ def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "SOURCE" in captured.out
     assert ".cr2" in captured.out
     assert ".nef" in captured.out
+    assert ".dng" in captured.out
     assert ".heic" in captured.out
     assert ".heif" in captured.out
     assert "Examples:" in captured.out
@@ -60,6 +61,7 @@ def test_inspect_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "SOURCE" in captured.out
     assert "--report" in captured.out
     assert ".arw" in captured.out
+    assert ".dng" in captured.out
     assert ".heic" in captured.out
     assert "Examples:" in captured.out
 
@@ -751,6 +753,40 @@ def test_inspect_report_includes_heif_audit_details(
     assert audit["missing_metadata"] == ["XMP embedded", "XMP sidecar"]
     assert audit["date_evidence"]["kind"] == "real-metadata"
     assert audit["location_evidence"]["kind"] == "missing"
+
+
+def test_inspect_report_includes_apple_proraw_raw_audit(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    image = tmp_path / "a.dng"
+    image.write_text("x")
+    report_path = tmp_path / "metadata-audit.json"
+    item = _inspect_item(image)
+    item["raw"] = {
+        "is_raw": True,
+        "format": "Apple ProRAW",
+        "extension": ".dng",
+        "flow": "Apple ProRAW / Linear DNG",
+    }
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.find_image_files",
+        lambda _source, recursive=True: [image],
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli._inspect_file",
+        lambda path, *_args, **_kwargs: item,
+    )
+
+    result = main(["inspect", str(tmp_path), "--report", str(report_path)])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    raw_audit = report["files"][0]["raw"]
+    assert raw_audit["is_raw"] is True
+    assert raw_audit["format"] == "Apple ProRAW"
+    assert raw_audit["flow"] == "Apple ProRAW / Linear DNG"
 
 
 def test_inspect_writes_csv_report(tmp_path: Path, monkeypatch) -> None:
@@ -1550,6 +1586,9 @@ def test_organize_writes_valid_structured_execution_report(
             "sidecar_count": 0,
             "sidecar_sources": "",
             "sidecar_destinations": "",
+            "raw_family": False,
+            "raw_format": "",
+            "raw_flow": "",
             "dng_candidate": False,
             "dng_candidate_reason": "",
         }
@@ -1609,6 +1648,9 @@ def test_organize_report_includes_error_status_and_observation(
             "sidecar_count": 0,
             "sidecar_sources": "",
             "sidecar_destinations": "",
+            "raw_family": False,
+            "raw_format": "",
+            "raw_flow": "",
             "dng_candidate": False,
             "dng_candidate_reason": "",
         }
@@ -1710,6 +1752,50 @@ def test_organize_report_includes_dng_candidate_marker(
     assert operation["observations"] == (
         "DNG candidate: RAW file selected for optional DNG interoperability workflow"
     )
+
+
+def test_organize_report_identifies_apple_proraw_flow(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    report_path = tmp_path / "execution.json"
+    planned = [
+        FileOperation(
+            source=Path("input/IMG_0001.dng"),
+            destination=Path("out/2024-08-15_14-32-09.dng"),
+            mode="copy",
+            raw_format="Apple ProRAW",
+            raw_flow="Apple ProRAW / Linear DNG",
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/IMG_0001.dng -> out/2024-08-15_14-32-09.dng",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    operation = report["operations"][0]
+    assert operation["raw_family"] is True
+    assert operation["raw_format"] == "Apple ProRAW"
+    assert operation["raw_flow"] == "Apple ProRAW / Linear DNG"
 
 
 def test_organize_report_includes_text_normalization_observations(
@@ -2147,6 +2233,9 @@ def test_organize_writes_valid_csv_execution_report(
             "sidecar_count": "0",
             "sidecar_sources": "",
             "sidecar_destinations": "",
+            "raw_family": "False",
+            "raw_format": "",
+            "raw_flow": "",
             "dng_candidate": "False",
             "dng_candidate_reason": "",
         },
@@ -2165,6 +2254,9 @@ def test_organize_writes_valid_csv_execution_report(
             "sidecar_count": "0",
             "sidecar_sources": "",
             "sidecar_destinations": "",
+            "raw_family": "False",
+            "raw_format": "",
+            "raw_flow": "",
             "dng_candidate": "False",
             "dng_candidate_reason": "",
         },

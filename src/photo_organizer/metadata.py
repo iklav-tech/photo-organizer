@@ -2299,7 +2299,7 @@ def extract_exif_metadata(path: str | Path) -> dict[str, Any]:
 
 
 def _extract_raw_exif_metadata(file_path: Path) -> dict[str, Any]:
-    """Extract EXIF-compatible metadata from a proprietary RAW file."""
+    """Extract EXIF-compatible metadata from a RAW-family file."""
     try:
         fields = TiffRawMetadataBackend().read_metadata(file_path).fields
     except RawMetadataError as exc:

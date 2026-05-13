@@ -1018,6 +1018,18 @@ def test_extract_exif_metadata_reads_raw_tiff_capture_camera_and_gps(
     assert result["GPSLongitudeDecimal"] == -46.625
 
 
+def test_extract_exif_metadata_reads_apple_proraw_dng_as_raw(
+    tmp_path: Path,
+) -> None:
+    file_path = tmp_path / "image.dng"
+    file_path.write_bytes(_minimal_raw_tiff_bytes())
+
+    result = metadata.extract_exif_metadata(file_path)
+
+    assert result["Make"] == "Canon"
+    assert result["DateTimeOriginal"] == "2024:05:06 07:08:09"
+
+
 def test_resolve_best_available_datetime_uses_raw_capture_date(
     tmp_path: Path,
 ) -> None:

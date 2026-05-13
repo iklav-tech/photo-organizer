@@ -27,8 +27,8 @@ The project includes a tested v0.6.0 CLI workflow:
 - HEIC/HEIF container detection for scan, hash, inspect and organize pipelines;
 - HEIC/HEIF EXIF/XMP metadata extraction through `pillow-heif` and native
   `libheif` support;
-- initial proprietary RAW format recognition and metadata reading for Canon,
-  Nikon, Sony, Panasonic, Olympus/OM System and Fujifilm files;
+- initial RAW format recognition and metadata reading for Apple ProRAW/DNG,
+  Canon, Nikon, Sony, Panasonic, Olympus/OM System and Fujifilm files;
 - documented format/source/field compatibility matrix, including HEIF/HEIC;
 - explicit metadata limitation documentation;
 - deterministic image hashing with chunked reads for large files;
@@ -248,7 +248,7 @@ Example use cases:
 
 - recursive search in source directory;
 - supported extensions: `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.webp`,
-  `.bmp`, `.heic`, `.heif`, `.hif`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`,
+  `.bmp`, `.heic`, `.heif`, `.hif`, `.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`,
   `.rw2`, `.orf`, `.raf`;
 - unsupported files are ignored;
 - stable/consistent returned path list;
@@ -330,6 +330,7 @@ the centralized supported extension list:
 
 | Manufacturer | Extensions |
 | --- | --- |
+| Apple ProRAW / Linear DNG | `.dng` |
 | Canon | `.cr2`, `.cr3`, `.crw` |
 | Nikon | `.nef` |
 | Sony | `.arw` |
@@ -339,11 +340,20 @@ the centralized supported extension list:
 
 The current RAW metadata reader focuses on safe EXIF/TIFF metadata extraction:
 capture date/time, camera manufacturer, camera model and GPS coordinates when
-those tags are exposed by the RAW file. It does not decode RAW image pixels and
-does not aim to be a complete manufacturer-specific RAW parser. When RAW
-metadata is missing or cannot be parsed safely, files can still be discovered,
-hashed, reported and organized through sidecars, correction manifests,
-filename/folder heuristics or filesystem `mtime` fallback.
+those tags are exposed by the RAW file. Apple ProRAW is included here because
+Apple exposes it through a DNG/Linear DNG workflow; the app treats `.dng` as
+RAW-family input and reports its flow as `Apple ProRAW / Linear DNG`. It does
+not decode RAW image pixels and does not aim to be a complete
+manufacturer-specific RAW parser. When RAW metadata is missing or cannot be
+parsed safely, files can still be discovered, hashed, reported and organized
+through sidecars, correction manifests, filename/folder heuristics or
+filesystem `mtime` fallback.
+
+HEIC and ProRAW are intentionally different paths. HEIC/HEIF (`.heic`,
+`.heif`, `.hif`) is a compressed HEIF container handled by the HEIF backend and
+can optionally produce JPEG previews. Apple ProRAW (`.dng`) is handled by the
+RAW layer as a DNG/Linear DNG file, participates in RAW sidecar handling and can
+be marked for the optional DNG interoperability workflow.
 
 When a RAW file has a same-basename `.xmp` sidecar, organization treats the
 sidecar as linked data for that RAW file. Copy and move operations apply to both
@@ -400,6 +410,7 @@ Current support status:
 | BMP (`.bmp`) | Embedded EXIF/XMP | Embedded metadata | None in the current reader | Not supported |
 | HEIF (`.heic`, `.heif`, `.hif`) | EXIF via HEIF backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `DateTimeDigitized`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed by `pillow-heif`/Pillow | Implemented |
 | HEIF (`.heic`, `.heif`, `.hif`) | XMP via HEIF backend | Embedded metadata | `exif:DateTimeOriginal`, `xmp:CreateDate`, `exif:GPSLatitude`, `exif:GPSLongitude`, `photoshop:City`, `photoshop:State`, `photoshop:Country`, `tiff:Make`, `tiff:Model` | Implemented |
+| Apple ProRAW / DNG (`.dng`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
 | Canon RAW (`.cr2`, `.cr3`, `.crw`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
 | Nikon RAW (`.nef`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
 | Sony RAW (`.arw`) | EXIF/TIFF via RAW backend | Embedded metadata | `DateTimeOriginal`, `CreateDate`, `DateTime`, `GPSInfo`, `GPSLatitude`, `GPSLongitude`, `Make`, `Model` when exposed in TIFF-style metadata | Implemented |
@@ -539,7 +550,7 @@ report data.
 
 ### Known Metadata Limitations
 
-- Proprietary RAW formats in the initial scope (`.cr2`, `.cr3`, `.crw`, `.nef`,
+- RAW formats in the initial scope (`.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`,
   `.arw`, `.rw2`, `.orf`, `.raf`) are recognized by scanner/hash/inspect/
   organize flows. The current RAW backend reads TIFF-style EXIF metadata for
   capture date/time, camera make/model and GPS when available, but it is not a
@@ -827,8 +838,8 @@ photo-organizer/
 - `planner.py`: destination folder planning by date, location and custom patterns;
 - `executor.py`: operation planning and execution/simulation;
 - `preview.py`: optional JPEG preview generation for organized HEIC/HEIF files;
-- `raw_backend.py`: safe TIFF-style EXIF metadata reader for proprietary RAW
-  files in the initial RAW scope;
+- `raw_backend.py`: safe TIFF-style EXIF metadata reader for RAW-family files
+  in the initial RAW scope, including Apple ProRAW/DNG;
 - `text_normalization.py`: Unicode/path-safe text normalization and
   report-friendly normalization observations;
 - `logging_config.py`: logging setup and level control;
@@ -1147,7 +1158,7 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,dng_candidate,dng_candidate_reason
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,raw_family,raw_format,raw_flow,dng_candidate,dng_candidate_reason
 ```
 
 When reverse geocoding is enabled, execution reports also include location
@@ -1674,8 +1685,9 @@ metadata workflow.
   delivered scope section).
 
 ### Version 0.7.0
-- initial RAW recognition scope implemented for Canon CR2/CR3/CRW, Nikon NEF,
-  Sony ARW, Panasonic RW2, Olympus/OM System ORF and Fujifilm RAF;
+- initial RAW recognition scope implemented for Apple ProRAW/DNG, Canon
+  CR2/CR3/CRW, Nikon NEF, Sony ARW, Panasonic RW2, Olympus/OM System ORF and
+  Fujifilm RAF;
 - scanner, hash, dedupe, inspect and organize flows recognize the initial RAW
   extension set through `IMAGE_FORMATS`;
 - initial RAW metadata backend implemented for TIFF-style EXIF capture date,

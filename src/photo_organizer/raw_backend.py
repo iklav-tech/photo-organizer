@@ -1,9 +1,10 @@
-"""Safe metadata reader for proprietary RAW files.
+"""Safe metadata reader for RAW-family files.
 
 The first RAW backend intentionally implements a focused EXIF/TIFF reader
 instead of a full RAW decoder. Many proprietary RAW formats in the initial
-scope expose capture metadata through TIFF Image File Directories, which is
-enough for organization decisions without decoding image pixels.
+scope, plus DNG-family files such as Apple ProRAW, expose capture metadata
+through TIFF Image File Directories. That is enough for organization decisions
+without decoding image pixels.
 """
 
 from __future__ import annotations

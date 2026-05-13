@@ -24,6 +24,7 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
     (tmp_path / "p.rw2").write_text("x")
     (tmp_path / "q.orf").write_text("x")
     (tmp_path / "r.raf").write_text("x")
+    (tmp_path / "s.dng").write_text("x")
 
     result = find_image_files(tmp_path)
 
@@ -46,6 +47,7 @@ def test_find_image_files_supported_extensions(tmp_path: Path) -> None:
         tmp_path / "p.rw2",
         tmp_path / "q.orf",
         tmp_path / "r.raf",
+        tmp_path / "s.dng",
     ]
 
 
@@ -80,12 +82,14 @@ def test_find_image_files_is_case_insensitive_for_extensions(tmp_path: Path) -> 
     (tmp_path / "canon.CR3").write_text("x")
     (tmp_path / "nikon.NEF").write_text("x")
     (tmp_path / "sony.ArW").write_text("x")
+    (tmp_path / "apple.DNG").write_text("x")
     (tmp_path / "web.WEBP").write_text("x")
     (tmp_path / "ignored.GIF").write_text("x")
 
     result = find_image_files(tmp_path)
 
     assert result == [
+        tmp_path / "apple.DNG",
         tmp_path / "bitmap.BMP",
         tmp_path / "canon.CR3",
         tmp_path / "heic.HEIC",

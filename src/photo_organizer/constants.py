@@ -23,6 +23,7 @@ IMAGE_FORMATS = (
     ImageFormat("WEBP", frozenset({".webp"})),
     ImageFormat("BMP", frozenset({".bmp"})),
     ImageFormat("HEIF", frozenset({".heic", ".heif", ".hif"}), supports_exif=True),
+    ImageFormat("Apple ProRAW", frozenset({".dng"}), supports_exif=True),
     ImageFormat("Canon RAW", frozenset({".cr2", ".cr3", ".crw"}), supports_exif=True),
     ImageFormat("Nikon RAW", frozenset({".nef"}), supports_exif=True),
     ImageFormat("Sony RAW", frozenset({".arw"}), supports_exif=True),
@@ -55,7 +56,28 @@ RAW_IMAGE_FILE_EXTENSIONS = frozenset(
     for extension in image_format.extensions
 )
 
+RAW_FORMAT_BY_EXTENSION = {
+    extension: image_format.name
+    for image_format in IMAGE_FORMATS
+    if image_format.name.endswith("RAW")
+    for extension in image_format.extensions
+}
+
+RAW_FLOW_BY_EXTENSION = {
+    ".dng": "Apple ProRAW / Linear DNG",
+}
+
 
 def supported_image_extensions_text() -> str:
     """Return a stable comma-separated list of supported image extensions."""
     return ", ".join(sorted(IMAGE_FILE_EXTENSIONS))
+
+
+def raw_format_name_for_extension(extension: str) -> str:
+    """Return the RAW format label for an extension, or an empty string."""
+    return RAW_FORMAT_BY_EXTENSION.get(extension.lower(), "")
+
+
+def raw_flow_name_for_extension(extension: str) -> str:
+    """Return the explicit RAW workflow label for an extension, or empty."""
+    return RAW_FLOW_BY_EXTENSION.get(extension.lower(), "")

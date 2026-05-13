@@ -13,7 +13,11 @@ from photo_organizer.correction_manifest import (
     CorrectionPriority,
     correction_for_file,
 )
-from photo_organizer.constants import RAW_IMAGE_FILE_EXTENSIONS
+from photo_organizer.constants import (
+    RAW_IMAGE_FILE_EXTENSIONS,
+    raw_flow_name_for_extension,
+    raw_format_name_for_extension,
+)
 from photo_organizer.geocoding import (
     ReverseGeocodedLocation,
     reverse_geocode_coordinates,
@@ -155,6 +159,8 @@ class FileOperation:
     text_normalization_observations: tuple[str, ...] = ()
     correction_manifest: CorrectionApplication | None = None
     related_sidecars: tuple[Path, ...] = ()
+    raw_format: str = ""
+    raw_flow: str = ""
     dng_candidate: bool = False
     dng_candidate_reason: str = ""
 
@@ -439,6 +445,8 @@ def plan_organization_operations(
 
         destination_file = destination_dir / filename
         related_sidecars = find_related_sidecars(image_path)
+        raw_format = raw_format_name_for_extension(image_path.suffix)
+        raw_flow = raw_flow_name_for_extension(image_path.suffix)
         dng_candidate = (
             dng_candidates and image_path.suffix.lower() in RAW_IMAGE_FILE_EXTENSIONS
         )
@@ -460,6 +468,8 @@ def plan_organization_operations(
                 text_normalization_observations=tuple(text_normalization_observations),
                 correction_manifest=correction,
                 related_sidecars=related_sidecars,
+                raw_format=raw_format,
+                raw_flow=raw_flow,
                 dng_candidate=dng_candidate,
                 dng_candidate_reason=(
                     "RAW file selected for optional DNG interoperability workflow"

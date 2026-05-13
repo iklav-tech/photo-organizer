@@ -14,6 +14,9 @@ from photo_organizer import __app_name__, __description__, __repository__, __ver
 from photo_organizer.config import ConfigurationError, load_organization_config
 from photo_organizer.constants import (
     HEIF_IMAGE_FILE_EXTENSIONS,
+    RAW_IMAGE_FILE_EXTENSIONS,
+    raw_flow_name_for_extension,
+    raw_format_name_for_extension,
     supported_image_extensions_text,
 )
 from photo_organizer.correction_manifest import (
@@ -189,6 +192,15 @@ def _write_execution_report(
         else:
             operation["dng_candidate"] = False
             operation["dng_candidate_reason"] = ""
+        operation["raw_family"] = bool(
+            planned_operation is not None and planned_operation.raw_format
+        )
+        operation["raw_format"] = (
+            planned_operation.raw_format if planned_operation is not None else ""
+        )
+        operation["raw_flow"] = (
+            planned_operation.raw_flow if planned_operation is not None else ""
+        )
         if (
             planned_operation is not None
             and planned_operation.text_normalization_observations
@@ -320,6 +332,9 @@ def _write_execution_report(
             "sidecar_count",
             "sidecar_sources",
             "sidecar_destinations",
+            "raw_family",
+            "raw_format",
+            "raw_flow",
             "dng_candidate",
             "dng_candidate_reason",
         ]
@@ -600,6 +615,17 @@ def _heif_audit_item(
             "state": location_decision.get("state"),
             "country": location_decision.get("country"),
         },
+    }
+
+
+def _raw_audit_item(path: Path) -> dict[str, object] | None:
+    if path.suffix.lower() not in RAW_IMAGE_FILE_EXTENSIONS:
+        return None
+    return {
+        "is_raw": True,
+        "format": raw_format_name_for_extension(path.suffix),
+        "extension": path.suffix.lower(),
+        "flow": raw_flow_name_for_extension(path.suffix),
     }
 
 
@@ -908,10 +934,12 @@ def _inspect_file(
         date_decision,
         location_decision,
     )
+    raw_audit = _raw_audit_item(path)
     return {
         "path": str(path),
         "sources": source_items,
         "heif": heif_audit,
+        "raw": raw_audit,
         "date": {
             "decision": date_decision,
             "candidates": date_candidates,
@@ -964,6 +992,9 @@ def _write_inspect_report(
                 "heif_missing_metadata",
                 "heif_date_evidence",
                 "heif_location_evidence",
+                "raw_family",
+                "raw_format",
+                "raw_flow",
                 "location_status",
                 "location_kind",
                 "latitude",
@@ -993,6 +1024,7 @@ def _write_inspect_report(
                 if isinstance(heif_audit, dict)
                 else {}
             )
+            raw_audit = item.get("raw")
             writer.writerow(
                 {
                     "path": item["path"],
@@ -1031,6 +1063,15 @@ def _write_inspect_report(
                     else "",
                     "heif_location_evidence": heif_location_evidence.get("kind", "")
                     if isinstance(heif_location_evidence, dict)
+                    else "",
+                    "raw_family": raw_audit.get("is_raw", False)
+                    if isinstance(raw_audit, dict)
+                    else False,
+                    "raw_format": raw_audit.get("format", "")
+                    if isinstance(raw_audit, dict)
+                    else "",
+                    "raw_flow": raw_audit.get("flow", "")
+                    if isinstance(raw_audit, dict)
                     else "",
                     "location_status": location_decision["status"],
                     "location_kind": location_decision["kind"],
@@ -1845,6 +1886,13 @@ def main(argv: list[str] | None = None) -> int:
                     "  HEIF evidence: "
                     f"date={date_evidence.get('kind', 'missing') if isinstance(date_evidence, dict) else 'missing'} "
                     f"location={location_evidence.get('kind', 'missing') if isinstance(location_evidence, dict) else 'missing'}"
+                )
+            raw_audit = item.get("raw")
+            if isinstance(raw_audit, dict):
+                print(
+                    "  RAW: "
+                    f"format={raw_audit.get('format', '')} "
+                    f"flow={raw_audit.get('flow', '') or 'manufacturer RAW'}"
                 )
             print(
                 "  Date: "
