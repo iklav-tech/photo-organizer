@@ -6,6 +6,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.7.0] - 2026-05-13
+
 ### Added
 
 - Initial RAW format recognition scope:
@@ -28,9 +32,28 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - `inspect` now emits a technical RAW audit with detected format, support
   status, make, model, capture date/time, GPS, field origins and explicit
   partial-support warnings.
+- `inspect` JSON reports now include a dedicated `raw` audit block with
+  `is_raw`, `format`, `extension`, `flow`, `status`, field-level
+  make/model/datetime/GPS entries, `found_fields`, `missing_fields` and
+  warnings.
+- `inspect` CSV reports now include RAW analysis fields:
+  - `raw_family`
+  - `raw_format`
+  - `raw_flow`
+  - `raw_status`
+  - `raw_found_fields`
+  - `raw_missing_fields`
+- Execution reports now identify RAW-family operations with:
+  - `raw_family`
+  - `raw_format`
+  - `raw_flow`
 - Synthetic RAW corpus fixtures cover every supported RAW-family extension,
   corrupted RAW input, valid RAW without GPS and cross-manufacturer metadata
   normalization.
+- RAW performance tests cover large sparse RAW files and batch planning without
+  full RAW reads.
+- Optional real-camera RAW performance validation can run with
+  `PHOTO_ORGANIZER_REAL_RAW_DIR`.
 - RAW metadata extraction now uses bounded TIFF range reads instead of loading
   full RAW files, and RAW organization planning skips generic full-file
   embedded XMP/IPTC scans to keep large batches responsive.
@@ -62,6 +85,8 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   normalized metadata fields instead of source-specific tag names.
 - Equivalent fields from EXIF, XMP sidecars, RAW TIFF-style metadata and common
   vendor aliases are mapped before organization decisions are made.
+- Apple ProRAW `.dng` files are treated as RAW-family input through the
+  Linear DNG workflow, not as ordinary HEIC/JPEG files.
 - RAW organization planning now links same-basename `.xmp` sidecars to the RAW
   operation.
 - Execution reports now include `sidecar_count`, `sidecar_sources` and
@@ -88,6 +113,14 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   conversion or require DNG files to be created.
 - RAW files with missing or unsupported embedded metadata can still use
   sidecars, correction manifests, heuristics or filesystem `mtime` fallback.
+- RAW metadata reads are bounded and range-based; the RAW backend reads TIFF
+  headers, IFDs and referenced metadata values without decoding pixels or
+  loading the full RAW payload.
+- Generic embedded XMP/IPTC full-file scans are skipped for RAW-family files to
+  preserve responsiveness on large batches; same-basename `.xmp` sidecars stay
+  supported.
+- RAW compatibility is documented per manufacturer/container as full, partial
+  or experimental.
 
 ### Validation
 
@@ -101,6 +134,16 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Tests cover RAW sidecar detection, copy, move and execution report linkage.
 - Tests cover DNG candidate marking from CLI/config, default disabled behavior
   and report fields.
+- Tests cover Apple ProRAW / DNG classification inside the RAW family.
+- Tests cover RAW `inspect` audit fields, terminal output and partial-support
+  warnings.
+- Tests cover synthetic RAW corpus generation for every supported RAW-family
+  extension.
+- Tests cover corrupted RAW files and valid RAW files without GPS.
+- Tests cover large sparse RAW metadata reads and large RAW batch planning
+  without full-file RAW reads.
+- Optional tests can validate the bounded-read policy against local real RAW
+  files via `PHOTO_ORGANIZER_REAL_RAW_DIR`.
 
 ## [0.6.0] - 2026-05-11
 
