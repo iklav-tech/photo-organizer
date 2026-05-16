@@ -68,6 +68,29 @@ def _get_journal_writer_type():
     return _JournalWriterType
 
 
+def filter_resumable_operations(
+    operations: list[FileOperation],
+    completed_sources: frozenset[str],
+) -> tuple[list[FileOperation], list[FileOperation]]:
+    """Split *operations* into pending and already-completed groups.
+
+    An operation is considered *completed* when its source path (as a
+    normalised string) appears in *completed_sources*.  The destination file
+    is **not** checked here — the journal is the authoritative record.
+
+    Returns ``(pending, skipped)`` where *pending* should be executed and
+    *skipped* were already done in a previous run.
+    """
+    pending: list[FileOperation] = []
+    skipped: list[FileOperation] = []
+    for operation in operations:
+        if str(operation.source) in completed_sources:
+            skipped.append(operation)
+        else:
+            pending.append(operation)
+    return pending, skipped
+
+
 def find_related_sidecars(path: str | Path) -> tuple[Path, ...]:
     """Return same-basename sidecars that should follow a RAW file."""
     raw_path = Path(path)

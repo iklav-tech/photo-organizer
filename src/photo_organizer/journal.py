@@ -294,3 +294,57 @@ def _entry_fields_from_operation(operation: object) -> dict[str, str]:
         "clock_offset": clock_offset,
         "event_name": event_name,
     }
+
+
+def load_completed_sources(path: str | Path) -> frozenset[str]:
+    """Read a journal file and return the set of source paths that succeeded.
+
+    Only entries with ``status == "success"`` are included.  Entries with
+    ``status == "error"`` or ``status == "dry-run"`` are intentionally excluded
+    so that failed or simulated operations are always retried on resume.
+
+    Malformed lines are silently skipped so a partially-written journal never
+    blocks a resume.
+
+    Returns a :class:`frozenset` of normalised absolute path strings so that
+    membership tests are O(1).
+    """
+    journal_path = Path(path)
+    if not journal_path.exists():
+        return frozenset()
+
+    completed: set[str] = set()
+    fmt = _detect_format(journal_path)
+
+    try:
+        if fmt == "jsonl":
+            with journal_path.open(encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if (
+                        isinstance(entry, dict)
+                        and entry.get("status") == "success"
+                        and entry.get("source")
+                    ):
+                        completed.add(str(entry["source"]))
+        else:
+            # CSV format
+            with journal_path.open(encoding="utf-8", newline="") as fh:
+                reader = csv.DictReader(fh)
+                for row in reader:
+                    if row.get("status") == "success" and row.get("source"):
+                        completed.add(str(row["source"]))
+    except OSError as exc:
+        logger.warning(
+            "Could not read journal for resume: path=%s error=%s",
+            journal_path,
+            exc,
+        )
+
+    return frozenset(completed)

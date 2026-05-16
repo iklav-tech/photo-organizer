@@ -29,11 +29,12 @@ from photo_organizer.correction_manifest import (
 from photo_organizer.executor import (
     FileOperation,
     apply_operations,
+    filter_resumable_operations,
     plan_organization_operations,
 )
 from photo_organizer.geocoding import reverse_geocode_coordinates
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
-from photo_organizer.journal import JOURNAL_EXTENSIONS, JournalWriter
+from photo_organizer.journal import JOURNAL_EXTENSIONS, JournalWriter, load_completed_sources
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.metadata import (
     DATE_HEURISTICS_DEFAULT,
@@ -1853,6 +1854,17 @@ def _add_organize_arguments(
             "The file is created if it does not exist; existing entries are "
             "preserved (append mode). "
             "Useful for long-term audit trails across multiple runs."
+        ),
+    )
+    report_group.add_argument(
+        "--resume",
+        action="store_true",
+        default=False,
+        help=(
+            "Resume an interrupted batch by skipping files that were already "
+            "successfully processed in a previous run. "
+            "Requires --journal so the completed files can be identified. "
+            "Only entries with status=success are skipped; errors are retried."
         ),
     )
 
