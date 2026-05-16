@@ -1,8 +1,22 @@
 # photo-organizer
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://iklav-tech.github.io/photo-organizer/)
+
 Python command-line photo organizer for renaming and organizing files by date, time, and metadata.
 
 Repository: https://github.com/iklav-tech/photo-organizer
+
+## Documentation
+
+Project documentation lives in [`docs/`](docs/) and is prepared for publication
+with GitHub Pages at:
+
+https://iklav-tech.github.io/photo-organizer/
+
+In the GitHub repository settings, configure `Settings > Pages > Source` as
+`GitHub Actions`. The workflow in `.github/workflows/pages.yml` publishes the
+site from the `docs/` directory on pushes to `main` and can also be run
+manually.
 
 ## Changelog
 
@@ -866,6 +880,15 @@ Duplicate reports:
 photo-organizer/
   pyproject.toml
   README.md
+  CHANGELOG.md
+  docs/
+    index.md
+    installation.md
+    usage.md
+    configuration.md
+    examples.md
+    roadmap.md
+    changelog.md
   src/
     photo_organizer/
       __init__.py

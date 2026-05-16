@@ -6,7 +6,13 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Initial project documentation site under `docs/`, including installation,
+  usage, configuration, examples, roadmap and changelog pages.
+- GitHub Pages publication workflow in `.github/workflows/pages.yml` to publish
+  the `docs/` site from the repository itself.
+- README documentation link and GitHub Pages setup note.
 
 ## [0.8.0] - 2026-05-16
 

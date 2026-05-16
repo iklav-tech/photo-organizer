@@ -1,0 +1,9 @@
+title: photo-organizer
+description: CLI tool to organize photos by metadata and date.
+baseurl: /photo-organizer
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

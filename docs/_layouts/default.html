@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }} | {{ site.title }}</title>
+    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a class="site-title" href="{{ '/' | relative_url }}">photo-organizer</a>
+        <nav class="site-nav" aria-label="Documentacao">
+          <a href="{{ '/' | relative_url }}">Inicio</a>
+          <a href="{{ '/installation/' | relative_url }}">Instalacao</a>
+          <a href="{{ '/usage/' | relative_url }}">Uso</a>
+          <a href="{{ '/configuration/' | relative_url }}">Configuracao</a>
+          <a href="{{ '/examples/' | relative_url }}">Exemplos</a>
+          <a href="{{ '/roadmap/' | relative_url }}">Roadmap</a>
+          <a href="{{ '/changelog/' | relative_url }}">Changelog</a>
+        </nav>
+      </div>
+    </header>
+    <main class="container content">
+      {{ content }}
+    </main>
+  </body>
+</html>
