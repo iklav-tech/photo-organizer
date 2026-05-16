@@ -28,7 +28,9 @@ from photo_organizer.correction_manifest import (
 )
 from photo_organizer.executor import (
     FileOperation,
+    QuarantineOperation,
     apply_operations,
+    apply_quarantine,
     filter_resumable_operations,
     plan_organization_operations,
 )

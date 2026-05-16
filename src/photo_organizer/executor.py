@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import logging
 from pathlib import Path
 import shutil
@@ -200,6 +201,161 @@ class FileOperation:
     dng_candidate_reason: str = ""
 
 
+# ---------------------------------------------------------------------------
+# Quarantine
+# ---------------------------------------------------------------------------
+
+#: Reason codes used in :class:`QuarantineOperation`.
+#:
+#: ``metadata-error``   – date/metadata extraction failed during planning.
+#: ``copy-error``       – the file could not be copied to its destination.
+#: ``move-error``       – the file could not be moved to its destination.
+#: ``read-error``       – the source file could not be read at all.
+QUARANTINE_REASON_CODES = frozenset({
+    "metadata-error",
+    "copy-error",
+    "move-error",
+    "read-error",
+})
+
+
+@dataclass(frozen=True)
+class QuarantineOperation:
+    """A file that could not be processed and should be isolated.
+
+    Quarantine operations are produced either during planning (when metadata
+    extraction fails) or during execution (when a copy/move fails).  They are
+    separate from :class:`FileOperation` so the rest of the batch is never
+    blocked by a single problematic file.
+    """
+
+    source: Path
+    reason: str
+    reason_code: str  # one of QUARANTINE_REASON_CODES
+    quarantine_destination: Path | None = None  # set after apply_quarantine()
+
+
+def _quarantine_sidecar_path(quarantine_dest: Path) -> Path:
+    """Return the path for the JSON sidecar that explains the quarantine."""
+    return quarantine_dest.with_suffix(quarantine_dest.suffix + ".quarantine.json")
+
+
+def apply_quarantine(
+    quarantine_operations: list[QuarantineOperation],
+    quarantine_dir: Path,
+    *,
+    dry_run: bool = False,
+) -> tuple[list[QuarantineOperation], list[str]]:
+    """Copy problematic files into *quarantine_dir* with a reason sidecar.
+
+    Each file is placed at ``quarantine_dir/<original-filename>`` (with a
+    numeric suffix when names collide).  A companion
+    ``<filename>.quarantine.json`` sidecar is written alongside it explaining
+    the reason for quarantine.
+
+    When *dry_run* is ``True`` no files are written; the returned operations
+    carry ``quarantine_destination`` set to the *planned* path so callers can
+    report what *would* happen.
+
+    Returns ``(applied_operations, log_lines)`` where *applied_operations* are
+    :class:`QuarantineOperation` instances with ``quarantine_destination`` set
+    and *log_lines* follow the same ``[INFO]``/``[DRY-RUN]``/``[ERROR]``
+    convention used by :func:`apply_operations`.
+    """
+    quarantine_dir.mkdir(parents=True, exist_ok=True)
+    applied: list[QuarantineOperation] = []
+    logs: list[str] = []
+    reserved: set[Path] = set()
+
+    for op in quarantine_operations:
+        dest = _resolve_quarantine_destination(op.source, quarantine_dir, reserved)
+        reserved.add(dest)
+        sidecar = _quarantine_sidecar_path(dest)
+        line_suffix = f"QUARANTINE {op.source} -> {dest}"
+
+        if dry_run:
+            applied.append(
+                QuarantineOperation(
+                    source=op.source,
+                    reason=op.reason,
+                    reason_code=op.reason_code,
+                    quarantine_destination=dest,
+                )
+            )
+            logs.append(f"[DRY-RUN] {line_suffix}")
+            continue
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(op.source, dest)
+            sidecar.write_text(
+                json.dumps(
+                    {
+                        "source": str(op.source),
+                        "quarantine_destination": str(dest),
+                        "reason": op.reason,
+                        "reason_code": op.reason_code,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to quarantine file: source=%s destination=%s error=%s",
+                op.source,
+                dest,
+                exc,
+            )
+            logs.append(f"[ERROR] {line_suffix} (error: {exc})")
+            applied.append(
+                QuarantineOperation(
+                    source=op.source,
+                    reason=op.reason,
+                    reason_code=op.reason_code,
+                    quarantine_destination=None,
+                )
+            )
+            continue
+
+        applied.append(
+            QuarantineOperation(
+                source=op.source,
+                reason=op.reason,
+                reason_code=op.reason_code,
+                quarantine_destination=dest,
+            )
+        )
+        logs.append(f"[INFO] {line_suffix}")
+        logger.info(
+            "File quarantined: source=%s destination=%s reason_code=%s",
+            op.source,
+            dest,
+            op.reason_code,
+        )
+
+    return applied, logs
+
+
+def _resolve_quarantine_destination(
+    source: Path,
+    quarantine_dir: Path,
+    reserved: set[Path],
+) -> Path:
+    """Return a non-colliding path inside *quarantine_dir* for *source*."""
+    base = quarantine_dir / source.name
+    if not base.exists() and base not in reserved:
+        return base
+    counter = 1
+    while True:
+        candidate = quarantine_dir / f"{source.stem}_{counter:02d}{source.suffix}"
+        if not candidate.exists() and candidate not in reserved:
+            return candidate
+        counter += 1
+
+
 def plan_organization_operations(
     source_dir: str | Path,
     output_dir: str | Path,
@@ -215,7 +371,7 @@ def plan_organization_operations(
     correction_priority: CorrectionPriority | None = None,
     clock_offset: str | None = None,
     dng_candidates: bool = False,
-) -> list[FileOperation]:
+) -> tuple[list[FileOperation], list[QuarantineOperation]]:
     """Plan organization operations for all supported images in source_dir.
 
     When *clock_offset* is provided it is applied as a global time correction to
@@ -225,6 +381,11 @@ def plan_organization_operations(
     original datetime is always preserved in the provenance ``raw_value``.
 
     Accepted offset formats: ``+3h``, ``-1d``, ``+00:30``, ``-5:45``, ``+12``.
+
+    Returns ``(operations, quarantine_operations)`` where *quarantine_operations*
+    contains files that could not be planned due to metadata or naming errors.
+    These files are not silently dropped — callers can pass them to
+    :func:`apply_quarantine` to isolate them in a dedicated directory.
     """
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
     source_path = Path(source_dir)
@@ -237,6 +398,7 @@ def plan_organization_operations(
     )
 
     operations: list[FileOperation] = []
+    quarantine_ops: list[QuarantineOperation] = []
     for image_path in find_image_files(source_path, recursive=True):
         camera_profile = (
             extract_camera_profile(image_path)
@@ -290,6 +452,13 @@ def plan_organization_operations(
                 "Failed to plan file operation: source=%s error=%s",
                 image_path,
                 exc,
+            )
+            quarantine_ops.append(
+                QuarantineOperation(
+                    source=image_path,
+                    reason=str(exc),
+                    reason_code="metadata-error",
+                )
             )
             continue
 
@@ -476,6 +645,13 @@ def plan_organization_operations(
                 image_path,
                 exc,
             )
+            quarantine_ops.append(
+                QuarantineOperation(
+                    source=image_path,
+                    reason=str(exc),
+                    reason_code="metadata-error",
+                )
+            )
             continue
 
         destination_file = destination_dir / filename
@@ -514,7 +690,7 @@ def plan_organization_operations(
             )
         )
 
-    return operations
+    return operations, quarantine_ops
 
 
 def apply_operations(
