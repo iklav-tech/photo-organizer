@@ -7,13 +7,13 @@ Repository: https://github.com/iklav-tech/photo-organizer
 ## Changelog
 
 Release history is tracked in [CHANGELOG.md](CHANGELOG.md). This README also
-consolidates the delivered v0.1.0 through v0.6.0 scope below.
+consolidates the delivered v0.1.0 through the current post-v0.7.0 scope below.
 
 ## Current status
 
-The project includes a tested v0.6.0 CLI workflow:
+The project includes a tested CLI workflow:
 
-- CLI with `scan` and `organize` commands;
+- CLI with `scan`, `organize` and safe-copy `import` commands;
 - `dedupe` command for read-only duplicate discovery;
 - `inspect` command for read-only metadata auditing;
 - `explain` command for JSON decision-trail reports;
@@ -62,6 +62,10 @@ The project includes a tested v0.6.0 CLI workflow:
 - structured execution summaries;
 - resilient per-file error handling for invalid files and malformed metadata;
 - optional audit report export in JSON or CSV with `--report`;
+- final import manifests in JSON or CSV for batch audit trails;
+- report fields that identify final destination, chosen date/location, metadata
+  source, reconciliation conflicts, RAW details, DNG candidates and derived
+  asset classification;
 - explain reports export chosen date/location, candidates, source and
   confidence in JSON;
 - external JSON/YAML organization config with custom naming, destination and
@@ -236,15 +240,19 @@ Example use cases:
 - `photo-organizer inspect --help`
 - `photo-organizer explain --help`
 - `photo-organizer organize --help`
+- `photo-organizer import --help`
 - `photo-organizer inspect SOURCE --report metadata-audit.json`
 - `photo-organizer explain SOURCE --report explain.json`
 - `photo-organizer explain SOURCE --reverse-geocode --report explain.json`
 - `photo-organizer dedupe SOURCE --report duplicates.json`
 - `photo-organizer dedupe SOURCE --report duplicates.csv`
+- `photo-organizer import SOURCE --output Organized --report import.json`
 - `photo-organizer organize SOURCE --config organizer.yaml`
 - `photo-organizer organize SOURCE --output Organized --name-pattern "{date:%Y%m%d}_{stem}{ext}"`
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
 - `photo-organizer organize SOURCE --output Organized --correction-manifest corrections.yaml`
+- `photo-organizer organize SOURCE --output Organized --conflict-policy skip`
+- `photo-organizer organize SOURCE --output Organized --segregate-derivatives`
 - `photo-organizer organize SOURCE --output Organized --heic-preview`
 - `photo-organizer organize SOURCE --output Organized --dng-candidates --report audit.json`
 - grouped `organize` help sections for paths, execution, reports and mode;
@@ -795,6 +803,8 @@ date path.
 - on `import`, the report is the final import manifest and audit trail;
 - report rows include source, final destination, action, status, observations,
   chosen date, chosen location, metadata source and reconciliation conflicts;
+- report rows identify original versus derived assets with `asset_role`,
+  `derived` and `derived_reason`;
 - report rows include RAW sidecar linkage fields: `sidecar_count`,
   `sidecar_sources` and `sidecar_destinations`;
 - execution reports identify RAW-family operations with `raw_family`,
@@ -1869,6 +1879,65 @@ scope.
 - README documents a RAW compatibility matrix by manufacturer/container with
   full, partial and experimental status, supported fields and known limitations.
 
+## Post-v0.7.0 import, conflict and asset-role delivered scope
+
+This section consolidates the batch-audit and library-layout work delivered
+after the RAW-family scope.
+
+### Import command and final manifests
+
+- `photo-organizer import SOURCE --output DIR` is available as a safe-copy
+  workflow for SD cards, phone dumps, old backups and other inbound batches;
+- `import` shares the same planning, metadata, naming, location, correction,
+  conflict and reporting behavior as `organize`;
+- `import` defaults to copy mode so the source batch is not modified unless the
+  user explicitly opts into move behavior;
+- `organize --report` and `import --report` write final batch manifests in JSON
+  or CSV;
+- manifest rows include the original source, final destination actually used,
+  action, status, observations, chosen date, chosen location, metadata source
+  and reconciliation conflict fields;
+- manifests preserve audit fields for RAW sidecars, RAW format/flow, DNG
+  candidates, correction manifests, clock offsets and derived asset decisions.
+
+### Configurable destination conflict policy
+
+- destination conflict handling is explicitly configurable with
+  `--conflict-policy` or `behavior.conflict_policy`;
+- supported policies are `suffix`, `skip`, `overwrite-never`, `quarantine` and
+  `fail-fast`;
+- `suffix` remains the default safe behavior and never overwrites existing
+  files;
+- `skip` records a skipped operation and leaves both source and destination
+  untouched;
+- `overwrite-never` records a per-item error while continuing the remaining
+  batch;
+- `quarantine` copies the incoming conflicting file to `<output>/.quarantine`
+  with a JSON reason sidecar;
+- `fail-fast` aborts the batch on the first destination conflict.
+
+### Original and derived asset segregation
+
+- derived-file segregation can be enabled with `--segregate-derivatives` or
+  `derivatives.enabled: true`;
+- derived files are classified by configurable filename glob patterns through
+  repeated `--derived-pattern` flags or `derivatives.patterns`;
+- the derived subtree is configurable with `--derived-path` or
+  `derivatives.path` and defaults to `Derivatives`;
+- when a file is classified as derived, the normal date/location organization
+  path is preserved below the derived subtree;
+- reports clearly identify derived handling with `asset_role`, `derived` and
+  `derived_reason`.
+
+### Configuration, documentation and tests
+
+- sample configuration now documents `behavior.conflict_policy` and the
+  `derivatives` section;
+- README examples cover import manifests, conflict policies and
+  original/derived segregation;
+- tests cover CLI/config plumbing, executor behavior, report fields and
+  end-to-end safe defaults for the new policies.
+
 ## Roadmap
 
 ### Version 0.1.0
@@ -1901,6 +1970,11 @@ scope.
 - RAW inspect audit, RAW execution report fields, RAW corpus tests, large-file
   performance policy and compatibility matrix are implemented;
 
+### Post-v0.7.0 delivered scope
+- import final manifests, configurable destination conflict policies and
+  optional original/derived asset segregation are implemented and documented
+  (see the post-v0.7.0 delivered scope section).
+
 ### Future work
 - support for more media types (including videos);
 - richer filtering (include/exclude and depth controls);
@@ -1914,8 +1988,8 @@ scope.
 ## Project status
 
 In active development, with stable tested workflows for scan, dedupe, inspect,
-explain and organize across JPEG/PNG/TIFF, HEIC/HEIF and the current RAW-family
-scope.
+explain, organize and import across JPEG/PNG/TIFF, HEIC/HEIF and the current
+RAW-family scope.
 
 ## Motivation
 
