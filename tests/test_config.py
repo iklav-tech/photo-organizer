@@ -30,7 +30,11 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                 },
                 "preview": {"heic": True},
                 "interop": {"dng_candidates": True},
-                "events": {"window_minutes": 45, "directory": True},
+                "events": {
+                    "window_minutes": 45,
+                    "directory": True,
+                    "directory_pattern": "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}",
+                },
             }
         ),
         encoding="utf-8",
@@ -55,6 +59,9 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.dng_candidates is True
     assert config.event_window_minutes == 45
     assert config.event_directory is True
+    assert config.event_directory_pattern == (
+        "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}"
+    )
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
@@ -134,6 +141,18 @@ def test_load_organization_config_accepts_city_state_month_strategy(
     config = load_organization_config(config_path)
 
     assert config.organization_strategy == "city-state-month"
+
+
+def test_load_organization_config_accepts_event_strategy(tmp_path: Path) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"destination": {"strategy": "event"}}),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.organization_strategy == "event"
 
 
 def test_load_organization_config_rejects_unknown_pattern_field(

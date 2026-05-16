@@ -85,7 +85,7 @@ Opcoes principais compartilhadas por `organize` e `import`:
 
 - `--output DIR`: diretorio destino.
 - `--config PATH`: arquivo `.json`, `.yaml` ou `.yml`.
-- `--by date|location|location-date|city-state-month`.
+- `--by date|event|location|location-date|city-state-month`.
 - `--name-pattern PATTERN`, com `{date}`, `{stem}`, `{ext}` e `{original}`.
 - `--report PATH`: relatorio `.json` ou `.csv`.
 - `--journal PATH`: diario persistente `.jsonl` ou `.csv`.
@@ -93,6 +93,7 @@ Opcoes principais compartilhadas por `organize` e `import`:
 - `--conflict-policy suffix|skip|overwrite-never|quarantine|fail-fast`.
 - `--segregate-derivatives`, `--no-segregate-derivatives`, `--derived-path DIR` e `--derived-pattern PATTERN`.
 - `--event-window-minutes MINUTES`: agrupa fotos em eventos quando timestamps consecutivos ficam dentro da janela informada.
+- `--event-directory-pattern PATTERN`: define o caminho de diretorio usado por `--by event`.
 - `--event-directory`: coloca arquivos organizados abaixo de um diretorio de evento gerado.
 - `--no-event-directory`: mantem o agrupamento temporal apenas nos relatorios.
 - `--heic-preview` ou `--no-heic-preview`.

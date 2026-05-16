@@ -18,6 +18,10 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Optional event destination directories with `--event-directory` or
   `events.directory`.
 - Temporal event fields in execution reports when event grouping is enabled.
+- Event-based organization with `--by event`, defaulting to
+  `YYYY/YYYY-MM-DD_evento-001` style paths.
+- Configurable event directory patterns through `--event-directory-pattern` and
+  `events.directory_pattern`.
 
 ## [0.8.0] - 2026-05-16
 

@@ -16,6 +16,7 @@ O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](
 - Documentacao inicial do site em `docs/`.
 - Workflow de publicacao no GitHub Pages para publicar o site a partir da pasta `docs/`.
 - Deteccao de eventos por proximidade temporal com janela configuravel, para relatorio ou diretorio.
+- Organizacao por evento com `--by event` e padrao configuravel de diretorio.
 
 ## Versao atual
 

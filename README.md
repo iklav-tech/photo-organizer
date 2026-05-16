@@ -64,8 +64,9 @@ The project includes a tested CLI workflow:
 - provenance tracking with source, field, confidence and raw value;
 - deterministic default naming rules;
 - configurable filename patterns through CLI or configuration files;
-- destination folder planning by date (`YYYY/MM/DD`), location, location plus
-  date, custom destination pattern, or city/state/month hybrid strategy;
+- destination folder planning by date (`YYYY/MM/DD`), event, location,
+  location plus date, custom destination pattern, or city/state/month hybrid
+  strategy;
 - optional temporal event grouping with configurable time windows, available
   for reports or as generated destination directories;
 - explicit planning layer separated from execution;
@@ -266,6 +267,8 @@ Example use cases:
 - `photo-organizer organize SOURCE --config organizer.yaml`
 - `photo-organizer organize SOURCE --output Organized --name-pattern "{date:%Y%m%d}_{stem}{ext}"`
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
+- `photo-organizer organize SOURCE --output Organized --by event`
+- `photo-organizer organize SOURCE --output Organized --by event --event-window-minutes 30`
 - `photo-organizer organize SOURCE --output Organized --correction-manifest corrections.yaml`
 - `photo-organizer organize SOURCE --output Organized --conflict-policy skip`
 - `photo-organizer organize SOURCE --output Organized --event-window-minutes 60`
@@ -720,7 +723,7 @@ The same structure is accepted as JSON. Supported fields:
   `{original}`;
 - `destination.pattern`: directory pattern with `{date}`, `{country}`,
   `{state}` and `{city}`;
-- `destination.strategy` or `behavior.organization_strategy`: `date`,
+- `destination.strategy` or `behavior.organization_strategy`: `date`, `event`,
   `location`, `location-date` or `city-state-month`;
 - `behavior.mode`: `copy` or `move`;
 - `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans;
@@ -749,6 +752,8 @@ The same structure is accepted as JSON. Supported fields:
   into temporal events;
 - `events.directory`: boolean to place organized files below generated event
   directories instead of using event grouping only in reports.
+- `events.directory_pattern`: directory pattern used by `--by event`, with
+  `{date}`, `{event}`, `{event_id}` and `{index}` fields.
 
 Example correction manifest:
 
@@ -789,6 +794,9 @@ clear CLI error before planning starts.
 Organization strategies:
 
 - `date`: writes to `YYYY/MM/DD`;
+- `event`: groups photos by temporal proximity and writes to
+  `YYYY/YYYY-MM-DD_event`, using `evento-001`, `evento-002`, ... unless a
+  correction manifest rule provides an `event` name;
 - `location`: writes to `Country/State/City`;
 - `location-date`: writes to `Country/State/City/YYYY/MM`;
 - `city-state-month`: writes to `City-State/YYYY-MM`, for example
@@ -798,6 +806,14 @@ Location-based strategies enable reverse geocoding automatically. If GPS data
 is missing or location resolution fails, organization falls back to the default
 date path.
 
+Event organization uses `--event-window-minutes` when provided and otherwise
+defaults to a 60-minute threshold. The default directory pattern is
+`{date:%Y}/{date:%Y-%m-%d}_{event}`. A custom pattern such as
+`{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}` produces paths like
+`2024/08/2024-08-15_viagem-paraty`. The `{event}` value is derived from the
+first correction-manifest `event` name found in the temporal group; when no rule
+provides a name, it is generated as `evento-001`, `evento-002`, and so on.
+
 ### Plan and execution separation
 
 - operations are planned first into an intermediate structure;
@@ -805,6 +821,8 @@ date path.
   metadata and linked RAW sidecars when present;
 - optional temporal event grouping runs during planning, after dates and
   destinations are resolved;
+- `--by event` uses the same temporal groups to replace the destination
+  directory with a human-oriented event path;
 - plan can be inspected without execution using `--plan`.
 
 ### Dry-run and operation modes
@@ -1711,8 +1729,10 @@ after the v0.3.0 workflow.
 
 - destination paths can be customized with `destination.pattern`;
 - destination patterns support `{date}`, `{country}`, `{state}` and `{city}`;
-- built-in strategies include `date`, `location`, `location-date` and
+- built-in strategies include `date`, `event`, `location`, `location-date` and
   `city-state-month`;
+- `event` creates paths like `2024/2024-08-15_evento-001` or, when a correction
+  manifest rule supplies an event name, `2024/08/2024-08-15_viagem-paraty`;
 - `city-state-month` creates paths like `Paraty-RJ/2024-08`;
 - location-based strategies automatically enable reverse geocoding unless the
   user explicitly disables it, in which case the CLI returns a clear error.

@@ -134,6 +134,53 @@ OrganizedPhotos/
           2024-08-15_10-00-00.jpg
 ```
 
+## Organizar diretamente por evento
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --by event
+```
+
+`--by event` usa agrupamento temporal e cria um caminho mais humano. Sem outras opcoes, a janela temporal padrao e de 60 minutos e o padrao de diretorio e `{date:%Y}/{date:%Y-%m-%d}_{event}`:
+
+```text
+OrganizedPhotos/
+  2024/
+    2024-08-15_evento-001/
+      2024-08-15_10-00-00.jpg
+```
+
+Para derivar nomes por regra, use o campo `event` no correction manifest:
+
+```yaml
+priority: highest
+rules:
+  - folder: "paraty"
+    event: "Viagem Paraty"
+```
+
+Com padrao mensal customizado:
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --by event \
+  --event-window-minutes 30 \
+  --event-directory-pattern "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}" \
+  --correction-manifest corrections.yaml
+```
+
+Destino esperado:
+
+```text
+OrganizedPhotos/
+  2024/
+    08/
+      2024-08-15_viagem-paraty/
+        2024-08-15_10-00-00.jpg
+```
+
 ## Exemplo de relatorio de execucao
 
 ```bash

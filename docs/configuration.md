@@ -41,6 +41,7 @@ derivatives:
 events:
   window_minutes: 60
   directory: false
+  directory_pattern: "{date:%Y}/{date:%Y-%m-%d}_{event}"
 ```
 
 Um exemplo completo existe em `config/organizer_sample.yaml`.
@@ -50,7 +51,7 @@ Um exemplo completo existe em `config/organizer_sample.yaml`.
 - `output`: diretorio raiz de destino.
 - `naming.pattern`: padrao de nome com `{date}`, `{stem}`, `{ext}` e `{original}`.
 - `destination.pattern`: padrao de diretorio com `{date}`, `{country}`, `{state}` e `{city}`.
-- `destination.strategy` ou `behavior.organization_strategy`: `date`, `location`, `location-date` ou `city-state-month`.
+- `destination.strategy` ou `behavior.organization_strategy`: `date`, `event`, `location`, `location-date` ou `city-state-month`.
 - `behavior.mode`: `copy` ou `move`.
 - `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleanos.
 - `behavior.reconciliation_policy`: `precedence`, `newest`, `oldest` ou `filesystem`.
@@ -68,6 +69,7 @@ Um exemplo completo existe em `config/organizer_sample.yaml`.
 - `derivatives.patterns`: globs usados para classificar arquivos editados/exportados/derivados.
 - `events.window_minutes`: inteiro positivo para agrupar fotos em eventos por proximidade temporal.
 - `events.directory`: quando `true`, usa o nome gerado do evento como diretorio; quando `false`, o agrupamento aparece apenas em relatorios.
+- `events.directory_pattern`: padrao de diretorio para `--by event`; aceita `{date}`, `{event}`, `{event_id}` e `{index}`.
 
 ## Variaveis de ambiente
 
@@ -86,6 +88,7 @@ rules:
     city: "Houston"
     state: "TX"
     country: "USA"
+    event: "Viagem Paraty"
   - camera_make: "Olympus"
     camera_model: "C-2020Z"
     clock_offset: "-1d"

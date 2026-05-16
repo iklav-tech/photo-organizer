@@ -35,6 +35,7 @@ from photo_organizer.executor import (
     apply_quarantine,
     filter_resumable_operations,
     plan_organization_operations,
+    validate_event_directory_pattern,
 )
 from photo_organizer.geocoding import reverse_geocode_coordinates
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
@@ -362,6 +363,10 @@ def _write_execution_report(
         if planned_operation is not None and planned_operation.temporal_event_id:
             operation["temporal_event_id"] = planned_operation.temporal_event_id
             operation["temporal_event_label"] = planned_operation.temporal_event_label
+            operation["temporal_event_name"] = planned_operation.temporal_event_name
+            operation["temporal_event_directory"] = (
+                planned_operation.temporal_event_directory
+            )
             operation["temporal_event_index"] = planned_operation.temporal_event_index
             operation["temporal_event_size"] = planned_operation.temporal_event_size
             operation["temporal_event_start"] = (
@@ -474,6 +479,8 @@ def _write_execution_report(
                 [
                     "temporal_event_id",
                     "temporal_event_label",
+                    "temporal_event_name",
+                    "temporal_event_directory",
                     "temporal_event_index",
                     "temporal_event_size",
                     "temporal_event_start",
@@ -1769,6 +1776,7 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos --copy
   photo-organizer organize ./Photos --output ./OrganizedPhotos --name-pattern "{date:%Y%m%d}_{stem}{ext}"
   photo-organizer organize ./Photos --config organizer.yaml
+  photo-organizer organize ./Photos --output ./OrganizedPhotos --by event
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by city-state-month
   photo-organizer organize ./Photos --output ./OrganizedPhotos --by location-date
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dng-candidates --report audit.json
@@ -1851,10 +1859,10 @@ def _add_organize_arguments(
     execution_group = parser.add_argument_group("Execution")
     execution_group.add_argument(
         "--by",
-        choices=["date", "location", "location-date", "city-state-month"],
+        choices=["date", "event", "location", "location-date", "city-state-month"],
         default=None,
         help=(
-            "Organisation strategy: date, location, location-date, or "
+            "Organisation strategy: date, event, location, location-date, or "
             "city-state-month."
         ),
     )
@@ -1935,6 +1943,16 @@ def _add_organize_arguments(
         help=(
             "Group planned photos into temporal events when consecutive "
             "timestamps are within this many minutes."
+        ),
+    )
+    execution_group.add_argument(
+        "--event-directory-pattern",
+        metavar="PATTERN",
+        default=None,
+        help=(
+            "Directory pattern for --by event. Supported fields: {date}, "
+            "{event}, {event_id}, {index}. Default: "
+            "'{date:%%Y}/{date:%%Y-%%m-%%d}_{event}'."
         ),
     )
     event_directory_group = execution_group.add_mutually_exclusive_group()
@@ -2576,6 +2594,19 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.event_directory is not None
             else False
         )
+        event_directory_pattern = (
+            args.event_directory_pattern
+            if args.event_directory_pattern is not None
+            else config.event_directory_pattern
+            if config is not None and config.event_directory_pattern is not None
+            else None
+        )
+        if strategy == "event":
+            if event_window_minutes is None:
+                event_window_minutes = 60
+            event_directory = True
+            if event_directory_pattern is None:
+                event_directory_pattern = "{date:%Y}/{date:%Y-%m-%d}_{event}"
 
         if not output:
             parser.error(
@@ -2614,6 +2645,13 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--event-window-minutes must be greater than zero")
         if event_directory and event_window_minutes is None:
             parser.error("--event-directory requires --event-window-minutes")
+        if event_directory_pattern is not None and event_window_minutes is None:
+            parser.error("--event-directory-pattern requires --event-window-minutes")
+        if event_directory_pattern is not None:
+            try:
+                validate_event_directory_pattern(event_directory_pattern)
+            except ValueError as exc:
+                parser.error(f"invalid --event-directory-pattern: {exc}")
 
         logger.info(
             "Execution started: %s source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s staging=%s",
@@ -2647,6 +2685,7 @@ def main(argv: list[str] | None = None) -> int:
                 derivative_patterns=derivative_patterns,
                 event_window_minutes=event_window_minutes,
                 event_directory=event_directory,
+                event_directory_pattern=event_directory_pattern,
             )
             if (
                 isinstance(plan_result, tuple)

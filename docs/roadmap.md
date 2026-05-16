@@ -17,6 +17,7 @@ Ja implementado e documentado no projeto:
 - Politicas de conflito: `suffix`, `skip`, `overwrite-never`, `quarantine` e `fail-fast`.
 - Segregacao opcional de arquivos derivados/editados/exportados.
 - Agrupamento temporal de fotos em eventos com janela configuravel, para relatorio ou diretorio.
+- Organizacao por evento com diretorios previsiveis e nomes automaticos ou derivados de correction manifests.
 - Suporte de auditoria para HEIC/HEIF e escopo inicial RAW.
 - Testes automatizados cobrindo fluxos principais.
 

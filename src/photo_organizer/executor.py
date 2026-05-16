@@ -8,7 +8,10 @@ import fnmatch
 import json
 import logging
 from pathlib import Path
+import re
 import shutil
+import string
+import unicodedata
 from typing import Literal
 
 from photo_organizer.correction_manifest import (
@@ -307,6 +310,8 @@ class FileOperation:
     derived_reason: str = ""
     temporal_event_id: str = ""
     temporal_event_label: str = ""
+    temporal_event_name: str = ""
+    temporal_event_directory: str = ""
     temporal_event_index: int = 0
     temporal_event_size: int = 0
     temporal_event_start: datetime | None = None
@@ -475,6 +480,72 @@ def _temporal_event_label(index: int, start: datetime) -> str:
     return f"event-{index:03d}_{start.strftime('%Y-%m-%d_%H-%M')}"
 
 
+def _event_slug(value: str) -> str:
+    ascii_text = (
+        unicodedata.normalize("NFKD", value)
+        .encode("ascii", errors="ignore")
+        .decode("ascii")
+    )
+    lowered = ascii_text.lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
+    return slug or "evento"
+
+
+def _temporal_event_name(index: int, group: list[tuple[int, FileOperation]]) -> str:
+    for _, operation in group:
+        if (
+            operation.correction_manifest is not None
+            and operation.correction_manifest.event_name
+        ):
+            return _event_slug(operation.correction_manifest.event_name)
+    return f"evento-{index:03d}"
+
+
+def validate_event_directory_pattern(pattern: str) -> None:
+    """Validate fields accepted by event directory patterns."""
+    formatter = string.Formatter()
+    allowed_fields = {"date", "event", "event_id", "index"}
+    for _, field_name, _, _ in formatter.parse(pattern):
+        if field_name is None:
+            continue
+        root_name = field_name.split(".", maxsplit=1)[0].split("[", maxsplit=1)[0]
+        if root_name not in allowed_fields:
+            allowed = ", ".join(sorted(allowed_fields))
+            raise ValueError(
+                f"Unknown event directory pattern field '{root_name}'. "
+                f"Allowed: {allowed}"
+            )
+
+
+def _event_pattern_destination(
+    output_path: Path,
+    *,
+    pattern: str,
+    start: datetime,
+    event_name: str,
+    event_id: str,
+    event_index: int,
+) -> Path:
+    validate_event_directory_pattern(pattern)
+    rendered = pattern.format(
+        date=start,
+        event=event_name,
+        event_id=event_id,
+        index=event_index,
+    )
+    parts = [
+        normalize_text(part).value.strip(" .")
+        for part in re.split(r"[\\/]+", rendered)
+        if part.strip()
+    ]
+    if not parts:
+        raise ValueError("Generated event directory path is empty")
+    destination = output_path
+    for part in parts:
+        destination = destination / part
+    return destination
+
+
 def _event_destination(
     output_path: Path,
     destination: Path,
@@ -493,6 +564,7 @@ def assign_temporal_events(
     window_minutes: int,
     output_dir: str | Path | None = None,
     use_event_directory: bool = False,
+    event_directory_pattern: str | None = None,
 ) -> list[FileOperation]:
     """Assign deterministic event groups using consecutive capture times."""
     if window_minutes <= 0:
@@ -543,15 +615,32 @@ def assign_temporal_events(
         end = max(dates)
         event_label = _temporal_event_label(event_index, start)
         event_id = f"event-{event_index:03d}"
+        event_name = _temporal_event_name(event_index, group)
+        event_dir = ""
+        if event_directory_pattern is not None and output_path is not None:
+            event_dir = str(
+                _event_pattern_destination(
+                    output_path,
+                    pattern=event_directory_pattern,
+                    start=start,
+                    event_name=event_name,
+                    event_id=event_id,
+                    event_index=event_index,
+                )
+            )
         for original_index, operation in group:
             destination = operation.destination
-            if use_event_directory and output_path is not None:
+            if event_directory_pattern is not None and output_path is not None:
+                destination = Path(event_dir) / destination.name
+            elif use_event_directory and output_path is not None:
                 destination = _event_destination(output_path, destination, event_label)
             planned[original_index] = replace(
                 operation,
                 destination=destination,
                 temporal_event_id=event_id,
                 temporal_event_label=event_label,
+                temporal_event_name=event_name,
+                temporal_event_directory=event_dir,
                 temporal_event_index=event_index,
                 temporal_event_size=len(group),
                 temporal_event_start=start,
@@ -582,6 +671,7 @@ def plan_organization_operations(
     derivative_patterns: tuple[str, ...] | None = None,
     event_window_minutes: int | None = None,
     event_directory: bool = False,
+    event_directory_pattern: str | None = None,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir.
 
@@ -925,6 +1015,7 @@ def plan_organization_operations(
             window_minutes=event_window_minutes,
             output_dir=output_path,
             use_event_directory=event_directory,
+            event_directory_pattern=event_directory_pattern,
         )
 
     return operations

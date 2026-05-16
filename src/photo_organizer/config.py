@@ -46,6 +46,7 @@ class OrganizationConfig:
     journal: str | None = None
     event_window_minutes: int | None = None
     event_directory: bool | None = None
+    event_directory_pattern: str | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -328,6 +329,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "directory",
         "events.directory",
     )
+    event_directory_pattern = _optional_string(
+        events,
+        "directory_pattern",
+        "events.directory_pattern",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -340,12 +346,13 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
     if organization_strategy is not None and organization_strategy not in {
         "city-state-month",
         "date",
+        "event",
         "location",
         "location-date",
     }:
         raise ConfigurationError(
-            "organization strategy must be 'date', 'location', 'location-date' "
-            "or 'city-state-month'"
+            "organization strategy must be 'date', 'event', 'location', "
+            "'location-date' or 'city-state-month'"
         )
     if reconciliation_policy is not None:
         try:
@@ -411,4 +418,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         derivative_patterns=derivative_patterns,
         event_window_minutes=event_window_minutes,
         event_directory=event_directory,
+        event_directory_pattern=event_directory_pattern,
     )

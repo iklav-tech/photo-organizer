@@ -59,3 +59,5 @@ events:
   # When directory is true, files are written below a generated event folder.
   window_minutes: 60
   directory: false
+  # Used by --by event. Supported fields: {date}, {event}, {event_id}, {index}.
+  # directory_pattern: "{date:%Y}/{date:%Y-%m-%d}_{event}"

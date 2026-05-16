@@ -5,7 +5,11 @@ import os
 
 import pytest
 
-from photo_organizer.correction_manifest import CorrectionManifest, CorrectionRule
+from photo_organizer.correction_manifest import (
+    CorrectionApplication,
+    CorrectionManifest,
+    CorrectionRule,
+)
 from photo_organizer.executor import (
     DestinationConflictError,
     FileOperation,
@@ -311,6 +315,63 @@ def test_assign_temporal_events_can_prefix_destination_directory(
         / "08"
         / "15"
         / "a.jpg"
+    )
+
+
+def test_assign_temporal_events_uses_human_event_directory_pattern(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "organized"
+    operations = [
+        FileOperation(
+            source=tmp_path / "a.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+        ),
+    ]
+
+    grouped = assign_temporal_events(
+        operations,
+        window_minutes=60,
+        output_dir=output_dir,
+        event_directory_pattern="{date:%Y}/{date:%Y-%m-%d}_{event}",
+    )
+
+    assert grouped[0].temporal_event_name == "evento-001"
+    assert grouped[0].destination == (
+        output_dir / "2024" / "2024-08-15_evento-001" / "a.jpg"
+    )
+
+
+def test_assign_temporal_events_derives_name_from_correction_event(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "organized"
+    operations = [
+        FileOperation(
+            source=tmp_path / "a.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+            correction_manifest=CorrectionApplication(
+                source_path=tmp_path / "corrections.yaml",
+                selectors=("glob:*.jpg",),
+                event_name="Viagem Paraty",
+            ),
+        ),
+    ]
+
+    grouped = assign_temporal_events(
+        operations,
+        window_minutes=60,
+        output_dir=output_dir,
+        event_directory_pattern="{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}",
+    )
+
+    assert grouped[0].temporal_event_name == "viagem-paraty"
+    assert grouped[0].destination == (
+        output_dir / "2024" / "08" / "2024-08-15_viagem-paraty" / "a.jpg"
     )
 
 

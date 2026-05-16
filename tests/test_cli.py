@@ -376,6 +376,64 @@ def test_organize_accepts_temporal_event_options_from_cli(monkeypatch) -> None:
     assert captured["event_directory"] is True
 
 
+def test_organize_event_strategy_uses_default_event_directory(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--by",
+        "event",
+    ])
+
+    assert result == 0
+    assert captured["organization_strategy"] == "event"
+    assert captured["event_window_minutes"] == 60
+    assert captured["event_directory"] is True
+    assert captured["event_directory_pattern"] == "{date:%Y}/{date:%Y-%m-%d}_{event}"
+
+
+def test_organize_event_strategy_accepts_custom_event_directory_pattern(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--by",
+        "event",
+        "--event-window-minutes",
+        "30",
+        "--event-directory-pattern",
+        "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}",
+    ])
+
+    assert result == 0
+    assert captured["event_window_minutes"] == 30
+    assert captured["event_directory_pattern"] == (
+        "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}"
+    )
+
+
 def test_organize_accepts_temporal_event_options_from_config(
     tmp_path: Path,
     monkeypatch,
@@ -424,6 +482,26 @@ def test_organize_rejects_event_directory_without_window(
     assert exc_info.value.code == 2
     captured = capsys.readouterr()
     assert "--event-directory requires --event-window-minutes" in captured.err
+
+
+def test_organize_rejects_invalid_event_directory_pattern(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--by",
+            "event",
+            "--event-directory-pattern",
+            "{unknown}",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "invalid --event-directory-pattern" in captured.err
 
 
 def test_organize_accepts_reconciliation_policy_from_cli(monkeypatch) -> None:
@@ -2092,6 +2170,8 @@ def test_execution_report_includes_temporal_event_fields(tmp_path: Path) -> None
     assert report["operations"][0]["temporal_event_label"] == (
         "event-001_2024-08-15_10-00"
     )
+    assert report["operations"][0]["temporal_event_name"] == ""
+    assert report["operations"][0]["temporal_event_directory"] == ""
     assert report["operations"][0]["temporal_event_size"] == 2
 
 
