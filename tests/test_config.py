@@ -207,3 +207,26 @@ def test_load_organization_config_rejects_invalid_dng_candidates(
 
     with pytest.raises(ConfigurationError, match="interop.dng_candidates"):
         load_organization_config(config_path)
+
+
+def test_load_organization_config_reads_staging_dir(tmp_path: Path) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"staging_dir": "/tmp/staging"}}),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.staging_dir == "/tmp/staging"
+
+
+def test_load_organization_config_staging_dir_defaults_to_none(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(json.dumps({}), encoding="utf-8")
+
+    config = load_organization_config(config_path)
+
+    assert config.staging_dir is None

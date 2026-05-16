@@ -1768,3 +1768,189 @@ def test_plan_organization_operations_applies_camera_profile_clock_offset(
     assert correction is not None
     assert correction.clock_offset == "+3h"
     assert correction.selectors == ("camera:Canon PowerShot A530",)
+
+
+# ---------------------------------------------------------------------------
+# Staging directory
+# ---------------------------------------------------------------------------
+
+def test_apply_operations_staging_copies_to_staging_then_promotes(
+    tmp_path: Path,
+) -> None:
+    """Files are written to staging first, then promoted to final destination."""
+    source = tmp_path / "source" / "a.jpg"
+    source.parent.mkdir()
+    source.write_text("image-data")
+
+    output_dir = tmp_path / "output"
+    staging_dir = tmp_path / "staging"
+    final_dest = output_dir / "2024" / "08" / "15" / "a.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=final_dest, mode="copy")],
+        staging_dir=staging_dir,
+    )
+
+    # Final destination must exist with correct content.
+    assert final_dest.exists()
+    assert final_dest.read_text() == "image-data"
+    # Source must still exist (copy mode).
+    assert source.exists()
+    # Staging dir must be cleaned up after promotion.
+    assert not staging_dir.exists()
+    # Log must show INFO (success), not STAGED.
+    assert len(logs) == 1
+    assert logs[0].startswith("[INFO]")
+    assert str(source) in logs[0]
+    assert str(final_dest) in logs[0]
+
+
+def test_apply_operations_staging_move_removes_source_after_promotion(
+    tmp_path: Path,
+) -> None:
+    """In move mode the source is removed only after successful promotion."""
+    source = tmp_path / "source" / "a.jpg"
+    source.parent.mkdir()
+    source.write_text("image-data")
+
+    output_dir = tmp_path / "output"
+    staging_dir = tmp_path / "staging"
+    final_dest = output_dir / "2024" / "08" / "15" / "a.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=final_dest, mode="move")],
+        staging_dir=staging_dir,
+    )
+
+    assert final_dest.exists()
+    assert final_dest.read_text() == "image-data"
+    # Source must be gone after a successful staged move.
+    assert not source.exists()
+    assert not staging_dir.exists()
+    assert logs[0].startswith("[INFO]")
+
+
+def test_apply_operations_staging_failure_leaves_output_untouched(
+    tmp_path: Path,
+) -> None:
+    """When a copy to staging fails the final output directory is not created."""
+    # Use a non-existent source to trigger a failure.
+    missing_source = tmp_path / "ghost.jpg"
+    output_dir = tmp_path / "output"
+    staging_dir = tmp_path / "staging"
+    final_dest = output_dir / "2024" / "08" / "15" / "ghost.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=missing_source, destination=final_dest, mode="copy")],
+        staging_dir=staging_dir,
+    )
+
+    # Final output must not exist.
+    assert not final_dest.exists()
+    assert not output_dir.exists()
+    # Staging area must be cleaned up.
+    assert not staging_dir.exists()
+    # All log lines must be errors.
+    assert all(line.startswith("[ERROR]") for line in logs)
+
+
+def test_apply_operations_staging_partial_failure_leaves_output_untouched(
+    tmp_path: Path,
+) -> None:
+    """If any file fails during staging, no files are promoted to output."""
+    good_source = tmp_path / "source" / "good.jpg"
+    good_source.parent.mkdir()
+    good_source.write_text("good")
+    missing_source = tmp_path / "source" / "bad.jpg"
+
+    output_dir = tmp_path / "output"
+    staging_dir = tmp_path / "staging"
+    good_dest = output_dir / "2024" / "01" / "01" / "good.jpg"
+    bad_dest = output_dir / "2024" / "01" / "01" / "bad.jpg"
+
+    logs = apply_operations(
+        [
+            FileOperation(source=good_source, destination=good_dest, mode="copy"),
+            FileOperation(source=missing_source, destination=bad_dest, mode="copy"),
+        ],
+        staging_dir=staging_dir,
+    )
+
+    # Neither file must appear in the final output.
+    assert not good_dest.exists()
+    assert not bad_dest.exists()
+    assert not output_dir.exists()
+    # Staging area must be cleaned up.
+    assert not staging_dir.exists()
+    # All log lines must be errors.
+    assert all(line.startswith("[ERROR]") for line in logs)
+    assert len(logs) == 2
+
+
+def test_apply_operations_staging_multiple_files_all_promoted(
+    tmp_path: Path,
+) -> None:
+    """All files in a batch are promoted when every staging copy succeeds."""
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    files = []
+    for name in ("a.jpg", "b.jpg", "c.png"):
+        f = source_dir / name
+        f.write_text(name)
+        files.append(f)
+
+    output_dir = tmp_path / "output"
+    staging_dir = tmp_path / "staging"
+    operations = [
+        FileOperation(
+            source=f,
+            destination=output_dir / "2024" / "01" / f.name,
+            mode="copy",
+        )
+        for f in files
+    ]
+
+    logs = apply_operations(operations, staging_dir=staging_dir)
+
+    assert all(line.startswith("[INFO]") for line in logs)
+    assert len(logs) == 3
+    for f in files:
+        assert (output_dir / "2024" / "01" / f.name).read_text() == f.name
+    assert not staging_dir.exists()
+
+
+def test_apply_operations_staging_dry_run_ignores_staging_dir(
+    tmp_path: Path,
+) -> None:
+    """dry_run takes precedence over staging_dir; no files are written anywhere."""
+    source = tmp_path / "a.jpg"
+    source.write_text("x")
+    staging_dir = tmp_path / "staging"
+    final_dest = tmp_path / "output" / "a.jpg"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=final_dest, mode="copy")],
+        dry_run=True,
+        staging_dir=staging_dir,
+    )
+
+    assert not final_dest.exists()
+    assert not staging_dir.exists()
+    assert logs[0].startswith("[DRY-RUN]")
+
+
+def test_apply_operations_staging_cleans_up_on_success(
+    tmp_path: Path,
+) -> None:
+    """The staging directory is removed after a successful run."""
+    source = tmp_path / "a.jpg"
+    source.write_text("x")
+    staging_dir = tmp_path / "staging"
+    final_dest = tmp_path / "output" / "a.jpg"
+
+    apply_operations(
+        [FileOperation(source=source, destination=final_dest, mode="copy")],
+        staging_dir=staging_dir,
+    )
+
+    assert not staging_dir.exists()

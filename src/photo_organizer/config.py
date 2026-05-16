@@ -37,6 +37,7 @@ class OrganizationConfig:
     clock_offset: str | None = None
     heic_preview: bool | None = None
     dng_candidates: bool | None = None
+    staging_dir: str | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -232,6 +233,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "dng_candidates",
         "interop.dng_candidates",
     )
+    staging_dir = _optional_string(
+        behavior,
+        "staging_dir",
+        "behavior.staging_dir",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -300,4 +306,5 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         clock_offset=clock_offset,
         heic_preview=heic_preview,
         dng_candidates=dng_candidates,
+        staging_dir=staging_dir,
     )

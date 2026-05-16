@@ -2597,3 +2597,196 @@ def test_organize_report_includes_clock_offset_and_original_datetime(
     observations = report["operations"][0]["observations"]
     assert "clock_offset=+3h" in observations
     assert f"original_datetime={original_dt.isoformat()}" in observations
+
+
+# ---------------------------------------------------------------------------
+# --staging-dir CLI flag
+# ---------------------------------------------------------------------------
+
+def test_organize_accepts_staging_dir_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_apply(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", lambda *_a, **_k: [])
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--staging-dir",
+        "/tmp/staging",
+    ])
+
+    assert result == 0
+    assert captured.get("staging_dir") == "/tmp/staging"
+
+
+def test_import_accepts_staging_dir_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_apply(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", lambda *_a, **_k: [])
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main([
+        "import",
+        "./photos",
+        "--output",
+        "./organized",
+        "--staging-dir",
+        "/tmp/staging",
+    ])
+
+    assert result == 0
+    assert captured.get("staging_dir") == "/tmp/staging"
+
+
+def test_organize_staging_dir_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "behavior": {"staging_dir": "/tmp/my-staging"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_apply(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", lambda *_a, **_k: [])
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured.get("staging_dir") == "/tmp/my-staging"
+
+
+def test_organize_cli_staging_dir_overrides_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "behavior": {"staging_dir": "/tmp/config-staging"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_apply(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", lambda *_a, **_k: [])
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main([
+        "organize",
+        "./photos",
+        "--config",
+        str(config_path),
+        "--staging-dir",
+        "/tmp/cli-staging",
+    ])
+
+    assert result == 0
+    assert captured.get("staging_dir") == "/tmp/cli-staging"
+
+
+def test_organize_staging_end_to_end_promotes_files(
+    tmp_path: Path,
+    caplog,
+) -> None:
+    """End-to-end: files are staged then promoted; staging dir is cleaned up."""
+    import os
+
+    source_dir = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    staging_dir = tmp_path / "staging"
+    source_dir.mkdir()
+
+    img = source_dir / "IMG_1.jpg"
+    img.write_text("image-data")
+    ts = datetime(2024, 8, 15, 14, 32, 9).timestamp()
+    os.utime(img, (ts, ts))
+
+    with caplog.at_level(logging.INFO):
+        result = main([
+            "organize",
+            str(source_dir),
+            "--output",
+            str(output_dir),
+            "--copy",
+            "--staging-dir",
+            str(staging_dir),
+        ])
+
+    assert result == 0
+    final = output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+    assert final.exists()
+    assert final.read_text() == "image-data"
+    # Source must still exist (copy mode).
+    assert img.exists()
+    # Staging dir must be cleaned up.
+    assert not staging_dir.exists()
+    assert "Staging enabled" in caplog.text
+    assert "promoting" in caplog.text
+
+
+def test_organize_staging_failure_leaves_output_untouched(
+    tmp_path: Path,
+    monkeypatch,
+    caplog,
+) -> None:
+    """When staging fails the output directory is not created."""
+    output_dir = tmp_path / "organized"
+    staging_dir = tmp_path / "staging"
+
+    planned = [
+        FileOperation(
+            source=Path("ghost.jpg"),  # does not exist
+            destination=output_dir / "2024" / "01" / "01" / "ghost.jpg",
+            mode="copy",
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_a, **_k: planned,
+    )
+
+    with caplog.at_level(logging.INFO):
+        result = main([
+            "organize",
+            "./photos",
+            "--output",
+            str(output_dir),
+            "--copy",
+            "--staging-dir",
+            str(staging_dir),
+        ])
+
+    assert result == 0  # command exits 0; errors are in the report
+    assert not output_dir.exists()
+    assert not staging_dir.exists()

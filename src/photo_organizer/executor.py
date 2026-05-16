@@ -486,12 +486,62 @@ def apply_operations(
     operations: list[FileOperation],
     dry_run: bool = False,
     heic_preview: bool = False,
+    staging_dir: str | Path | None = None,
 ) -> list[str]:
     """Apply planned operations or simulate them when dry_run is True.
+
+    When *staging_dir* is provided the files are first written into that
+    directory, mirroring the final destination structure.  Only after **all**
+    operations succeed are the staged files promoted (moved) to their real
+    destinations.  If any operation fails the staging area is cleaned up and
+    the final output directory is left completely untouched, preventing partial
+    inconsistent state.
+
+    The *staging_dir* is created automatically when it does not exist.  It is
+    the caller's responsibility to ensure the path is on the same filesystem as
+    the output directory so that the final promotion step can use atomic renames
+    where possible.
 
     Returns one status line per operation, including failures, so callers can
     inspect per-item outcomes.
     """
+    if dry_run:
+        return _apply_operations_dry_run(operations)
+
+    if staging_dir is not None:
+        return _apply_operations_with_staging(
+            operations,
+            Path(staging_dir),
+            heic_preview=heic_preview,
+        )
+
+    return _apply_operations_direct(operations, heic_preview=heic_preview)
+
+
+def _apply_operations_dry_run(operations: list[FileOperation]) -> list[str]:
+    """Return dry-run log lines without touching the filesystem."""
+    logs: list[str] = []
+    reserved_destinations: set[Path] = set()
+    for operation in operations:
+        action = operation.mode.upper()
+        destination = _resolve_available_operation_destination(
+            operation.destination,
+            operation.related_sidecars,
+            reserved_destinations,
+        )
+        reserved_destinations.add(destination)
+        for sidecar in operation.related_sidecars:
+            reserved_destinations.add(_sidecar_destination(destination, sidecar))
+        logs.append(f"[DRY-RUN] {action} {operation.source} -> {destination}")
+    return logs
+
+
+def _apply_operations_direct(
+    operations: list[FileOperation],
+    *,
+    heic_preview: bool = False,
+) -> list[str]:
+    """Write files directly to their final destinations."""
     logs: list[str] = []
     reserved_destinations: set[Path] = set()
 
@@ -507,20 +557,13 @@ def apply_operations(
             reserved_destinations.add(_sidecar_destination(destination, sidecar))
         line_suffix = f"{action} {operation.source} -> {destination}"
 
-        if dry_run:
-            logs.append(f"[DRY-RUN] {line_suffix}")
-            continue
-
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
 
             if operation.mode == "copy":
                 shutil.copy2(operation.source, destination)
             else:
-                _move_file_after_successful_copy(
-                    operation.source,
-                    destination,
-                )
+                _move_file_after_successful_copy(operation.source, destination)
             for sidecar in operation.related_sidecars:
                 sidecar_destination = _sidecar_destination(destination, sidecar)
                 if operation.mode == "copy":
@@ -539,26 +582,181 @@ def apply_operations(
             continue
 
         if heic_preview:
-            preview_destination = build_heic_preview_destination(destination)
-            try:
-                preview_path = generate_heic_preview(
-                    destination,
-                    preview_destination,
-                )
-                if preview_path is not None:
-                    logger.info(
-                        "HEIC preview generated: source=%s preview=%s",
-                        destination,
-                        preview_path,
-                    )
-            except Exception as exc:
-                logger.warning(
-                    "HEIC preview generation failed: source=%s preview=%s error=%s",
-                    destination,
-                    preview_destination,
-                    exc,
-                )
+            _try_generate_heic_preview(destination)
 
         logs.append(f"[INFO] {line_suffix}")
 
     return logs
+
+
+def _apply_operations_with_staging(
+    operations: list[FileOperation],
+    staging_dir: Path,
+    *,
+    heic_preview: bool = False,
+) -> list[str]:
+    """Copy files into *staging_dir*, then promote to final destinations.
+
+    The staging directory mirrors the final destination tree.  Every file is
+    written to ``staging_dir / <relative-destination-path>`` first.  If all
+    copies succeed the staged files are moved to their real destinations.  On
+    any failure the staging area is removed and the final output is untouched.
+    """
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Staging enabled: staging_dir=%s", staging_dir)
+
+    logs: list[str] = []
+    reserved_destinations: set[Path] = set()
+
+    # Resolve all final destinations up-front so conflict suffixes are stable.
+    resolved: list[tuple[FileOperation, Path]] = []
+    for operation in operations:
+        destination = _resolve_available_operation_destination(
+            operation.destination,
+            operation.related_sidecars,
+            reserved_destinations,
+        )
+        reserved_destinations.add(destination)
+        for sidecar in operation.related_sidecars:
+            reserved_destinations.add(_sidecar_destination(destination, sidecar))
+        resolved.append((operation, destination))
+
+    # Phase 1 – write everything into the staging area.
+    staged: list[tuple[FileOperation, Path, Path]] = []  # (op, staged_path, final_dest)
+    failed = False
+    for operation, final_destination in resolved:
+        action = operation.mode.upper()
+        # Derive the staging path by replacing the output root prefix with the
+        # staging root.  We use the full absolute path as a sub-path inside the
+        # staging dir so that files from different output sub-trees never clash.
+        staged_destination = _staging_path_for(staging_dir, final_destination)
+        line_suffix = f"{action} {operation.source} -> {final_destination}"
+
+        try:
+            staged_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(operation.source, staged_destination)
+            for sidecar in operation.related_sidecars:
+                staged_sidecar = staged_destination.with_suffix(sidecar.suffix)
+                shutil.copy2(sidecar, staged_sidecar)
+        except Exception as exc:
+            logger.error(
+                "Staging failed: source=%s staged=%s error=%s",
+                operation.source,
+                staged_destination,
+                exc,
+            )
+            logs.append(f"[ERROR] {line_suffix} (error: {exc})")
+            failed = True
+            continue
+
+        staged.append((operation, staged_destination, final_destination))
+        logs.append(f"[STAGED] {line_suffix}")
+
+    if failed:
+        # Clean up the staging area; leave the final output untouched.
+        _cleanup_staging(staging_dir)
+        logger.warning(
+            "Staging aborted: errors occurred, staging area cleaned up, "
+            "final output directory was not modified"
+        )
+        # Replace STAGED lines with ERROR for the failed items; the error lines
+        # are already present.  Convert successful STAGED lines to ERROR too so
+        # the caller knows nothing was committed.
+        final_logs: list[str] = []
+        for line in logs:
+            if line.startswith("[STAGED]"):
+                _, rest = line.split("] ", maxsplit=1)
+                final_logs.append(f"[ERROR] {rest} (error: staging aborted due to earlier failure)")
+            else:
+                final_logs.append(line)
+        return final_logs
+
+    # Phase 2 – promote staged files to their final destinations.
+    logger.info(
+        "Staging complete: promoting %d file(s) to final destinations",
+        len(staged),
+    )
+    promotion_logs: list[str] = []
+    for operation, staged_path, final_destination in staged:
+        action = operation.mode.upper()
+        line_suffix = f"{action} {operation.source} -> {final_destination}"
+        try:
+            final_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(staged_path), final_destination)
+            for sidecar in operation.related_sidecars:
+                staged_sidecar = staged_path.with_suffix(sidecar.suffix)
+                sidecar_destination = _sidecar_destination(final_destination, sidecar)
+                shutil.move(str(staged_sidecar), sidecar_destination)
+
+            # Remove source only after successful promotion for move mode.
+            if operation.mode == "move":
+                try:
+                    operation.source.unlink(missing_ok=True)
+                    for sidecar in operation.related_sidecars:
+                        sidecar.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.warning(
+                        "Could not remove source after staged move: "
+                        "source=%s error=%s",
+                        operation.source,
+                        exc,
+                    )
+        except Exception as exc:
+            logger.error(
+                "Promotion failed: staged=%s destination=%s error=%s",
+                staged_path,
+                final_destination,
+                exc,
+            )
+            promotion_logs.append(f"[ERROR] {line_suffix} (error: promotion failed: {exc})")
+            continue
+
+        if heic_preview:
+            _try_generate_heic_preview(final_destination)
+
+        promotion_logs.append(f"[INFO] {line_suffix}")
+
+    # Clean up the (now empty) staging area.
+    _cleanup_staging(staging_dir)
+    logger.info("Staging area cleaned up: staging_dir=%s", staging_dir)
+    return promotion_logs
+
+
+def _staging_path_for(staging_dir: Path, final_destination: Path) -> Path:
+    """Map a final destination path into the staging directory tree.
+
+    Uses the absolute path of the destination as a sub-path inside the staging
+    root so that files from different output sub-trees never collide.
+    """
+    abs_dest = final_destination.resolve()
+    # Strip the leading separator so Path / works correctly.
+    relative = Path(*abs_dest.parts[1:]) if abs_dest.parts else abs_dest
+    return staging_dir / relative
+
+
+def _cleanup_staging(staging_dir: Path) -> None:
+    """Remove the staging directory tree, logging but not raising on errors."""
+    try:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Failed to clean up staging dir: path=%s error=%s", staging_dir, exc)
+
+
+def _try_generate_heic_preview(destination: Path) -> None:
+    """Attempt HEIC preview generation, logging warnings on failure."""
+    preview_destination = build_heic_preview_destination(destination)
+    try:
+        preview_path = generate_heic_preview(destination, preview_destination)
+        if preview_path is not None:
+            logger.info(
+                "HEIC preview generated: source=%s preview=%s",
+                destination,
+                preview_path,
+            )
+    except Exception as exc:
+        logger.warning(
+            "HEIC preview generation failed: source=%s preview=%s error=%s",
+            destination,
+            preview_destination,
+            exc,
+        )

@@ -1692,6 +1692,18 @@ def _add_organize_arguments(
         metavar="PATH",
         help="Read batch correction overrides from a .csv, .json, .yaml or .yml file.",
     )
+    path_group.add_argument(
+        "--staging-dir",
+        metavar="DIR",
+        default=None,
+        help=(
+            "Write files to this temporary staging directory first. "
+            "Only after all operations succeed are the files promoted to "
+            "--output. On any failure the staging area is cleaned up and "
+            "--output is left completely untouched. "
+            "Recommended when --output is on a network share or slow drive."
+        ),
+    )
 
     execution_group = parser.add_argument_group("Execution")
     execution_group.add_argument(
@@ -2283,6 +2295,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.dng_candidates is not None
             else False
         )
+        staging_dir = (
+            args.staging_dir
+            if args.staging_dir is not None
+            else config.staging_dir
+            if config is not None and config.staging_dir is not None
+            else None
+        )
 
         if not output:
             parser.error(
@@ -2314,7 +2333,7 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error(f"invalid --clock-offset: {exc}")
 
         logger.info(
-            "Execution started: %s source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
+            "Execution started: %s source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s staging=%s",
             command_label,
             args.source,
             output,
@@ -2322,6 +2341,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run,
             plan_only,
             reverse_geocode,
+            staging_dir or "disabled",
         )
         try:
             operations = plan_organization_operations(
@@ -2414,6 +2434,7 @@ def main(argv: list[str] | None = None) -> int:
             operations,
             dry_run=dry_run,
             heic_preview=heic_preview,
+            staging_dir=staging_dir,
         )
         for line in logs:
             if line.startswith("[ERROR]"):
@@ -2423,7 +2444,12 @@ def main(argv: list[str] | None = None) -> int:
 
         error_files = sum(1 for line in logs if line.startswith("[ERROR]"))
         processed_files = len(logs) - error_files
-        summary_mode = "dry-run" if dry_run else "execute"
+        if dry_run:
+            summary_mode = "dry-run"
+        elif staging_dir is not None:
+            summary_mode = "staged"
+        else:
+            summary_mode = "execute"
         fallback_files = sum(1 for operation in operations if operation.date_fallback)
         location_files = sum(
             1 for operation in operations if operation.location is not None

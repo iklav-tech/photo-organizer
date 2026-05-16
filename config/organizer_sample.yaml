@@ -21,6 +21,12 @@ behavior:
   # For camera-specific offsets, add correction manifest rules with camera,
   # camera_make or camera_model selectors.
   # clock_offset: "+01:00"
+  # staging_dir: write files to this temporary directory first; only after all
+  # operations succeed are the files promoted to the final output directory.
+  # Prevents partial or inconsistent output on failure. Recommended when
+  # --output is on a network share, slow drive, or any destination where
+  # partial writes are unacceptable.
+  # staging_dir: "/tmp/photo-organizer-staging"
 preview:
   # Generate JPEG previews for HEIC/HEIF files when pillow-heif/libheif can
   # decode the source image. Preview failures are logged and do not stop copy
