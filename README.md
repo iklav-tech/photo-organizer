@@ -56,6 +56,7 @@ The project includes a tested v0.6.0 CLI workflow:
 - automatic destination directory creation;
 - safe move behavior that removes the source only after a successful copy;
 - configurable destination conflict policy with safe suffix handling by default;
+- optional segregation of edited/exported/derived files from originals;
 - `--dry-run` simulation with no filesystem changes;
 - `--plan` inspection mode without execution;
 - structured execution summaries;
@@ -680,6 +681,10 @@ preview:
   heic: false
 interop:
   dng_candidates: false
+derivatives:
+  enabled: false
+  path: Derivatives
+  patterns: "*_edit*,*-edit*,*_export*,*-export*"
 ```
 
 The same structure is accepted as JSON. Supported fields:
@@ -709,6 +714,11 @@ The same structure is accepted as JSON. Supported fields:
   HEIC/HEIF files;
 - `interop.dng_candidates`: boolean to mark RAW files in reports as candidates
   for an optional external DNG interoperability workflow.
+- `derivatives.enabled`: boolean to place derived files in a separate subtree;
+- `derivatives.path`: relative output subtree for derived files, defaulting to
+  `Derivatives`;
+- `derivatives.patterns`: filename glob patterns used to classify derived files
+  such as edits, exports or working files.
 
 Example correction manifest:
 
@@ -1003,6 +1013,28 @@ Destination conflict handling is configurable with `--conflict-policy` or
   reason sidecar;
 - `fail-fast`: stop the batch immediately at the first destination conflict.
 
+### Original and derived file segregation
+
+The organizer can optionally keep originals and derived files apart. Enable it
+with `--segregate-derivatives` or `derivatives.enabled: true`. Derived files are
+classified by filename glob patterns and written below a separate subtree while
+keeping the normal date/location structure:
+
+```bash
+photo-organizer organize ~/Photos --output ~/Library --segregate-derivatives
+photo-organizer organize ~/Photos --output ~/Library --segregate-derivatives --derived-path Working --derived-pattern "*-proof"
+```
+
+With the default `Derivatives` subtree, a file such as
+`IMG_1034_edited.jpg` is written to:
+
+```text
+Library/Derivatives/2024/08/15/2024-08-15_14-32-09.jpg
+```
+
+Reports identify this decision with `asset_role`, `derived` and
+`derived_reason`.
+
 ## Installation
 
 ### Requirements
@@ -1159,6 +1191,10 @@ preview:
   heic: true
 interop:
   dng_candidates: true
+derivatives:
+  enabled: true
+  path: Derivatives
+  patterns: "*_edit*,*_export*"
 ```
 
 ### Example: simulation mode
@@ -1261,6 +1297,9 @@ JSON reports include a summary and operation rows:
       "raw_family": false,
       "raw_format": "",
       "raw_flow": "",
+      "asset_role": "original",
+      "derived": false,
+      "derived_reason": "",
       "dng_candidate": false,
       "dng_candidate_reason": ""
     }
@@ -1271,7 +1310,7 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,chosen_date,chosen_location,metadata_source,conflict,conflict_sources,conflict_reason,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,raw_family,raw_format,raw_flow,dng_candidate,dng_candidate_reason
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,chosen_date,chosen_location,metadata_source,conflict,conflict_sources,conflict_reason,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,raw_family,raw_format,raw_flow,asset_role,derived,derived_reason,dng_candidate,dng_candidate_reason
 ```
 
 When reverse geocoding is enabled, execution reports also include location

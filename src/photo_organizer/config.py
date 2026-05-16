@@ -40,6 +40,9 @@ class OrganizationConfig:
     heic_preview: bool | None = None
     dng_candidates: bool | None = None
     staging_dir: str | None = None
+    segregate_derivatives: bool | None = None
+    derivative_path: str | None = None
+    derivative_patterns: tuple[str, ...] | None = None
     journal: str | None = None
 
 
@@ -155,6 +158,35 @@ def _optional_bool(section: dict[str, Any], key: str, label: str) -> bool | None
     return value
 
 
+def _optional_string_tuple(
+    section: dict[str, Any],
+    key: str,
+    label: str,
+) -> tuple[str, ...] | None:
+    value = section.get(key)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        items = tuple(item.strip() for item in value.split(",") if item.strip())
+    elif isinstance(value, list):
+        items = tuple(item for item in value if isinstance(item, str) and item.strip())
+        if len(items) != len(value):
+            raise ConfigurationError(f"{label} must contain only non-empty strings")
+    else:
+        raise ConfigurationError(f"{label} must be a string or list of strings")
+    if not items:
+        raise ConfigurationError(f"{label} must contain at least one pattern")
+    return items
+
+
+def _validate_relative_directory(value: str | None, label: str) -> None:
+    if value is None:
+        return
+    path = Path(value)
+    if path.is_absolute() or any(part == ".." for part in path.parts):
+        raise ConfigurationError(f"{label} must be a relative directory")
+
+
 def load_organization_config(config_path: str | Path) -> OrganizationConfig:
     """Load and validate external organize configuration."""
     path = Path(config_path)
@@ -246,6 +278,22 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "staging_dir",
         "behavior.staging_dir",
     )
+    derivatives = _expect_mapping(config.get("derivatives", {}), "derivatives")
+    segregate_derivatives = _optional_bool(
+        derivatives,
+        "enabled",
+        "derivatives.enabled",
+    )
+    derivative_path = _optional_string(
+        derivatives,
+        "path",
+        "derivatives.path",
+    )
+    derivative_patterns = _optional_string_tuple(
+        derivatives,
+        "patterns",
+        "derivatives.patterns",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -303,6 +351,7 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
             validate_destination_pattern(destination_pattern)
         except ValueError as exc:
             raise ConfigurationError(f"Invalid destination.pattern: {exc}") from exc
+    _validate_relative_directory(derivative_path, "derivatives.path")
 
     return OrganizationConfig(
         output=output,
@@ -323,4 +372,7 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         heic_preview=heic_preview,
         dng_candidates=dng_candidates,
         staging_dir=staging_dir,
+        segregate_derivatives=segregate_derivatives,
+        derivative_path=derivative_path,
+        derivative_patterns=derivative_patterns,
     )

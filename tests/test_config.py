@@ -233,6 +233,41 @@ def test_load_organization_config_reads_conflict_policy(tmp_path: Path) -> None:
     assert config.conflict_policy == "overwrite-never"
 
 
+def test_load_organization_config_reads_derivative_rules(tmp_path: Path) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "derivatives": {
+                    "enabled": True,
+                    "path": "Working",
+                    "patterns": ["*-proof", "*_retouched*"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.segregate_derivatives is True
+    assert config.derivative_path == "Working"
+    assert config.derivative_patterns == ("*-proof", "*_retouched*")
+
+
+def test_load_organization_config_rejects_absolute_derivative_path(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"derivatives": {"path": "/tmp/Working"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="derivatives.path"):
+        load_organization_config(config_path)
+
+
 def test_load_organization_config_rejects_invalid_conflict_policy(
     tmp_path: Path,
 ) -> None:

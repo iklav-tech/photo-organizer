@@ -179,6 +179,73 @@ def test_plan_organization_operations_does_not_mark_dng_candidate_by_default(
     assert operations[0].dng_candidate_reason == ""
 
 
+def test_plan_organization_operations_segregates_derived_files(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "IMG_0001_edited.jpg"
+    image.write_text("derived")
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p, **_kwargs: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        segregate_derivatives=True,
+    )
+
+    assert operations[0].destination == (
+        output_dir / "Derivatives" / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+    )
+    assert operations[0].asset_role == "derived"
+    assert operations[0].derived is True
+    assert operations[0].derived_reason == "matched pattern *_edit*"
+
+
+def test_plan_organization_operations_uses_configured_derivative_patterns(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    image = source_dir / "album-proof.jpg"
+    image.write_text("proof")
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda _p, **_kwargs: DateTimeResolution(
+            value=datetime(2024, 8, 15, 14, 32, 9),
+            used_fallback=False,
+        ),
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        segregate_derivatives=True,
+        derivative_path="Working",
+        derivative_patterns=("*-proof",),
+    )
+
+    assert operations[0].destination == (
+        output_dir / "Working" / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+    )
+    assert operations[0].asset_role == "derived"
+    assert operations[0].derived_reason == "matched pattern *-proof"
+
+
 def test_apply_operations_copies_raw_sidecar_with_destination_basename(
     tmp_path: Path,
 ) -> None:

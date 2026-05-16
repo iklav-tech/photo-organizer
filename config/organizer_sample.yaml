@@ -44,3 +44,12 @@ interop:
   # interoperability workflow. This does not convert files and does not change
   # organization behavior.
   dng_candidates: false
+derivatives:
+  # Optionally separate edited/exported/derived files from originals.
+  # Matching files are written under output/<path>/ while preserving the normal
+  # date/location structure below that path.
+  enabled: false
+  path: Derivatives
+  # Comma-separated patterns work with the built-in YAML fallback. PyYAML also
+  # accepts a real list.
+  patterns: "*_edit*,*-edit*,*_edited*,*-edited*,*_export*,*-export*,*_derived*,*-derived*"

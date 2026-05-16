@@ -288,6 +288,69 @@ def test_organize_accepts_dng_candidates_from_config(
     assert captured["dng_candidates"] is True
 
 
+def test_organize_accepts_derivative_segregation_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--segregate-derivatives",
+        "--derived-path",
+        "Working",
+        "--derived-pattern",
+        "*-proof",
+    ])
+
+    assert result == 0
+    assert captured["segregate_derivatives"] is True
+    assert captured["derivative_path"] == "Working"
+    assert captured["derivative_patterns"] == ("*-proof",)
+
+
+def test_organize_accepts_derivative_segregation_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "derivatives": {
+                    "enabled": True,
+                    "path": "Working",
+                    "patterns": ["*-proof"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured["segregate_derivatives"] is True
+    assert captured["derivative_path"] == "Working"
+    assert captured["derivative_patterns"] == ("*-proof",)
+
+
 def test_organize_accepts_reconciliation_policy_from_cli(monkeypatch) -> None:
     captured = {}
 
@@ -1734,6 +1797,9 @@ def test_organize_writes_valid_structured_execution_report(
             "raw_family": False,
             "raw_format": "",
             "raw_flow": "",
+            "asset_role": "original",
+            "derived": False,
+            "derived_reason": "",
             "dng_candidate": False,
             "dng_candidate_reason": "",
         }
@@ -1802,6 +1868,9 @@ def test_organize_report_includes_error_status_and_observation(
             "raw_family": False,
             "raw_format": "",
             "raw_flow": "",
+            "asset_role": "original",
+            "derived": False,
+            "derived_reason": "",
             "dng_candidate": False,
             "dng_candidate_reason": "",
         }
@@ -2332,6 +2401,50 @@ def test_organize_report_marks_correction_manifest_source(
     assert str(manifest_path) in operation["observations"]
 
 
+def test_organize_report_identifies_derived_asset(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "execution.json"
+    planned = [
+        FileOperation(
+            source=Path("input/IMG_0001_edited.jpg"),
+            destination=Path("out/Derivatives/2024/08/15/IMG_0001_edited.jpg"),
+            mode="copy",
+            asset_role="derived",
+            derived=True,
+            derived_reason="matched pattern *_edit*",
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY input/IMG_0001_edited.jpg -> out/Derivatives/2024/08/15/IMG_0001_edited.jpg",
+        ],
+    )
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--copy",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    operation = json.loads(report_path.read_text(encoding="utf-8"))["operations"][0]
+    assert operation["asset_role"] == "derived"
+    assert operation["derived"] is True
+    assert operation["derived_reason"] == "matched pattern *_edit*"
+    assert operation["observations"] == "derived asset: matched pattern *_edit*"
+
+
 def test_import_report_is_final_batch_manifest(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -2465,6 +2578,9 @@ def test_organize_writes_valid_csv_execution_report(
             "raw_family": "False",
             "raw_format": "",
             "raw_flow": "",
+            "asset_role": "original",
+            "derived": "False",
+            "derived_reason": "",
             "dng_candidate": "False",
             "dng_candidate_reason": "",
         },
@@ -2492,6 +2608,9 @@ def test_organize_writes_valid_csv_execution_report(
             "raw_family": "False",
             "raw_format": "",
             "raw_flow": "",
+            "asset_role": "original",
+            "derived": "False",
+            "derived_reason": "",
             "dng_candidate": "False",
             "dng_candidate_reason": "",
         },

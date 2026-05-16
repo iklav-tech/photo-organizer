@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import fnmatch
 import json
 import logging
 from pathlib import Path
@@ -59,6 +60,20 @@ logger = logging.getLogger(__name__)
 SIDECAR_EXTENSIONS = frozenset({".xmp"})
 ConflictPolicy = Literal["suffix", "skip", "overwrite-never", "quarantine", "fail-fast"]
 CONFLICT_POLICIES = ("suffix", "skip", "overwrite-never", "quarantine", "fail-fast")
+DEFAULT_DERIVATIVE_PATTERNS = (
+    "*_edit*",
+    "*-edit*",
+    "*_edited*",
+    "*-edited*",
+    "*_export*",
+    "*-export*",
+    "*_exported*",
+    "*-exported*",
+    "*_derivative*",
+    "*-derivative*",
+    "*_derived*",
+    "*-derived*",
+)
 
 
 class DestinationConflictError(RuntimeError):
@@ -70,6 +85,24 @@ def validate_conflict_policy(policy: str) -> ConflictPolicy:
         choices = ", ".join(CONFLICT_POLICIES)
         raise ValueError(f"Conflict policy must be one of: {choices}")
     return policy  # type: ignore[return-value]
+
+
+def classify_derivative(
+    path: str | Path,
+    patterns: tuple[str, ...] | None = None,
+) -> tuple[bool, str]:
+    """Classify files that look like edited/exported/derived variants."""
+    active_patterns = patterns or DEFAULT_DERIVATIVE_PATTERNS
+    filename = Path(path).name.lower()
+    stem = Path(path).stem.lower()
+    for pattern in active_patterns:
+        normalized_pattern = pattern.lower()
+        if fnmatch.fnmatch(filename, normalized_pattern) or fnmatch.fnmatch(
+            stem,
+            normalized_pattern,
+        ):
+            return True, f"matched pattern {pattern}"
+    return False, ""
 
 # Imported lazily to avoid a hard circular dependency; the type hint is kept as
 # a string so it is only evaluated at runtime when actually used.
@@ -269,6 +302,9 @@ class FileOperation:
     raw_flow: str = ""
     dng_candidate: bool = False
     dng_candidate_reason: str = ""
+    asset_role: str = "original"
+    derived: bool = False
+    derived_reason: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +479,9 @@ def plan_organization_operations(
     correction_priority: CorrectionPriority | None = None,
     clock_offset: str | None = None,
     dng_candidates: bool = False,
+    segregate_derivatives: bool = False,
+    derivative_path: str = "Derivatives",
+    derivative_patterns: tuple[str, ...] | None = None,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir.
 
@@ -724,6 +763,22 @@ def plan_organization_operations(
             )
             continue
 
+        derived = False
+        derived_reason = ""
+        if segregate_derivatives:
+            derived, derived_reason = classify_derivative(
+                image_path,
+                derivative_patterns,
+            )
+            if derived:
+                try:
+                    relative_destination_dir = destination_dir.relative_to(output_path)
+                except ValueError:
+                    relative_destination_dir = Path(destination_dir.name)
+                destination_dir = (
+                    output_path / derivative_path / relative_destination_dir
+                )
+
         destination_file = destination_dir / filename
         related_sidecars = find_related_sidecars(image_path)
         raw_format = raw_format_name_for_extension(image_path.suffix)
@@ -758,6 +813,9 @@ def plan_organization_operations(
                     if dng_candidate
                     else ""
                 ),
+                asset_role="derived" if derived else "original",
+                derived=derived,
+                derived_reason=derived_reason,
             )
         )
 

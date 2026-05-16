@@ -255,6 +255,24 @@ def _write_execution_report(
         operation["raw_flow"] = (
             planned_operation.raw_flow if planned_operation is not None else ""
         )
+        operation["asset_role"] = (
+            planned_operation.asset_role if planned_operation is not None else ""
+        )
+        operation["derived"] = (
+            planned_operation.derived if planned_operation is not None else False
+        )
+        operation["derived_reason"] = (
+            planned_operation.derived_reason
+            if planned_operation is not None
+            else ""
+        )
+        if planned_operation is not None and planned_operation.derived:
+            derived_note = f"derived asset: {planned_operation.derived_reason}"
+            operation["observations"] = (
+                f"{operation['observations']}; {derived_note}"
+                if operation["observations"]
+                else derived_note
+            )
         if (
             planned_operation is not None
             and planned_operation.text_normalization_observations
@@ -408,6 +426,9 @@ def _write_execution_report(
             "raw_family",
             "raw_format",
             "raw_flow",
+            "asset_role",
+            "derived",
+            "derived_reason",
             "dng_candidate",
             "dng_candidate_reason",
         ]
@@ -1824,6 +1845,39 @@ def _add_organize_arguments(
             "quarantine, or fail-fast (default: suffix)."
         ),
     )
+    derivative_group = execution_group.add_mutually_exclusive_group()
+    derivative_group.add_argument(
+        "--segregate-derivatives",
+        action="store_true",
+        dest="segregate_derivatives",
+        help=(
+            "Place edited/exported/derived files in a separate destination "
+            "subtree."
+        ),
+    )
+    derivative_group.add_argument(
+        "--no-segregate-derivatives",
+        action="store_false",
+        dest="segregate_derivatives",
+        help="Disable derived-file segregation.",
+    )
+    parser.set_defaults(segregate_derivatives=None)
+    execution_group.add_argument(
+        "--derived-path",
+        metavar="DIR",
+        default=None,
+        help="Relative output subtree for derived files (default: Derivatives).",
+    )
+    execution_group.add_argument(
+        "--derived-pattern",
+        metavar="PATTERN",
+        action="append",
+        default=None,
+        help=(
+            "Filename glob pattern treated as derived. Can be repeated; "
+            "defaults cover common edit/export suffixes."
+        ),
+    )
     execution_group.add_argument(
         "--correction-priority",
         choices=CORRECTION_PRIORITY_CHOICES,
@@ -2372,6 +2426,27 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.conflict_policy is not None
             else "suffix"
         )
+        segregate_derivatives = (
+            args.segregate_derivatives
+            if args.segregate_derivatives is not None
+            else config.segregate_derivatives
+            if config is not None and config.segregate_derivatives is not None
+            else False
+        )
+        derivative_path = (
+            args.derived_path
+            if args.derived_path is not None
+            else config.derivative_path
+            if config is not None and config.derivative_path is not None
+            else "Derivatives"
+        )
+        derivative_patterns = (
+            tuple(args.derived_pattern)
+            if args.derived_pattern is not None
+            else config.derivative_patterns
+            if config is not None and config.derivative_patterns is not None
+            else None
+        )
         date_heuristics = (
             args.date_heuristics
             if args.date_heuristics is not None
@@ -2425,6 +2500,11 @@ def main(argv: list[str] | None = None) -> int:
                 f"{command_label} --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
+        derived_path_value = Path(derivative_path)
+        if derived_path_value.is_absolute() or any(
+            part == ".." for part in derived_path_value.parts
+        ):
+            parser.error("--derived-path must be a relative directory")
         if (
             strategy in {"location", "location-date", "city-state-month"}
             and reverse_geocode is False
@@ -2471,6 +2551,9 @@ def main(argv: list[str] | None = None) -> int:
                 correction_priority=correction_priority,
                 clock_offset=clock_offset,
                 dng_candidates=dng_candidates,
+                segregate_derivatives=segregate_derivatives,
+                derivative_path=derivative_path,
+                derivative_patterns=derivative_patterns,
             )
             if (
                 isinstance(plan_result, tuple)
