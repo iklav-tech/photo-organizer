@@ -21,6 +21,7 @@ O projeto resolve um problema comum em acervos antigos: fotos espalhadas em past
 - Relatorios JSON ou CSV para duplicatas, auditoria de metadados e manifestos de execucao/importacao.
 - Configuracao externa em JSON, YAML ou YML para regras de nome, destino e comportamento.
 - Politicas de conflito de destino e segregacao opcional de arquivos derivados.
+- Agrupamento temporal de fotos em eventos, para relatorio ou diretorio.
 
 ## Exemplo rapido
 

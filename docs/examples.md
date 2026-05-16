@@ -100,6 +100,40 @@ OrganizedPhotos/
 
 Se GPS/localizacao nao estiver disponivel, estrategias baseadas em local podem cair para organizacao por data ou usar `UnknownLocation`, conforme a estrategia e opcoes de inferencia.
 
+## Agrupar fotos em eventos temporais
+
+Para gerar eventos apenas no relatorio:
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --event-window-minutes 60 \
+  --dry-run \
+  --report audit.json
+```
+
+Fotos ordenadas por data/hora ficam no mesmo evento enquanto a diferenca entre timestamps consecutivos for de ate 60 minutos. O relatorio inclui campos como `temporal_event_id`, `temporal_event_label`, `temporal_event_size`, `temporal_event_start` e `temporal_event_end`.
+
+Para tambem usar o evento como diretorio:
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --event-window-minutes 60 \
+  --event-directory
+```
+
+Exemplo de destino esperado:
+
+```text
+OrganizedPhotos/
+  event-001_2024-08-15_10-00/
+    2024/
+      08/
+        15/
+          2024-08-15_10-00-00.jpg
+```
+
 ## Exemplo de relatorio de execucao
 
 ```bash

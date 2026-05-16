@@ -351,6 +351,81 @@ def test_organize_accepts_derivative_segregation_from_config(
     assert captured["derivative_patterns"] == ("*-proof",)
 
 
+def test_organize_accepts_temporal_event_options_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--event-window-minutes",
+        "45",
+        "--event-directory",
+    ])
+
+    assert result == 0
+    assert captured["event_window_minutes"] == 45
+    assert captured["event_directory"] is True
+
+
+def test_organize_accepts_temporal_event_options_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "events": {
+                    "window_minutes": 60,
+                    "directory": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured["event_window_minutes"] == 60
+    assert captured["event_directory"] is True
+
+
+def test_organize_rejects_event_directory_without_window(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main([
+            "organize",
+            "./photos",
+            "--output",
+            "./organized",
+            "--event-directory",
+        ])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "--event-directory requires --event-window-minutes" in captured.err
+
+
 def test_organize_accepts_reconciliation_policy_from_cli(monkeypatch) -> None:
     captured = {}
 
@@ -1972,6 +2047,52 @@ def test_organize_report_includes_dng_candidate_marker(
     assert operation["observations"] == (
         "DNG candidate: RAW file selected for optional DNG interoperability workflow"
     )
+
+
+def test_execution_report_includes_temporal_event_fields(tmp_path: Path) -> None:
+    report_path = tmp_path / "execution.json"
+    source = Path("input/a.jpg")
+    destination = Path("out/event-001_2024-08-15_10-00/a.jpg")
+    operation = FileOperation(
+        source=source,
+        destination=destination,
+        mode="copy",
+        chosen_date=datetime(2024, 8, 15, 10, 0),
+        temporal_event_id="event-001",
+        temporal_event_label="event-001_2024-08-15_10-00",
+        temporal_event_index=1,
+        temporal_event_size=2,
+        temporal_event_start=datetime(2024, 8, 15, 10, 0),
+        temporal_event_end=datetime(2024, 8, 15, 10, 20),
+        temporal_event_window_minutes=30,
+    )
+    summary = {
+        "mode": "dry-run",
+        "processed_files": 1,
+        "ignored_files": 0,
+        "error_files": 0,
+        "fallback_files": 0,
+        "location_files": 0,
+        "gps_files": 0,
+        "missing_gps_files": 0,
+        "organization_fallback_files": 0,
+    }
+
+    cli._write_execution_report(
+        report_path,
+        [f"[DRY-RUN] COPY {source} -> {destination}"],
+        summary,
+        [operation],
+    )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"]["temporal_event_groups"] == 1
+    assert report["summary"]["temporal_event_window_minutes"] == 30
+    assert report["operations"][0]["temporal_event_id"] == "event-001"
+    assert report["operations"][0]["temporal_event_label"] == (
+        "event-001_2024-08-15_10-00"
+    )
+    assert report["operations"][0]["temporal_event_size"] == 2
 
 
 def test_organize_report_identifies_apple_proraw_flow(

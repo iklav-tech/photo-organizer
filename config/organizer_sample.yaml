@@ -53,3 +53,9 @@ derivatives:
   # Comma-separated patterns work with the built-in YAML fallback. PyYAML also
   # accepts a real list.
   patterns: "*_edit*,*-edit*,*_edited*,*-edited*,*_export*,*-export*,*_derived*,*-derived*"
+events:
+  # Group photos into temporal events when consecutive timestamps are close.
+  # When directory is false, event data appears only in execution reports.
+  # When directory is true, files are written below a generated event folder.
+  window_minutes: 60
+  directory: false

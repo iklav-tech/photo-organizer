@@ -44,6 +44,8 @@ class OrganizationConfig:
     derivative_path: str | None = None
     derivative_patterns: tuple[str, ...] | None = None
     journal: str | None = None
+    event_window_minutes: int | None = None
+    event_directory: bool | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -156,6 +158,27 @@ def _optional_bool(section: dict[str, Any], key: str, label: str) -> bool | None
     if not isinstance(value, bool):
         raise ConfigurationError(f"{label} must be a boolean")
     return value
+
+
+def _optional_positive_int(
+    section: dict[str, Any],
+    key: str,
+    label: str,
+) -> int | None:
+    value = section.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ConfigurationError(f"{label} must be a positive integer")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str) and value.isdigit():
+        parsed = int(value)
+    else:
+        raise ConfigurationError(f"{label} must be a positive integer")
+    if parsed <= 0:
+        raise ConfigurationError(f"{label} must be a positive integer")
+    return parsed
 
 
 def _optional_string_tuple(
@@ -294,6 +317,17 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "patterns",
         "derivatives.patterns",
     )
+    events = _expect_mapping(config.get("events", {}), "events")
+    event_window_minutes = _optional_positive_int(
+        events,
+        "window_minutes",
+        "events.window_minutes",
+    )
+    event_directory = _optional_bool(
+        events,
+        "directory",
+        "events.directory",
+    )
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -375,4 +409,6 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         segregate_derivatives=segregate_derivatives,
         derivative_path=derivative_path,
         derivative_patterns=derivative_patterns,
+        event_window_minutes=event_window_minutes,
+        event_directory=event_directory,
     )

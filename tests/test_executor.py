@@ -10,6 +10,7 @@ from photo_organizer.executor import (
     DestinationConflictError,
     FileOperation,
     apply_operations,
+    assign_temporal_events,
     find_related_sidecars,
     plan_organization_operations,
 )
@@ -244,6 +245,112 @@ def test_plan_organization_operations_uses_configured_derivative_patterns(
     )
     assert operations[0].asset_role == "derived"
     assert operations[0].derived_reason == "matched pattern *-proof"
+
+
+def test_assign_temporal_events_groups_by_configured_window(tmp_path: Path) -> None:
+    output_dir = tmp_path / "organized"
+    operations = [
+        FileOperation(
+            source=tmp_path / "a.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+        ),
+        FileOperation(
+            source=tmp_path / "b.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "b.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 20),
+        ),
+        FileOperation(
+            source=tmp_path / "c.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "c.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 11, 0),
+        ),
+    ]
+
+    grouped = assign_temporal_events(operations, window_minutes=30)
+
+    assert [operation.temporal_event_id for operation in grouped] == [
+        "event-001",
+        "event-001",
+        "event-002",
+    ]
+    assert grouped[0].temporal_event_label == "event-001_2024-08-15_10-00"
+    assert grouped[0].temporal_event_size == 2
+    assert grouped[2].temporal_event_size == 1
+    assert grouped[0].destination == operations[0].destination
+
+
+def test_assign_temporal_events_can_prefix_destination_directory(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "organized"
+    destination = output_dir / "2024" / "08" / "15" / "a.jpg"
+    operations = [
+        FileOperation(
+            source=tmp_path / "a.jpg",
+            destination=destination,
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+        ),
+    ]
+
+    grouped = assign_temporal_events(
+        operations,
+        window_minutes=30,
+        output_dir=output_dir,
+        use_event_directory=True,
+    )
+
+    assert grouped[0].destination == (
+        output_dir
+        / "event-001_2024-08-15_10-00"
+        / "2024"
+        / "08"
+        / "15"
+        / "a.jpg"
+    )
+
+
+def test_plan_organization_operations_assigns_temporal_events(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    first = source_dir / "a.jpg"
+    second = source_dir / "b.jpg"
+    first.write_text("a")
+    second.write_text("b")
+    dates = {
+        first: datetime(2024, 8, 15, 10, 0),
+        second: datetime(2024, 8, 15, 10, 10),
+    }
+
+    monkeypatch.setattr(
+        "photo_organizer.executor.resolve_best_available_datetime",
+        lambda path, **_kwargs: DateTimeResolution(
+            value=dates[path],
+            used_fallback=False,
+        ),
+    )
+
+    operations = plan_organization_operations(
+        source_dir,
+        output_dir,
+        mode="copy",
+        event_window_minutes=30,
+        event_directory=True,
+    )
+
+    assert {operation.temporal_event_id for operation in operations} == {"event-001"}
+    assert all(
+        "event-001_2024-08-15_10-00" in operation.destination.parts
+        for operation in operations
+    )
 
 
 def test_apply_operations_copies_raw_sidecar_with_destination_basename(

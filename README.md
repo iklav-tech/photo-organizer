@@ -66,6 +66,8 @@ The project includes a tested CLI workflow:
 - configurable filename patterns through CLI or configuration files;
 - destination folder planning by date (`YYYY/MM/DD`), location, location plus
   date, custom destination pattern, or city/state/month hybrid strategy;
+- optional temporal event grouping with configurable time windows, available
+  for reports or as generated destination directories;
 - explicit planning layer separated from execution;
 - automatic destination directory creation;
 - safe move behavior that removes the source only after a successful copy;
@@ -266,6 +268,8 @@ Example use cases:
 - `photo-organizer organize SOURCE --output Organized --by city-state-month`
 - `photo-organizer organize SOURCE --output Organized --correction-manifest corrections.yaml`
 - `photo-organizer organize SOURCE --output Organized --conflict-policy skip`
+- `photo-organizer organize SOURCE --output Organized --event-window-minutes 60`
+- `photo-organizer organize SOURCE --output Organized --event-window-minutes 60 --event-directory`
 - `photo-organizer organize SOURCE --output Organized --segregate-derivatives`
 - `photo-organizer organize SOURCE --output Organized --heic-preview`
 - `photo-organizer organize SOURCE --output Organized --dng-candidates --report audit.json`
@@ -741,6 +745,10 @@ The same structure is accepted as JSON. Supported fields:
   `Derivatives`;
 - `derivatives.patterns`: filename glob patterns used to classify derived files
   such as edits, exports or working files.
+- `events.window_minutes`: positive integer used to group consecutive photos
+  into temporal events;
+- `events.directory`: boolean to place organized files below generated event
+  directories instead of using event grouping only in reports.
 
 Example correction manifest:
 
@@ -795,6 +803,8 @@ date path.
 - operations are planned first into an intermediate structure;
 - each plan item contains source, destination, action (`move`/`copy`), fallback
   metadata and linked RAW sidecars when present;
+- optional temporal event grouping runs during planning, after dates and
+  destinations are resolved;
 - plan can be inspected without execution using `--plan`.
 
 ### Dry-run and operation modes
@@ -819,6 +829,8 @@ date path.
   chosen date, chosen location, metadata source and reconciliation conflicts;
 - report rows identify original versus derived assets with `asset_role`,
   `derived` and `derived_reason`;
+- when temporal event grouping is enabled, report rows include event id, label,
+  index, size, start/end timestamps and configured time window;
 - report rows include RAW sidecar linkage fields: `sidecar_count`,
   `sidecar_sources` and `sidecar_destinations`;
 - execution reports identify RAW-family operations with `raw_family`,
@@ -2003,6 +2015,7 @@ after the RAW-family scope.
 - richer filtering (include/exclude and depth controls);
 - richer report analytics;
 - broader manufacturer-specific RAW metadata extraction support;
+- richer event naming controls beyond the deterministic generated event label;
 - investigate ExifTool integration for broad metadata extraction across RAW
   formats;
 - expand real-camera RAW validation beyond the synthetic corpus and optional

@@ -38,6 +38,9 @@ derivatives:
   enabled: false
   path: Derivatives
   patterns: "*_edit*,*-edit*,*_edited*,*-edited*,*_export*,*-export*"
+events:
+  window_minutes: 60
+  directory: false
 ```
 
 Um exemplo completo existe em `config/organizer_sample.yaml`.
@@ -63,6 +66,8 @@ Um exemplo completo existe em `config/organizer_sample.yaml`.
 - `derivatives.enabled`: separa arquivos derivados em subarvore propria.
 - `derivatives.path`: subdiretorio relativo para derivados; o padrao e `Derivatives`.
 - `derivatives.patterns`: globs usados para classificar arquivos editados/exportados/derivados.
+- `events.window_minutes`: inteiro positivo para agrupar fotos em eventos por proximidade temporal.
+- `events.directory`: quando `true`, usa o nome gerado do evento como diretorio; quando `false`, o agrupamento aparece apenas em relatorios.
 
 ## Variaveis de ambiente
 

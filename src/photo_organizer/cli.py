@@ -359,6 +359,24 @@ def _write_execution_report(
             and planned_operation.correction_manifest.event_name is not None
             else ""
         )
+        if planned_operation is not None and planned_operation.temporal_event_id:
+            operation["temporal_event_id"] = planned_operation.temporal_event_id
+            operation["temporal_event_label"] = planned_operation.temporal_event_label
+            operation["temporal_event_index"] = planned_operation.temporal_event_index
+            operation["temporal_event_size"] = planned_operation.temporal_event_size
+            operation["temporal_event_start"] = (
+                planned_operation.temporal_event_start.isoformat()
+                if planned_operation.temporal_event_start is not None
+                else ""
+            )
+            operation["temporal_event_end"] = (
+                planned_operation.temporal_event_end.isoformat()
+                if planned_operation.temporal_event_end is not None
+                else ""
+            )
+            operation["temporal_event_window_minutes"] = (
+                planned_operation.temporal_event_window_minutes
+            )
 
         if include_location_fields:
             location = location_by_source.get(operation["source"])
@@ -401,6 +419,25 @@ def _write_execution_report(
                 )
             )
 
+    include_temporal_event_fields = any(
+        planned_operation.temporal_event_id
+        for planned_operation in planned_operations or []
+    )
+    if include_temporal_event_fields:
+        summary["temporal_event_groups"] = len({
+            planned_operation.temporal_event_id
+            for planned_operation in planned_operations or []
+            if planned_operation.temporal_event_id
+        })
+        summary["temporal_event_window_minutes"] = next(
+            (
+                planned_operation.temporal_event_window_minutes
+                for planned_operation in planned_operations or []
+                if planned_operation.temporal_event_window_minutes
+            ),
+            0,
+        )
+
     if path.suffix.lower() == ".csv":
         fieldnames = [
             "source",
@@ -432,6 +469,18 @@ def _write_execution_report(
             "dng_candidate",
             "dng_candidate_reason",
         ]
+        if include_temporal_event_fields:
+            fieldnames.extend(
+                [
+                    "temporal_event_id",
+                    "temporal_event_label",
+                    "temporal_event_index",
+                    "temporal_event_size",
+                    "temporal_event_start",
+                    "temporal_event_end",
+                    "temporal_event_window_minutes",
+                ]
+            )
         if include_location_fields:
             fieldnames.extend(
                 [
@@ -1879,6 +1928,30 @@ def _add_organize_arguments(
         ),
     )
     execution_group.add_argument(
+        "--event-window-minutes",
+        metavar="MINUTES",
+        type=int,
+        default=None,
+        help=(
+            "Group planned photos into temporal events when consecutive "
+            "timestamps are within this many minutes."
+        ),
+    )
+    event_directory_group = execution_group.add_mutually_exclusive_group()
+    event_directory_group.add_argument(
+        "--event-directory",
+        action="store_true",
+        dest="event_directory",
+        help="Place organized files below a generated temporal event directory.",
+    )
+    event_directory_group.add_argument(
+        "--no-event-directory",
+        action="store_false",
+        dest="event_directory",
+        help="Keep temporal event grouping in reports only.",
+    )
+    parser.set_defaults(event_directory=None)
+    execution_group.add_argument(
         "--correction-priority",
         choices=CORRECTION_PRIORITY_CHOICES,
         default=None,
@@ -2489,6 +2562,20 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.staging_dir is not None
             else None
         )
+        event_window_minutes = (
+            args.event_window_minutes
+            if args.event_window_minutes is not None
+            else config.event_window_minutes
+            if config is not None and config.event_window_minutes is not None
+            else None
+        )
+        event_directory = (
+            args.event_directory
+            if args.event_directory is not None
+            else config.event_directory
+            if config is not None and config.event_directory is not None
+            else False
+        )
 
         if not output:
             parser.error(
@@ -2523,6 +2610,10 @@ def main(argv: list[str] | None = None) -> int:
                 validate_clock_offset(clock_offset)
             except ValueError as exc:
                 parser.error(f"invalid --clock-offset: {exc}")
+        if event_window_minutes is not None and event_window_minutes <= 0:
+            parser.error("--event-window-minutes must be greater than zero")
+        if event_directory and event_window_minutes is None:
+            parser.error("--event-directory requires --event-window-minutes")
 
         logger.info(
             "Execution started: %s source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s staging=%s",
@@ -2554,6 +2645,8 @@ def main(argv: list[str] | None = None) -> int:
                 segregate_derivatives=segregate_derivatives,
                 derivative_path=derivative_path,
                 derivative_patterns=derivative_patterns,
+                event_window_minutes=event_window_minutes,
+                event_directory=event_directory,
             )
             if (
                 isinstance(plan_result, tuple)

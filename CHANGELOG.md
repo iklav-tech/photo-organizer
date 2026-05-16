@@ -13,6 +13,11 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - GitHub Pages publication workflow in `.github/workflows/pages.yml` to publish
   the `docs/` site from the repository itself.
 - README documentation link and GitHub Pages setup note.
+- Temporal event grouping for `organize` and `import`, configurable with
+  `--event-window-minutes` or `events.window_minutes`.
+- Optional event destination directories with `--event-directory` or
+  `events.directory`.
+- Temporal event fields in execution reports when event grouping is enabled.
 
 ## [0.8.0] - 2026-05-16
 

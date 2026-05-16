@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 import fnmatch
 import json
 import logging
@@ -305,6 +305,13 @@ class FileOperation:
     asset_role: str = "original"
     derived: bool = False
     derived_reason: str = ""
+    temporal_event_id: str = ""
+    temporal_event_label: str = ""
+    temporal_event_index: int = 0
+    temporal_event_size: int = 0
+    temporal_event_start: datetime | None = None
+    temporal_event_end: datetime | None = None
+    temporal_event_window_minutes: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +471,97 @@ def _resolve_quarantine_destination(
         counter += 1
 
 
+def _temporal_event_label(index: int, start: datetime) -> str:
+    return f"event-{index:03d}_{start.strftime('%Y-%m-%d_%H-%M')}"
+
+
+def _event_destination(
+    output_path: Path,
+    destination: Path,
+    event_label: str,
+) -> Path:
+    try:
+        relative_destination = destination.relative_to(output_path)
+    except ValueError:
+        return destination.parent / event_label / destination.name
+    return output_path / event_label / relative_destination
+
+
+def assign_temporal_events(
+    operations: list[FileOperation],
+    *,
+    window_minutes: int,
+    output_dir: str | Path | None = None,
+    use_event_directory: bool = False,
+) -> list[FileOperation]:
+    """Assign deterministic event groups using consecutive capture times."""
+    if window_minutes <= 0:
+        raise ValueError("Temporal event window must be greater than zero minutes")
+
+    indexed = [
+        (index, operation)
+        for index, operation in enumerate(operations)
+        if operation.chosen_date is not None
+    ]
+    if not indexed:
+        return operations
+
+    sorted_items = sorted(
+        indexed,
+        key=lambda item: (item[1].chosen_date, str(item[1].source)),
+    )
+    groups: list[list[tuple[int, FileOperation]]] = []
+    current_group: list[tuple[int, FileOperation]] = []
+    previous_dt: datetime | None = None
+    threshold = timedelta(minutes=window_minutes)
+
+    for item in sorted_items:
+        operation_dt = item[1].chosen_date
+        if (
+            previous_dt is None
+            or operation_dt is None
+            or operation_dt - previous_dt > threshold
+        ):
+            if current_group:
+                groups.append(current_group)
+            current_group = [item]
+        else:
+            current_group.append(item)
+        previous_dt = operation_dt
+    if current_group:
+        groups.append(current_group)
+
+    planned = list(operations)
+    output_path = Path(output_dir) if output_dir is not None else None
+    for event_index, group in enumerate(groups, start=1):
+        dates = [
+            operation.chosen_date
+            for _, operation in group
+            if operation.chosen_date is not None
+        ]
+        start = min(dates)
+        end = max(dates)
+        event_label = _temporal_event_label(event_index, start)
+        event_id = f"event-{event_index:03d}"
+        for original_index, operation in group:
+            destination = operation.destination
+            if use_event_directory and output_path is not None:
+                destination = _event_destination(output_path, destination, event_label)
+            planned[original_index] = replace(
+                operation,
+                destination=destination,
+                temporal_event_id=event_id,
+                temporal_event_label=event_label,
+                temporal_event_index=event_index,
+                temporal_event_size=len(group),
+                temporal_event_start=start,
+                temporal_event_end=end,
+                temporal_event_window_minutes=window_minutes,
+            )
+
+    return planned
+
+
 def plan_organization_operations(
     source_dir: str | Path,
     output_dir: str | Path,
@@ -482,6 +580,8 @@ def plan_organization_operations(
     segregate_derivatives: bool = False,
     derivative_path: str = "Derivatives",
     derivative_patterns: tuple[str, ...] | None = None,
+    event_window_minutes: int | None = None,
+    event_directory: bool = False,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir.
 
@@ -817,6 +917,14 @@ def plan_organization_operations(
                 derived=derived,
                 derived_reason=derived_reason,
             )
+        )
+
+    if event_window_minutes is not None:
+        operations = assign_temporal_events(
+            operations,
+            window_minutes=event_window_minutes,
+            output_dir=output_path,
+            use_event_directory=event_directory,
         )
 
     return operations

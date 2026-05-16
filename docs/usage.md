@@ -92,6 +92,9 @@ Opcoes principais compartilhadas por `organize` e `import`:
 - `--resume`: pula fontes ja processadas com sucesso em um journal anterior.
 - `--conflict-policy suffix|skip|overwrite-never|quarantine|fail-fast`.
 - `--segregate-derivatives`, `--no-segregate-derivatives`, `--derived-path DIR` e `--derived-pattern PATTERN`.
+- `--event-window-minutes MINUTES`: agrupa fotos em eventos quando timestamps consecutivos ficam dentro da janela informada.
+- `--event-directory`: coloca arquivos organizados abaixo de um diretorio de evento gerado.
+- `--no-event-directory`: mantem o agrupamento temporal apenas nos relatorios.
 - `--heic-preview` ou `--no-heic-preview`.
 - `--dng-candidates` ou `--no-dng-candidates`.
 - `--reverse-geocode` ou `--no-reverse-geocode`.

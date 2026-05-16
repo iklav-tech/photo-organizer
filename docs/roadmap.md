@@ -16,6 +16,7 @@ Ja implementado e documentado no projeto:
 - Manifestos finais JSON/CSV para `organize` e `import`.
 - Politicas de conflito: `suffix`, `skip`, `overwrite-never`, `quarantine` e `fail-fast`.
 - Segregacao opcional de arquivos derivados/editados/exportados.
+- Agrupamento temporal de fotos em eventos com janela configuravel, para relatorio ou diretorio.
 - Suporte de auditoria para HEIC/HEIF e escopo inicial RAW.
 - Testes automatizados cobrindo fluxos principais.
 
@@ -34,6 +35,7 @@ Planejado, sem tratar como funcionalidade ja entregue:
 Itens candidatos para versoes futuras:
 
 - Deteccao de fotos burst ou sequencias visualmente relacionadas.
+- Controles mais ricos de nomes de eventos.
 - Suporte a mais tipos de midia, incluindo videos.
 - Filtros mais ricos de inclusao/exclusao e profundidade de varredura.
 - Analise mais rica dos relatorios gerados.
