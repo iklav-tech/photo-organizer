@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from difflib import SequenceMatcher
 import fnmatch
 import json
 import logging
@@ -317,6 +318,13 @@ class FileOperation:
     temporal_event_start: datetime | None = None
     temporal_event_end: datetime | None = None
     temporal_event_window_minutes: int = 0
+    burst_group_id: str = ""
+    burst_mark: str = ""
+    burst_reason: str = ""
+    burst_group_index: int = 0
+    burst_group_size: int = 0
+    burst_window_seconds: int = 0
+    burst_similarity_score: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -651,6 +659,96 @@ def assign_temporal_events(
     return planned
 
 
+def _burst_similarity_score(group: list[tuple[int, FileOperation]]) -> float:
+    stems = [operation.source.stem.lower() for _, operation in group]
+    if len(stems) < 2:
+        return 1.0
+    scores = [
+        SequenceMatcher(None, left, right).ratio()
+        for left, right in zip(stems, stems[1:])
+    ]
+    return min(scores) if scores else 1.0
+
+
+def mark_burst_groups(
+    operations: list[FileOperation],
+    *,
+    window_seconds: int,
+    min_photos: int = 3,
+    similarity_threshold: float | None = None,
+) -> list[FileOperation]:
+    """Mark likely burst groups without deleting or moving any extra files."""
+    if window_seconds <= 0:
+        raise ValueError("Burst window must be greater than zero seconds")
+    if min_photos < 2:
+        raise ValueError("Burst minimum photo count must be at least two")
+    if similarity_threshold is not None and not 0 <= similarity_threshold <= 1:
+        raise ValueError("Burst similarity threshold must be between 0 and 1")
+
+    indexed = [
+        (index, operation)
+        for index, operation in enumerate(operations)
+        if operation.chosen_date is not None
+    ]
+    if len(indexed) < min_photos:
+        return operations
+
+    sorted_items = sorted(
+        indexed,
+        key=lambda item: (item[1].chosen_date, str(item[1].source)),
+    )
+    groups: list[list[tuple[int, FileOperation]]] = []
+    current_group: list[tuple[int, FileOperation]] = []
+    previous_dt: datetime | None = None
+    threshold = timedelta(seconds=window_seconds)
+    for item in sorted_items:
+        operation_dt = item[1].chosen_date
+        if (
+            previous_dt is None
+            or operation_dt is None
+            or operation_dt - previous_dt > threshold
+        ):
+            if len(current_group) >= min_photos:
+                groups.append(current_group)
+            current_group = [item]
+        else:
+            current_group.append(item)
+        previous_dt = operation_dt
+    if len(current_group) >= min_photos:
+        groups.append(current_group)
+
+    planned = list(operations)
+    for burst_index, group in enumerate(groups, start=1):
+        score = (
+            _burst_similarity_score(group)
+            if similarity_threshold is not None
+            else None
+        )
+        confirmed = score is not None and score >= similarity_threshold
+        mark = "BURST" if confirmed else "REVIEW_BURST"
+        if score is not None and similarity_threshold is not None:
+            comparison = ">=" if confirmed else "<"
+            reason = (
+                f"temporal gap <= {window_seconds}s; filename similarity "
+                f"{score:.2f} {comparison} {similarity_threshold:.2f}"
+            )
+        else:
+            reason = f"temporal gap <= {window_seconds}s"
+        group_id = f"burst-{burst_index:03d}"
+        for original_index, operation in group:
+            planned[original_index] = replace(
+                operation,
+                burst_group_id=group_id,
+                burst_mark=mark,
+                burst_reason=reason,
+                burst_group_index=burst_index,
+                burst_group_size=len(group),
+                burst_window_seconds=window_seconds,
+                burst_similarity_score=score,
+            )
+    return planned
+
+
 def plan_organization_operations(
     source_dir: str | Path,
     output_dir: str | Path,
@@ -672,6 +770,10 @@ def plan_organization_operations(
     event_window_minutes: int | None = None,
     event_directory: bool = False,
     event_directory_pattern: str | None = None,
+    burst_detection: bool = False,
+    burst_window_seconds: int = 2,
+    burst_min_photos: int = 3,
+    burst_similarity_threshold: float | None = None,
 ) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir.
 
@@ -1016,6 +1118,13 @@ def plan_organization_operations(
             output_dir=output_path,
             use_event_directory=event_directory,
             event_directory_pattern=event_directory_pattern,
+        )
+    if burst_detection:
+        operations = mark_burst_groups(
+            operations,
+            window_seconds=burst_window_seconds,
+            min_photos=burst_min_photos,
+            similarity_threshold=burst_similarity_threshold,
         )
 
     return operations

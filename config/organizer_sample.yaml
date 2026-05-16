@@ -61,3 +61,13 @@ events:
   directory: false
   # Used by --by event. Supported fields: {date}, {event}, {event_id}, {index}.
   # directory_pattern: "{date:%Y}/{date:%Y-%m-%d}_{event}"
+bursts:
+  # Mark likely burst sequences for later review. No files are deleted.
+  enabled: false
+  # Consecutive photos within this many seconds can belong to the same burst.
+  window_seconds: 2
+  # Minimum number of photos required before a group is marked.
+  min_photos: 3
+  # Optional filename similarity confirmation from 0 to 1. When omitted,
+  # temporal groups are marked REVIEW_BURST. When matched, they are BURST.
+  # similarity_threshold: 0.8

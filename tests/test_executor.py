@@ -16,6 +16,7 @@ from photo_organizer.executor import (
     apply_operations,
     assign_temporal_events,
     find_related_sidecars,
+    mark_burst_groups,
     plan_organization_operations,
 )
 from photo_organizer.geocoding import ReverseGeocodedLocation
@@ -411,6 +412,59 @@ def test_plan_organization_operations_assigns_temporal_events(
     assert all(
         "event-001_2024-08-15_10-00" in operation.destination.parts
         for operation in operations
+    )
+
+
+def test_mark_burst_groups_marks_temporal_candidates_for_review(
+    tmp_path: Path,
+) -> None:
+    operations = [
+        FileOperation(
+            source=tmp_path / f"IMG_000{index}.jpg",
+            destination=tmp_path / "out" / f"{index}.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0, index),
+        )
+        for index in range(3)
+    ]
+
+    marked = mark_burst_groups(
+        operations,
+        window_seconds=2,
+        min_photos=3,
+    )
+
+    assert {operation.burst_group_id for operation in marked} == {"burst-001"}
+    assert {operation.burst_mark for operation in marked} == {"REVIEW_BURST"}
+    assert all(operation.burst_group_size == 3 for operation in marked)
+    assert all(operation.destination == original.destination for operation, original in zip(marked, operations))
+
+
+def test_mark_burst_groups_confirms_with_filename_similarity(
+    tmp_path: Path,
+) -> None:
+    operations = [
+        FileOperation(
+            source=tmp_path / filename,
+            destination=tmp_path / "out" / filename,
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0, index),
+        )
+        for index, filename in enumerate(("IMG_1001.jpg", "IMG_1002.jpg", "IMG_1003.jpg"))
+    ]
+
+    marked = mark_burst_groups(
+        operations,
+        window_seconds=2,
+        min_photos=3,
+        similarity_threshold=0.8,
+    )
+
+    assert {operation.burst_mark for operation in marked} == {"BURST"}
+    assert all(
+        operation.burst_similarity_score is not None
+        and operation.burst_similarity_score >= 0.8
+        for operation in marked
     )
 
 

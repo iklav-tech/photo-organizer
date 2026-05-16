@@ -22,6 +22,11 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
   `YYYY/YYYY-MM-DD_evento-001` style paths.
 - Configurable event directory patterns through `--event-directory-pattern` and
   `events.directory_pattern`.
+- Burst detection that marks close temporal sequences as `REVIEW_BURST` or
+  `BURST` without deleting files.
+- Burst report and journal fields, configurable through `--burst-detection`,
+  `--burst-window-seconds`, `--burst-min-photos`,
+  `--burst-similarity-threshold` and `bursts.*` config.
 
 ## [0.8.0] - 2026-05-16
 

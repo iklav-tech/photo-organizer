@@ -80,6 +80,9 @@ JOURNAL_FIELDS = (
     "date_kind",
     "clock_offset",
     "event_name",
+    "burst_group_id",
+    "burst_mark",
+    "burst_reason",
     "staging",
 )
 
@@ -202,6 +205,9 @@ class JournalWriter:
         date_kind: str = "",
         clock_offset: str = "",
         event_name: str = "",
+        burst_group_id: str = "",
+        burst_mark: str = "",
+        burst_reason: str = "",
         staging: bool = False,
     ) -> None:
         """Append one entry to the journal and flush immediately."""
@@ -220,6 +226,9 @@ class JournalWriter:
             "date_kind": date_kind,
             "clock_offset": clock_offset,
             "event_name": event_name,
+            "burst_group_id": burst_group_id,
+            "burst_mark": burst_mark,
+            "burst_reason": burst_reason,
             "staging": staging,
         }
         try:
@@ -267,6 +276,9 @@ def _entry_fields_from_operation(operation: object) -> dict[str, str]:
     date_kind = getattr(operation, "date_kind", "") or ""
     clock_offset = ""
     event_name = ""
+    burst_group_id = getattr(operation, "burst_group_id", "") or ""
+    burst_mark = getattr(operation, "burst_mark", "") or ""
+    burst_reason = getattr(operation, "burst_reason", "") or ""
 
     prov = getattr(operation, "date_provenance", None)
     if prov is not None:
@@ -293,6 +305,9 @@ def _entry_fields_from_operation(operation: object) -> dict[str, str]:
         "date_kind": date_kind,
         "clock_offset": clock_offset,
         "event_name": event_name,
+        "burst_group_id": burst_group_id,
+        "burst_mark": burst_mark,
+        "burst_reason": burst_reason,
     }
 
 

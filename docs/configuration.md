@@ -42,6 +42,11 @@ events:
   window_minutes: 60
   directory: false
   directory_pattern: "{date:%Y}/{date:%Y-%m-%d}_{event}"
+bursts:
+  enabled: false
+  window_seconds: 2
+  min_photos: 3
+  similarity_threshold: 0.8
 ```
 
 Um exemplo completo existe em `config/organizer_sample.yaml`.
@@ -70,6 +75,10 @@ Um exemplo completo existe em `config/organizer_sample.yaml`.
 - `events.window_minutes`: inteiro positivo para agrupar fotos em eventos por proximidade temporal.
 - `events.directory`: quando `true`, usa o nome gerado do evento como diretorio; quando `false`, o agrupamento aparece apenas em relatorios.
 - `events.directory_pattern`: padrao de diretorio para `--by event`; aceita `{date}`, `{event}`, `{event_id}` e `{index}`.
+- `bursts.enabled`: habilita marcacao de provaveis sequencias burst.
+- `bursts.window_seconds`: intervalo maximo entre fotos consecutivas no mesmo burst.
+- `bursts.min_photos`: quantidade minima para marcar um grupo.
+- `bursts.similarity_threshold`: similaridade opcional de nome de arquivo entre `0` e `1`; grupos confirmados recebem `BURST`, grupos apenas temporais recebem `REVIEW_BURST`.
 
 ## Variaveis de ambiente
 

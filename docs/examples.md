@@ -191,3 +191,29 @@ photo-organizer organize ./Photos \
 ```
 
 Campos documentados pelo codigo incluem origem, destino final, acao, status, observacoes, data escolhida, local escolhido, fonte de metadado, conflitos de reconciliacao, campos RAW, sidecars e classificacao de arquivo original/derivado.
+
+## Marcar sequencias burst
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --burst-detection \
+  --dry-run \
+  --report audit.json
+```
+
+Com a configuracao padrao, grupos com pelo menos 3 fotos e diferenca de ate 2 segundos entre timestamps consecutivos recebem `REVIEW_BURST` no relatorio. Nenhuma foto e apagada automaticamente.
+
+Para confirmar grupos por similaridade de nome de arquivo:
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --burst-detection \
+  --burst-window-seconds 2 \
+  --burst-min-photos 3 \
+  --burst-similarity-threshold 0.8 \
+  --report audit.json
+```
+
+Quando a similaridade configurada e atingida, a marcacao passa a ser `BURST`; caso contrario, o grupo temporal continua como `REVIEW_BURST`.

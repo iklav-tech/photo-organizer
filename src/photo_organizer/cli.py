@@ -209,6 +209,10 @@ def _write_execution_report(
         str(operation.source): operation
         for operation in planned_operations or []
     }
+    include_burst_fields = any(
+        planned_operation.burst_mark
+        for planned_operation in planned_operations or []
+    )
     for operation in operations:
         planned_operation = planned_operation_by_source.get(operation["source"])
         if planned_operation is not None and planned_operation.related_sidecars:
@@ -247,6 +251,39 @@ def _write_execution_report(
         else:
             operation["dng_candidate"] = False
             operation["dng_candidate_reason"] = ""
+        if include_burst_fields:
+            operation["burst_group_id"] = (
+                planned_operation.burst_group_id
+                if planned_operation is not None
+                else ""
+            )
+            operation["burst_mark"] = (
+                planned_operation.burst_mark if planned_operation is not None else ""
+            )
+            operation["burst_reason"] = (
+                planned_operation.burst_reason if planned_operation is not None else ""
+            )
+            operation["burst_group_index"] = (
+                planned_operation.burst_group_index
+                if planned_operation is not None
+                else 0
+            )
+            operation["burst_group_size"] = (
+                planned_operation.burst_group_size
+                if planned_operation is not None
+                else 0
+            )
+            operation["burst_window_seconds"] = (
+                planned_operation.burst_window_seconds
+                if planned_operation is not None
+                else 0
+            )
+            operation["burst_similarity_score"] = (
+                planned_operation.burst_similarity_score
+                if planned_operation is not None
+                and planned_operation.burst_similarity_score is not None
+                else ""
+            )
         operation["raw_family"] = bool(
             planned_operation is not None and planned_operation.raw_format
         )
@@ -442,6 +479,17 @@ def _write_execution_report(
             ),
             0,
         )
+    if include_burst_fields:
+        summary["burst_groups"] = len({
+            planned_operation.burst_group_id
+            for planned_operation in planned_operations or []
+            if planned_operation.burst_group_id
+        })
+        summary["burst_files"] = sum(
+            1
+            for planned_operation in planned_operations or []
+            if planned_operation.burst_mark
+        )
 
     if path.suffix.lower() == ".csv":
         fieldnames = [
@@ -474,6 +522,18 @@ def _write_execution_report(
             "dng_candidate",
             "dng_candidate_reason",
         ]
+        if include_burst_fields:
+            fieldnames.extend(
+                [
+                    "burst_group_id",
+                    "burst_mark",
+                    "burst_reason",
+                    "burst_group_index",
+                    "burst_group_size",
+                    "burst_window_seconds",
+                    "burst_similarity_score",
+                ]
+            )
         if include_temporal_event_fields:
             fieldnames.extend(
                 [
@@ -1969,6 +2029,44 @@ def _add_organize_arguments(
         help="Keep temporal event grouping in reports only.",
     )
     parser.set_defaults(event_directory=None)
+    burst_group = execution_group.add_mutually_exclusive_group()
+    burst_group.add_argument(
+        "--burst-detection",
+        action="store_true",
+        dest="burst_detection",
+        help="Mark likely burst photo groups without deleting any files.",
+    )
+    burst_group.add_argument(
+        "--no-burst-detection",
+        action="store_false",
+        dest="burst_detection",
+        help="Disable burst detection.",
+    )
+    parser.set_defaults(burst_detection=None)
+    execution_group.add_argument(
+        "--burst-window-seconds",
+        metavar="SECONDS",
+        type=int,
+        default=None,
+        help="Maximum consecutive timestamp gap for burst candidates (default: 2).",
+    )
+    execution_group.add_argument(
+        "--burst-min-photos",
+        metavar="COUNT",
+        type=int,
+        default=None,
+        help="Minimum photos required to mark a burst group (default: 3).",
+    )
+    execution_group.add_argument(
+        "--burst-similarity-threshold",
+        metavar="VALUE",
+        type=float,
+        default=None,
+        help=(
+            "Optional filename similarity threshold from 0 to 1. "
+            "Confirmed groups are marked BURST; temporal-only groups are REVIEW_BURST."
+        ),
+    )
     execution_group.add_argument(
         "--correction-priority",
         choices=CORRECTION_PRIORITY_CHOICES,
@@ -2607,6 +2705,34 @@ def main(argv: list[str] | None = None) -> int:
             event_directory = True
             if event_directory_pattern is None:
                 event_directory_pattern = "{date:%Y}/{date:%Y-%m-%d}_{event}"
+        burst_detection = (
+            args.burst_detection
+            if args.burst_detection is not None
+            else config.burst_detection
+            if config is not None and config.burst_detection is not None
+            else False
+        )
+        burst_window_seconds = (
+            args.burst_window_seconds
+            if args.burst_window_seconds is not None
+            else config.burst_window_seconds
+            if config is not None and config.burst_window_seconds is not None
+            else 2
+        )
+        burst_min_photos = (
+            args.burst_min_photos
+            if args.burst_min_photos is not None
+            else config.burst_min_photos
+            if config is not None and config.burst_min_photos is not None
+            else 3
+        )
+        burst_similarity_threshold = (
+            args.burst_similarity_threshold
+            if args.burst_similarity_threshold is not None
+            else config.burst_similarity_threshold
+            if config is not None and config.burst_similarity_threshold is not None
+            else None
+        )
 
         if not output:
             parser.error(
@@ -2652,6 +2778,15 @@ def main(argv: list[str] | None = None) -> int:
                 validate_event_directory_pattern(event_directory_pattern)
             except ValueError as exc:
                 parser.error(f"invalid --event-directory-pattern: {exc}")
+        if burst_window_seconds <= 0:
+            parser.error("--burst-window-seconds must be greater than zero")
+        if burst_min_photos < 2:
+            parser.error("--burst-min-photos must be at least 2")
+        if (
+            burst_similarity_threshold is not None
+            and not 0 <= burst_similarity_threshold <= 1
+        ):
+            parser.error("--burst-similarity-threshold must be between 0 and 1")
 
         logger.info(
             "Execution started: %s source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s staging=%s",
@@ -2686,6 +2821,10 @@ def main(argv: list[str] | None = None) -> int:
                 event_window_minutes=event_window_minutes,
                 event_directory=event_directory,
                 event_directory_pattern=event_directory_pattern,
+                burst_detection=burst_detection,
+                burst_window_seconds=burst_window_seconds,
+                burst_min_photos=burst_min_photos,
+                burst_similarity_threshold=burst_similarity_threshold,
             )
             if (
                 isinstance(plan_result, tuple)

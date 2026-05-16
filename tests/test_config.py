@@ -35,6 +35,12 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "directory": True,
                     "directory_pattern": "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}",
                 },
+                "bursts": {
+                    "enabled": True,
+                    "window_seconds": 2,
+                    "min_photos": 3,
+                    "similarity_threshold": 0.8,
+                },
             }
         ),
         encoding="utf-8",
@@ -62,6 +68,10 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.event_directory_pattern == (
         "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}"
     )
+    assert config.burst_detection is True
+    assert config.burst_window_seconds == 2
+    assert config.burst_min_photos == 3
+    assert config.burst_similarity_threshold == 0.8
 
 
 def test_load_organization_config_reads_yaml_rules(tmp_path: Path) -> None:
@@ -241,6 +251,19 @@ def test_load_organization_config_rejects_invalid_event_window(
     )
 
     with pytest.raises(ConfigurationError, match="events.window_minutes"):
+        load_organization_config(config_path)
+
+
+def test_load_organization_config_rejects_invalid_burst_similarity(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"bursts": {"similarity_threshold": 1.5}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="bursts.similarity_threshold"):
         load_organization_config(config_path)
 
 

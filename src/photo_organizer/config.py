@@ -47,6 +47,10 @@ class OrganizationConfig:
     event_window_minutes: int | None = None
     event_directory: bool | None = None
     event_directory_pattern: str | None = None
+    burst_detection: bool | None = None
+    burst_window_seconds: int | None = None
+    burst_min_photos: int | None = None
+    burst_similarity_threshold: float | None = None
 
 
 def _load_yaml(path: Path) -> Any:
@@ -179,6 +183,32 @@ def _optional_positive_int(
         raise ConfigurationError(f"{label} must be a positive integer")
     if parsed <= 0:
         raise ConfigurationError(f"{label} must be a positive integer")
+    return parsed
+
+
+def _optional_probability(
+    section: dict[str, Any],
+    key: str,
+    label: str,
+) -> float | None:
+    value = section.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ConfigurationError(f"{label} must be a number between 0 and 1")
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        try:
+            parsed = float(value)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"{label} must be a number between 0 and 1"
+            ) from exc
+    else:
+        raise ConfigurationError(f"{label} must be a number between 0 and 1")
+    if not 0 <= parsed <= 1:
+        raise ConfigurationError(f"{label} must be a number between 0 and 1")
     return parsed
 
 
@@ -334,6 +364,29 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "directory_pattern",
         "events.directory_pattern",
     )
+    bursts = _expect_mapping(config.get("bursts", {}), "bursts")
+    burst_detection = _optional_bool(
+        bursts,
+        "enabled",
+        "bursts.enabled",
+    )
+    burst_window_seconds = _optional_positive_int(
+        bursts,
+        "window_seconds",
+        "bursts.window_seconds",
+    )
+    burst_min_photos = _optional_positive_int(
+        bursts,
+        "min_photos",
+        "bursts.min_photos",
+    )
+    burst_similarity_threshold = _optional_probability(
+        bursts,
+        "similarity_threshold",
+        "bursts.similarity_threshold",
+    )
+    if burst_min_photos is not None and burst_min_photos < 2:
+        raise ConfigurationError("bursts.min_photos must be at least 2")
 
     if organization_strategy is not None and behavior_strategy is not None:
         raise ConfigurationError(
@@ -419,4 +472,8 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         event_window_minutes=event_window_minutes,
         event_directory=event_directory,
         event_directory_pattern=event_directory_pattern,
+        burst_detection=burst_detection,
+        burst_window_seconds=burst_window_seconds,
+        burst_min_photos=burst_min_photos,
+        burst_similarity_threshold=burst_similarity_threshold,
     )

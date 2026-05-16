@@ -18,6 +18,7 @@ Ja implementado e documentado no projeto:
 - Segregacao opcional de arquivos derivados/editados/exportados.
 - Agrupamento temporal de fotos em eventos com janela configuravel, para relatorio ou diretorio.
 - Organizacao por evento com diretorios previsiveis e nomes automaticos ou derivados de correction manifests.
+- Deteccao de burst com marcacao `REVIEW_BURST`/`BURST`, sem exclusao automatica.
 - Suporte de auditoria para HEIC/HEIF e escopo inicial RAW.
 - Testes automatizados cobrindo fluxos principais.
 

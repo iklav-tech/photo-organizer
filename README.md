@@ -69,6 +69,8 @@ The project includes a tested CLI workflow:
   strategy;
 - optional temporal event grouping with configurable time windows, available
   for reports or as generated destination directories;
+- optional burst detection that marks near-time sequences as `REVIEW_BURST` or
+  `BURST` without deleting files;
 - explicit planning layer separated from execution;
 - automatic destination directory creation;
 - safe move behavior that removes the source only after a successful copy;
@@ -273,6 +275,8 @@ Example use cases:
 - `photo-organizer organize SOURCE --output Organized --conflict-policy skip`
 - `photo-organizer organize SOURCE --output Organized --event-window-minutes 60`
 - `photo-organizer organize SOURCE --output Organized --event-window-minutes 60 --event-directory`
+- `photo-organizer organize SOURCE --output Organized --burst-detection --report audit.json`
+- `photo-organizer organize SOURCE --output Organized --burst-detection --burst-similarity-threshold 0.8`
 - `photo-organizer organize SOURCE --output Organized --segregate-derivatives`
 - `photo-organizer organize SOURCE --output Organized --heic-preview`
 - `photo-organizer organize SOURCE --output Organized --dng-candidates --report audit.json`
@@ -754,6 +758,14 @@ The same structure is accepted as JSON. Supported fields:
   directories instead of using event grouping only in reports.
 - `events.directory_pattern`: directory pattern used by `--by event`, with
   `{date}`, `{event}`, `{event_id}` and `{index}` fields.
+- `bursts.enabled`: boolean to mark likely burst sequences.
+- `bursts.window_seconds`: maximum consecutive timestamp gap for burst
+  candidates.
+- `bursts.min_photos`: minimum group size required before a burst mark is
+  emitted.
+- `bursts.similarity_threshold`: optional filename similarity threshold from
+  `0` to `1`; matching groups are marked `BURST`, temporal-only groups are
+  marked `REVIEW_BURST`.
 
 Example correction manifest:
 
@@ -849,6 +861,9 @@ provides a name, it is generated as `evento-001`, `evento-002`, and so on.
   `derived` and `derived_reason`;
 - when temporal event grouping is enabled, report rows include event id, label,
   index, size, start/end timestamps and configured time window;
+- when burst detection is enabled, report rows include burst group id, mark,
+  reason, group size, time window and optional filename similarity score;
+- burst detection only annotates files; it never deletes photos automatically;
 - report rows include RAW sidecar linkage fields: `sidecar_count`,
   `sidecar_sources` and `sidecar_destinations`;
 - execution reports identify RAW-family operations with `raw_family`,

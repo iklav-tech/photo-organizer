@@ -96,6 +96,10 @@ Opcoes principais compartilhadas por `organize` e `import`:
 - `--event-directory-pattern PATTERN`: define o caminho de diretorio usado por `--by event`.
 - `--event-directory`: coloca arquivos organizados abaixo de um diretorio de evento gerado.
 - `--no-event-directory`: mantem o agrupamento temporal apenas nos relatorios.
+- `--burst-detection`: marca grupos provaveis de burst sem apagar arquivos.
+- `--burst-window-seconds SECONDS`: intervalo maximo entre fotos consecutivas para burst.
+- `--burst-min-photos COUNT`: tamanho minimo do grupo de burst.
+- `--burst-similarity-threshold VALUE`: similaridade opcional de nome de arquivo entre `0` e `1`.
 - `--heic-preview` ou `--no-heic-preview`.
 - `--dng-candidates` ou `--no-dng-candidates`.
 - `--reverse-geocode` ou `--no-reverse-geocode`.
