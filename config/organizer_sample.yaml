@@ -10,6 +10,13 @@ behavior:
   plan: false
   reverse_geocode: false
   reconciliation_policy: precedence
+  # Destination conflict policy:
+  # suffix (default, safest): keep existing files and write _01, _02, ...
+  # skip: leave existing destination untouched and skip the incoming file
+  # overwrite-never: report the conflict as an error and continue
+  # quarantine: copy the incoming file to <output>/.quarantine with a reason sidecar
+  # fail-fast: stop the batch at the first destination conflict
+  conflict_policy: suffix
   date_heuristics: true
   location_inference: true
   correction_manifest: corrections.yaml

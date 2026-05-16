@@ -27,6 +27,8 @@ from photo_organizer.correction_manifest import (
     load_correction_manifest,
 )
 from photo_organizer.executor import (
+    CONFLICT_POLICIES,
+    DestinationConflictError,
     FileOperation,
     QuarantineOperation,
     apply_operations,
@@ -81,6 +83,9 @@ def _report_item_from_operation_log(line: str) -> dict[str, str]:
     if marker == "ERROR" and " (error: " in details:
         details, error_text = details.rsplit(" (error: ", maxsplit=1)
         observations = error_text.removesuffix(")")
+    if marker == "SKIP" and " (conflict: " in details:
+        details, conflict_text = details.rsplit(" (conflict: ", maxsplit=1)
+        observations = "conflict: " + conflict_text.removesuffix(")")
 
     action, paths = details.split(" ", maxsplit=1)
     source, destination = paths.split(" -> ", maxsplit=1)
@@ -88,6 +93,7 @@ def _report_item_from_operation_log(line: str) -> dict[str, str]:
         "DRY-RUN": "dry-run",
         "ERROR": "error",
         "INFO": "success",
+        "SKIP": "skipped",
     }.get(marker, marker.lower())
 
     if marker == "DRY-RUN":
@@ -1810,6 +1816,15 @@ def _add_organize_arguments(
         ),
     )
     execution_group.add_argument(
+        "--conflict-policy",
+        choices=CONFLICT_POLICIES,
+        default=None,
+        help=(
+            "Destination conflict policy: suffix, skip, overwrite-never, "
+            "quarantine, or fail-fast (default: suffix)."
+        ),
+    )
+    execution_group.add_argument(
         "--correction-priority",
         choices=CORRECTION_PRIORITY_CHOICES,
         default=None,
@@ -2350,6 +2365,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.reconciliation_policy is not None
             else "precedence"
         )
+        conflict_policy = (
+            args.conflict_policy
+            if args.conflict_policy is not None
+            else config.conflict_policy
+            if config is not None and config.conflict_policy is not None
+            else "suffix"
+        )
         date_heuristics = (
             args.date_heuristics
             if args.date_heuristics is not None
@@ -2528,12 +2550,19 @@ def main(argv: list[str] | None = None) -> int:
         if dry_run:
             logger.info("DRY-RUN enabled: no files will be changed")
 
-        logs = apply_operations(
-            operations,
-            dry_run=dry_run,
-            heic_preview=heic_preview,
-            staging_dir=staging_dir,
-        )
+        try:
+            logs = apply_operations(
+                operations,
+                dry_run=dry_run,
+                heic_preview=heic_preview,
+                staging_dir=staging_dir,
+                conflict_policy=conflict_policy,
+                conflict_quarantine_dir=Path(output) / ".quarantine",
+            )
+        except DestinationConflictError as exc:
+            logger.error("Execution stopped by fail-fast conflict policy: %s", exc)
+            logger.info("Execution finished: %s processed_files=0", command_label)
+            return 1
         for line in logs:
             if line.startswith("[ERROR]"):
                 logger.error(line)
@@ -2541,7 +2570,8 @@ def main(argv: list[str] | None = None) -> int:
                 logger.info(line)
 
         error_files = sum(1 for line in logs if line.startswith("[ERROR]"))
-        processed_files = len(logs) - error_files
+        skipped_files = sum(1 for line in logs if line.startswith("[SKIP]"))
+        processed_files = len(logs) - error_files - skipped_files
         if dry_run:
             summary_mode = "dry-run"
         elif staging_dir is not None:

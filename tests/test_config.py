@@ -221,6 +221,31 @@ def test_load_organization_config_reads_staging_dir(tmp_path: Path) -> None:
     assert config.staging_dir == "/tmp/staging"
 
 
+def test_load_organization_config_reads_conflict_policy(tmp_path: Path) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"conflict_policy": "overwrite-never"}}),
+        encoding="utf-8",
+    )
+
+    config = load_organization_config(config_path)
+
+    assert config.conflict_policy == "overwrite-never"
+
+
+def test_load_organization_config_rejects_invalid_conflict_policy(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps({"behavior": {"conflict_policy": "replace"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="behavior.conflict_policy"):
+        load_organization_config(config_path)
+
+
 def test_load_organization_config_staging_dir_defaults_to_none(
     tmp_path: Path,
 ) -> None:

@@ -3,8 +3,11 @@ from datetime import datetime
 import logging
 import os
 
+import pytest
+
 from photo_organizer.correction_manifest import CorrectionManifest, CorrectionRule
 from photo_organizer.executor import (
+    DestinationConflictError,
     FileOperation,
     apply_operations,
     find_related_sidecars,
@@ -1553,6 +1556,91 @@ def test_apply_operations_uses_third_suffix_without_overwriting_existing_files(
     assert second_collision.read_text() == "existing-02"
     assert third_suffix.read_text() == "new-data"
     assert logs == [f"[INFO] COPY {source} -> {third_suffix}"]
+
+
+def test_apply_operations_skips_destination_conflict_when_configured(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        conflict_policy="skip",
+    )
+
+    assert source.exists()
+    assert destination.read_text() == "existing-data"
+    assert logs == [
+        f"[SKIP] COPY {source} -> {destination} (conflict: destination exists)"
+    ]
+
+
+def test_apply_operations_overwrite_never_reports_conflict_error(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        conflict_policy="overwrite-never",
+    )
+
+    assert source.exists()
+    assert destination.read_text() == "existing-data"
+    assert logs == [
+        f"[ERROR] COPY {source} -> {destination} "
+        "(error: destination conflict; overwrite-never policy)"
+    ]
+
+
+def test_apply_operations_quarantines_destination_conflict(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+    quarantine_dir = tmp_path / "quarantine"
+
+    logs = apply_operations(
+        [FileOperation(source=source, destination=destination, mode="copy")],
+        conflict_policy="quarantine",
+        conflict_quarantine_dir=quarantine_dir,
+    )
+
+    quarantined = quarantine_dir / "source.jpg"
+    assert source.exists()
+    assert destination.read_text() == "existing-data"
+    assert quarantined.read_text() == "new-data"
+    assert quarantined.with_suffix(".jpg.quarantine.json").exists()
+    assert logs == [f"[INFO] QUARANTINE {source} -> {quarantined}"]
+
+
+def test_apply_operations_fail_fast_raises_on_destination_conflict(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.jpg"
+    source.write_text("new-data")
+    destination = tmp_path / "out" / "source.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing-data")
+
+    with pytest.raises(DestinationConflictError, match="Destination conflict"):
+        apply_operations(
+            [FileOperation(source=source, destination=destination, mode="copy")],
+            conflict_policy="fail-fast",
+        )
+
+    assert destination.read_text() == "existing-data"
 
 
 def test_apply_operations_dry_run_reserves_destinations_for_same_batch(

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from photo_organizer.correction_manifest import validate_correction_priority
+from photo_organizer.executor import validate_conflict_policy
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.planner import validate_destination_pattern
 from photo_organizer.metadata import validate_clock_offset, validate_reconciliation_policy
@@ -30,6 +31,7 @@ class OrganizationConfig:
     reverse_geocode: bool | None = None
     organization_strategy: str | None = None
     reconciliation_policy: str | None = None
+    conflict_policy: str | None = None
     date_heuristics: bool | None = None
     location_inference: bool | None = None
     correction_manifest: str | None = None
@@ -197,6 +199,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "reconciliation_policy",
         "behavior.reconciliation_policy",
     )
+    conflict_policy = _optional_string(
+        behavior,
+        "conflict_policy",
+        "behavior.conflict_policy",
+    )
     date_heuristics = _optional_bool(
         behavior,
         "date_heuristics",
@@ -265,6 +272,13 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
             raise ConfigurationError(
                 f"Invalid behavior.reconciliation_policy: {exc}"
             ) from exc
+    if conflict_policy is not None:
+        try:
+            validate_conflict_policy(conflict_policy)
+        except ValueError as exc:
+            raise ConfigurationError(
+                f"Invalid behavior.conflict_policy: {exc}"
+            ) from exc
     if correction_priority is not None:
         try:
             validate_correction_priority(correction_priority)
@@ -300,6 +314,7 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         reverse_geocode=reverse_geocode,
         organization_strategy=organization_strategy,
         reconciliation_policy=reconciliation_policy,
+        conflict_policy=conflict_policy,
         date_heuristics=date_heuristics,
         location_inference=location_inference,
         correction_manifest=correction_manifest,

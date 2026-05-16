@@ -2810,6 +2810,123 @@ def test_organize_cli_staging_dir_overrides_config(
     assert captured.get("staging_dir") == "/tmp/cli-staging"
 
 
+def test_organize_accepts_conflict_policy_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_apply(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", lambda *_a, **_k: [])
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--conflict-policy",
+        "skip",
+    ])
+
+    assert result == 0
+    assert captured.get("conflict_policy") == "skip"
+
+
+def test_organize_conflict_policy_from_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "organizer.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "output": str(tmp_path / "organized"),
+                "behavior": {"conflict_policy": "quarantine"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_apply(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", lambda *_a, **_k: [])
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", fake_apply)
+
+    result = main(["organize", "./photos", "--config", str(config_path)])
+
+    assert result == 0
+    assert captured.get("conflict_policy") == "quarantine"
+
+
+def test_organize_fail_fast_conflict_policy_returns_error(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "photos"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    source = source_dir / "IMG_0001.jpg"
+    source.write_text("new")
+    ts = datetime(2024, 8, 15, 14, 32, 9).timestamp()
+    os.utime(source, (ts, ts))
+    destination = output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing")
+
+    result = main([
+        "organize",
+        str(source_dir),
+        "--output",
+        str(output_dir),
+        "--copy",
+        "--conflict-policy",
+        "fail-fast",
+    ])
+
+    assert result == 1
+    assert destination.read_text() == "existing"
+    assert source.exists()
+
+
+def test_organize_skip_conflict_policy_reports_skipped_operation(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "photos"
+    source_dir.mkdir()
+    output_dir = tmp_path / "organized"
+    report_path = tmp_path / "report.json"
+    source = source_dir / "IMG_0001.jpg"
+    source.write_text("new")
+    ts = datetime(2024, 8, 15, 14, 32, 9).timestamp()
+    os.utime(source, (ts, ts))
+    destination = output_dir / "2024" / "08" / "15" / "2024-08-15_14-32-09.jpg"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("existing")
+
+    result = main([
+        "organize",
+        str(source_dir),
+        "--output",
+        str(output_dir),
+        "--copy",
+        "--conflict-policy",
+        "skip",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"]["processed_files"] == 0
+    assert report["operations"][0]["status"] == "skipped"
+    assert report["operations"][0]["observations"] == "conflict: destination exists"
+    assert destination.read_text() == "existing"
+    assert source.exists()
+
+
 def test_organize_staging_end_to_end_promotes_files(
     tmp_path: Path,
     caplog,

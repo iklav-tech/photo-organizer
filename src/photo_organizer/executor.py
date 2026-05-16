@@ -8,6 +8,7 @@ import json
 import logging
 from pathlib import Path
 import shutil
+from typing import Literal
 
 from photo_organizer.correction_manifest import (
     CorrectionApplication,
@@ -56,6 +57,19 @@ from photo_organizer.text_normalization import normalize_text
 logger = logging.getLogger(__name__)
 
 SIDECAR_EXTENSIONS = frozenset({".xmp"})
+ConflictPolicy = Literal["suffix", "skip", "overwrite-never", "quarantine", "fail-fast"]
+CONFLICT_POLICIES = ("suffix", "skip", "overwrite-never", "quarantine", "fail-fast")
+
+
+class DestinationConflictError(RuntimeError):
+    """Raised when fail-fast conflict handling finds an existing destination."""
+
+
+def validate_conflict_policy(policy: str) -> ConflictPolicy:
+    if policy not in CONFLICT_POLICIES:
+        choices = ", ".join(CONFLICT_POLICIES)
+        raise ValueError(f"Conflict policy must be one of: {choices}")
+    return policy  # type: ignore[return-value]
 
 # Imported lazily to avoid a hard circular dependency; the type hint is kept as
 # a string so it is only evaluated at runtime when actually used.
@@ -154,6 +168,60 @@ def _resolve_available_operation_destination(
         counter += 1
 
 
+def _operation_destination_conflicts(
+    destination: Path,
+    related_sidecars: tuple[Path, ...],
+    reserved: set[Path],
+) -> bool:
+    linked_destinations = {
+        _sidecar_destination(destination, sidecar)
+        for sidecar in related_sidecars
+    }
+    return (
+        destination.exists()
+        or destination in reserved
+        or any(
+            sidecar_destination.exists() or sidecar_destination in reserved
+            for sidecar_destination in linked_destinations
+        )
+    )
+
+
+def _reserve_operation_destination(
+    destination: Path,
+    related_sidecars: tuple[Path, ...],
+    reserved: set[Path],
+) -> None:
+    reserved.add(destination)
+    for sidecar in related_sidecars:
+        reserved.add(_sidecar_destination(destination, sidecar))
+
+
+def _destination_for_policy(
+    operation: FileOperation,
+    reserved: set[Path],
+    conflict_policy: ConflictPolicy,
+) -> Path | None:
+    if conflict_policy == "suffix":
+        return _resolve_available_operation_destination(
+            operation.destination,
+            operation.related_sidecars,
+            reserved,
+        )
+    has_conflict = _operation_destination_conflicts(
+        operation.destination,
+        operation.related_sidecars,
+        reserved,
+    )
+    if has_conflict:
+        if conflict_policy == "fail-fast":
+            raise DestinationConflictError(
+                f"Destination conflict for {operation.source}: {operation.destination}"
+            )
+        return None
+    return operation.destination
+
+
 def _move_file_after_successful_copy(source: Path, destination: Path) -> None:
     """Move a file by copying first and removing the source only after success."""
     shutil.copy2(source, destination)
@@ -213,11 +281,13 @@ class FileOperation:
 #: ``copy-error``       – the file could not be copied to its destination.
 #: ``move-error``       – the file could not be moved to its destination.
 #: ``read-error``       – the source file could not be read at all.
+#: ``destination-conflict`` – the planned destination already exists.
 QUARANTINE_REASON_CODES = frozenset({
     "metadata-error",
     "copy-error",
     "move-error",
     "read-error",
+    "destination-conflict",
 })
 
 
@@ -700,6 +770,8 @@ def apply_operations(
     heic_preview: bool = False,
     staging_dir: str | Path | None = None,
     journal: object | None = None,
+    conflict_policy: ConflictPolicy = "suffix",
+    conflict_quarantine_dir: str | Path | None = None,
 ) -> list[str]:
     """Apply planned operations or simulate them when dry_run is True.
 
@@ -717,8 +789,18 @@ def apply_operations(
     Returns one status line per operation, including failures, so callers can
     inspect per-item outcomes.
     """
+    conflict_policy = validate_conflict_policy(conflict_policy)
     if dry_run:
-        return _apply_operations_dry_run(operations, journal=journal)
+        return _apply_operations_dry_run(
+            operations,
+            journal=journal,
+            conflict_policy=conflict_policy,
+            conflict_quarantine_dir=(
+                Path(conflict_quarantine_dir)
+                if conflict_quarantine_dir is not None
+                else None
+            ),
+        )
 
     if staging_dir is not None:
         return _apply_operations_with_staging(
@@ -726,31 +808,79 @@ def apply_operations(
             Path(staging_dir),
             heic_preview=heic_preview,
             journal=journal,
+            conflict_policy=conflict_policy,
+            conflict_quarantine_dir=(
+                Path(conflict_quarantine_dir)
+                if conflict_quarantine_dir is not None
+                else None
+            ),
         )
 
-    return _apply_operations_direct(operations, heic_preview=heic_preview, journal=journal)
+    return _apply_operations_direct(
+        operations,
+        heic_preview=heic_preview,
+        journal=journal,
+        conflict_policy=conflict_policy,
+        conflict_quarantine_dir=(
+            Path(conflict_quarantine_dir)
+            if conflict_quarantine_dir is not None
+            else None
+        ),
+    )
 
 
 def _apply_operations_dry_run(
     operations: list[FileOperation],
     *,
     journal: object | None = None,
+    conflict_policy: ConflictPolicy = "suffix",
+    conflict_quarantine_dir: Path | None = None,
 ) -> list[str]:
     """Return dry-run log lines without touching the filesystem."""
     from photo_organizer.journal import _entry_fields_from_operation  # noqa: PLC0415
 
     logs: list[str] = []
     reserved_destinations: set[Path] = set()
+    reserved_quarantine: set[Path] = set()
     for operation in operations:
         action = operation.mode.upper()
-        destination = _resolve_available_operation_destination(
-            operation.destination,
+        destination = _destination_for_policy(
+            operation,
+            reserved_destinations,
+            conflict_policy,
+        )
+        if destination is None:
+            if conflict_policy == "skip":
+                logs.append(
+                    f"[SKIP] {action} {operation.source} -> {operation.destination} "
+                    "(conflict: destination exists)"
+                )
+                continue
+            if conflict_policy == "overwrite-never":
+                logs.append(
+                    f"[ERROR] {action} {operation.source} -> {operation.destination} "
+                    "(error: destination conflict; overwrite-never policy)"
+                )
+                continue
+            if conflict_policy == "quarantine":
+                quarantine_dir = conflict_quarantine_dir or (
+                    operation.destination.parent / ".quarantine"
+                )
+                quarantine_destination = _resolve_quarantine_destination(
+                    operation.source,
+                    quarantine_dir,
+                    reserved_quarantine,
+                )
+                reserved_quarantine.add(quarantine_destination)
+                logs.append(
+                    f"[DRY-RUN] QUARANTINE {operation.source} -> {quarantine_destination}"
+                )
+                continue
+        _reserve_operation_destination(
+            destination,
             operation.related_sidecars,
             reserved_destinations,
         )
-        reserved_destinations.add(destination)
-        for sidecar in operation.related_sidecars:
-            reserved_destinations.add(_sidecar_destination(destination, sidecar))
         logs.append(f"[DRY-RUN] {action} {operation.source} -> {destination}")
         if journal is not None:
             extra = _entry_fields_from_operation(operation)
@@ -769,6 +899,8 @@ def _apply_operations_direct(
     *,
     heic_preview: bool = False,
     journal: object | None = None,
+    conflict_policy: ConflictPolicy = "suffix",
+    conflict_quarantine_dir: Path | None = None,
 ) -> list[str]:
     """Write files directly to their final destinations."""
     from photo_organizer.journal import _entry_fields_from_operation  # noqa: PLC0415
@@ -778,14 +910,49 @@ def _apply_operations_direct(
 
     for operation in operations:
         action = operation.mode.upper()
-        destination = _resolve_available_operation_destination(
-            operation.destination,
+        destination = _destination_for_policy(
+            operation,
+            reserved_destinations,
+            conflict_policy,
+        )
+        if destination is None:
+            if conflict_policy == "skip":
+                logs.append(
+                    f"[SKIP] {action} {operation.source} -> {operation.destination} "
+                    "(conflict: destination exists)"
+                )
+                continue
+            if conflict_policy == "overwrite-never":
+                logs.append(
+                    f"[ERROR] {action} {operation.source} -> {operation.destination} "
+                    "(error: destination conflict; overwrite-never policy)"
+                )
+                continue
+            if conflict_policy == "quarantine":
+                quarantine_dir = conflict_quarantine_dir or (
+                    operation.destination.parent / ".quarantine"
+                )
+                _applied, quarantine_logs = apply_quarantine(
+                    [
+                        QuarantineOperation(
+                            source=operation.source,
+                            reason=(
+                                "Destination conflict: "
+                                f"{operation.destination}"
+                            ),
+                            reason_code="destination-conflict",
+                        )
+                    ],
+                    quarantine_dir,
+                    dry_run=False,
+                )
+                logs.extend(quarantine_logs)
+                continue
+        _reserve_operation_destination(
+            destination,
             operation.related_sidecars,
             reserved_destinations,
         )
-        reserved_destinations.add(destination)
-        for sidecar in operation.related_sidecars:
-            reserved_destinations.add(_sidecar_destination(destination, sidecar))
         line_suffix = f"{action} {operation.source} -> {destination}"
         extra = _entry_fields_from_operation(operation)
 
@@ -844,6 +1011,8 @@ def _apply_operations_with_staging(
     *,
     heic_preview: bool = False,
     journal: object | None = None,
+    conflict_policy: ConflictPolicy = "suffix",
+    conflict_quarantine_dir: Path | None = None,
 ) -> list[str]:
     """Copy files into *staging_dir*, then promote to final destinations.
 
@@ -863,14 +1032,50 @@ def _apply_operations_with_staging(
     # Resolve all final destinations up-front so conflict suffixes are stable.
     resolved: list[tuple[FileOperation, Path]] = []
     for operation in operations:
-        destination = _resolve_available_operation_destination(
-            operation.destination,
+        destination = _destination_for_policy(
+            operation,
+            reserved_destinations,
+            conflict_policy,
+        )
+        if destination is None:
+            action = operation.mode.upper()
+            if conflict_policy == "skip":
+                logs.append(
+                    f"[SKIP] {action} {operation.source} -> {operation.destination} "
+                    "(conflict: destination exists)"
+                )
+                continue
+            if conflict_policy == "overwrite-never":
+                logs.append(
+                    f"[ERROR] {action} {operation.source} -> {operation.destination} "
+                    "(error: destination conflict; overwrite-never policy)"
+                )
+                continue
+            if conflict_policy == "quarantine":
+                quarantine_dir = conflict_quarantine_dir or (
+                    operation.destination.parent / ".quarantine"
+                )
+                _applied, quarantine_logs = apply_quarantine(
+                    [
+                        QuarantineOperation(
+                            source=operation.source,
+                            reason=(
+                                "Destination conflict: "
+                                f"{operation.destination}"
+                            ),
+                            reason_code="destination-conflict",
+                        )
+                    ],
+                    quarantine_dir,
+                    dry_run=False,
+                )
+                logs.extend(quarantine_logs)
+                continue
+        _reserve_operation_destination(
+            destination,
             operation.related_sidecars,
             reserved_destinations,
         )
-        reserved_destinations.add(destination)
-        for sidecar in operation.related_sidecars:
-            reserved_destinations.add(_sidecar_destination(destination, sidecar))
         resolved.append((operation, destination))
 
     # Phase 1 – write everything into the staging area.

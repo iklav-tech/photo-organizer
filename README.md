@@ -55,7 +55,7 @@ The project includes a tested v0.6.0 CLI workflow:
 - explicit planning layer separated from execution;
 - automatic destination directory creation;
 - safe move behavior that removes the source only after a successful copy;
-- filename collision handling with predictable suffixes (`_01`, `_02`, `_03`);
+- configurable destination conflict policy with safe suffix handling by default;
 - `--dry-run` simulation with no filesystem changes;
 - `--plan` inspection mode without execution;
 - structured execution summaries;
@@ -670,6 +670,7 @@ behavior:
   plan: false
   reverse_geocode: true
   reconciliation_policy: precedence
+  conflict_policy: suffix
   date_heuristics: true
   location_inference: true
   correction_manifest: corrections.yaml
@@ -694,6 +695,8 @@ The same structure is accepted as JSON. Supported fields:
 - `behavior.dry_run`, `behavior.plan`, `behavior.reverse_geocode`: booleans;
 - `behavior.reconciliation_policy`: `precedence`, `newest`, `oldest` or
   `filesystem`;
+- `behavior.conflict_policy`: `suffix`, `skip`, `overwrite-never`,
+  `quarantine` or `fail-fast`;
 - `behavior.date_heuristics`: boolean to enable or disable inferred date
   recovery;
 - `behavior.location_inference`: boolean to enable or disable non-GPS location
@@ -979,13 +982,26 @@ Available destination fields for `destination.pattern`:
 - `{state}`: resolved state or `Unknown`;
 - `{city}`: resolved city or `Unknown`.
 
-When a destination already exists, the organizer does not overwrite it by default. It appends the next available numeric suffix:
+When a destination already exists, the organizer does not overwrite it by
+default. The default conflict policy is `suffix`, which appends the next
+available numeric suffix:
 
 ```text
 2024-08-15_14-32-09.jpg
 2024-08-15_14-32-09_01.jpg
 2024-08-15_14-32-09_02.jpg
 ```
+
+Destination conflict handling is configurable with `--conflict-policy` or
+`behavior.conflict_policy` in the config file:
+
+- `suffix`: default and safest; keep existing files and write `_01`, `_02`, ...
+- `skip`: leave existing files untouched and skip the incoming operation;
+- `overwrite-never`: leave existing files untouched, record an error, and
+  continue processing the rest of the batch;
+- `quarantine`: copy the incoming file to `<output>/.quarantine` with a JSON
+  reason sidecar;
+- `fail-fast`: stop the batch immediately at the first destination conflict.
 
 ## Installation
 
@@ -1133,6 +1149,7 @@ behavior:
   dry_run: true
   reverse_geocode: true
   reconciliation_policy: precedence
+  conflict_policy: suffix
   date_heuristics: true
   location_inference: true
   correction_manifest: corrections.yaml
