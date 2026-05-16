@@ -55,6 +55,18 @@ logger = logging.getLogger(__name__)
 
 SIDECAR_EXTENSIONS = frozenset({".xmp"})
 
+# Imported lazily to avoid a hard circular dependency; the type hint is kept as
+# a string so it is only evaluated at runtime when actually used.
+_JournalWriterType = None
+
+
+def _get_journal_writer_type():
+    global _JournalWriterType
+    if _JournalWriterType is None:
+        from photo_organizer.journal import JournalWriter  # noqa: PLC0415
+        _JournalWriterType = JournalWriter
+    return _JournalWriterType
+
 
 def find_related_sidecars(path: str | Path) -> tuple[Path, ...]:
     """Return same-basename sidecars that should follow a RAW file."""
@@ -487,6 +499,7 @@ def apply_operations(
     dry_run: bool = False,
     heic_preview: bool = False,
     staging_dir: str | Path | None = None,
+    journal: object | None = None,
 ) -> list[str]:
     """Apply planned operations or simulate them when dry_run is True.
 
@@ -497,29 +510,35 @@ def apply_operations(
     the final output directory is left completely untouched, preventing partial
     inconsistent state.
 
-    The *staging_dir* is created automatically when it does not exist.  It is
-    the caller's responsibility to ensure the path is on the same filesystem as
-    the output directory so that the final promotion step can use atomic renames
-    where possible.
+    When *journal* is a :class:`~photo_organizer.journal.JournalWriter` each
+    completed (or failed) operation is appended to the journal immediately so
+    partial runs are always recoverable.
 
     Returns one status line per operation, including failures, so callers can
     inspect per-item outcomes.
     """
     if dry_run:
-        return _apply_operations_dry_run(operations)
+        return _apply_operations_dry_run(operations, journal=journal)
 
     if staging_dir is not None:
         return _apply_operations_with_staging(
             operations,
             Path(staging_dir),
             heic_preview=heic_preview,
+            journal=journal,
         )
 
-    return _apply_operations_direct(operations, heic_preview=heic_preview)
+    return _apply_operations_direct(operations, heic_preview=heic_preview, journal=journal)
 
 
-def _apply_operations_dry_run(operations: list[FileOperation]) -> list[str]:
+def _apply_operations_dry_run(
+    operations: list[FileOperation],
+    *,
+    journal: object | None = None,
+) -> list[str]:
     """Return dry-run log lines without touching the filesystem."""
+    from photo_organizer.journal import _entry_fields_from_operation  # noqa: PLC0415
+
     logs: list[str] = []
     reserved_destinations: set[Path] = set()
     for operation in operations:
@@ -533,6 +552,15 @@ def _apply_operations_dry_run(operations: list[FileOperation]) -> list[str]:
         for sidecar in operation.related_sidecars:
             reserved_destinations.add(_sidecar_destination(destination, sidecar))
         logs.append(f"[DRY-RUN] {action} {operation.source} -> {destination}")
+        if journal is not None:
+            extra = _entry_fields_from_operation(operation)
+            journal.write_entry(
+                action=operation.mode,
+                source=operation.source,
+                destination=destination,
+                status="dry-run",
+                **extra,
+            )
     return logs
 
 
@@ -540,8 +568,11 @@ def _apply_operations_direct(
     operations: list[FileOperation],
     *,
     heic_preview: bool = False,
+    journal: object | None = None,
 ) -> list[str]:
     """Write files directly to their final destinations."""
+    from photo_organizer.journal import _entry_fields_from_operation  # noqa: PLC0415
+
     logs: list[str] = []
     reserved_destinations: set[Path] = set()
 
@@ -556,6 +587,7 @@ def _apply_operations_direct(
         for sidecar in operation.related_sidecars:
             reserved_destinations.add(_sidecar_destination(destination, sidecar))
         line_suffix = f"{action} {operation.source} -> {destination}"
+        extra = _entry_fields_from_operation(operation)
 
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -579,12 +611,29 @@ def _apply_operations_direct(
                 exc,
             )
             logs.append(f"[ERROR] {line_suffix} (error: {exc})")
+            if journal is not None:
+                journal.write_entry(
+                    action=operation.mode,
+                    source=operation.source,
+                    destination=destination,
+                    status="error",
+                    error=str(exc),
+                    **extra,
+                )
             continue
 
         if heic_preview:
             _try_generate_heic_preview(destination)
 
         logs.append(f"[INFO] {line_suffix}")
+        if journal is not None:
+            journal.write_entry(
+                action=operation.mode,
+                source=operation.source,
+                destination=destination,
+                status="success",
+                **extra,
+            )
 
     return logs
 
@@ -594,6 +643,7 @@ def _apply_operations_with_staging(
     staging_dir: Path,
     *,
     heic_preview: bool = False,
+    journal: object | None = None,
 ) -> list[str]:
     """Copy files into *staging_dir*, then promote to final destinations.
 
@@ -602,6 +652,8 @@ def _apply_operations_with_staging(
     copies succeed the staged files are moved to their real destinations.  On
     any failure the staging area is removed and the final output is untouched.
     """
+    from photo_organizer.journal import _entry_fields_from_operation  # noqa: PLC0415
+
     staging_dir.mkdir(parents=True, exist_ok=True)
     logger.info("Staging enabled: staging_dir=%s", staging_dir)
 
@@ -626,11 +678,9 @@ def _apply_operations_with_staging(
     failed = False
     for operation, final_destination in resolved:
         action = operation.mode.upper()
-        # Derive the staging path by replacing the output root prefix with the
-        # staging root.  We use the full absolute path as a sub-path inside the
-        # staging dir so that files from different output sub-trees never clash.
         staged_destination = _staging_path_for(staging_dir, final_destination)
         line_suffix = f"{action} {operation.source} -> {final_destination}"
+        extra = _entry_fields_from_operation(operation)
 
         try:
             staged_destination.parent.mkdir(parents=True, exist_ok=True)
@@ -646,6 +696,16 @@ def _apply_operations_with_staging(
                 exc,
             )
             logs.append(f"[ERROR] {line_suffix} (error: {exc})")
+            if journal is not None:
+                journal.write_entry(
+                    action=operation.mode,
+                    source=operation.source,
+                    destination=final_destination,
+                    status="error",
+                    error=str(exc),
+                    staging=True,
+                    **extra,
+                )
             failed = True
             continue
 
@@ -653,22 +713,34 @@ def _apply_operations_with_staging(
         logs.append(f"[STAGED] {line_suffix}")
 
     if failed:
-        # Clean up the staging area; leave the final output untouched.
         _cleanup_staging(staging_dir)
         logger.warning(
             "Staging aborted: errors occurred, staging area cleaned up, "
             "final output directory was not modified"
         )
-        # Replace STAGED lines with ERROR for the failed items; the error lines
-        # are already present.  Convert successful STAGED lines to ERROR too so
-        # the caller knows nothing was committed.
         final_logs: list[str] = []
         for line in logs:
             if line.startswith("[STAGED]"):
                 _, rest = line.split("] ", maxsplit=1)
-                final_logs.append(f"[ERROR] {rest} (error: staging aborted due to earlier failure)")
+                final_logs.append(
+                    f"[ERROR] {rest} (error: staging aborted due to earlier failure)"
+                )
             else:
                 final_logs.append(line)
+        # Journal entries for aborted-staging items (those that were STAGED but
+        # not promoted) are written here so the journal reflects reality.
+        if journal is not None:
+            for operation, _staged_path, final_destination in staged:
+                extra = _entry_fields_from_operation(operation)
+                journal.write_entry(
+                    action=operation.mode,
+                    source=operation.source,
+                    destination=final_destination,
+                    status="error",
+                    error="staging aborted due to earlier failure",
+                    staging=True,
+                    **extra,
+                )
         return final_logs
 
     # Phase 2 – promote staged files to their final destinations.
@@ -680,6 +752,7 @@ def _apply_operations_with_staging(
     for operation, staged_path, final_destination in staged:
         action = operation.mode.upper()
         line_suffix = f"{action} {operation.source} -> {final_destination}"
+        extra = _entry_fields_from_operation(operation)
         try:
             final_destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(staged_path), final_destination)
@@ -688,7 +761,6 @@ def _apply_operations_with_staging(
                 sidecar_destination = _sidecar_destination(final_destination, sidecar)
                 shutil.move(str(staged_sidecar), sidecar_destination)
 
-            # Remove source only after successful promotion for move mode.
             if operation.mode == "move":
                 try:
                     operation.source.unlink(missing_ok=True)
@@ -708,15 +780,35 @@ def _apply_operations_with_staging(
                 final_destination,
                 exc,
             )
-            promotion_logs.append(f"[ERROR] {line_suffix} (error: promotion failed: {exc})")
+            promotion_logs.append(
+                f"[ERROR] {line_suffix} (error: promotion failed: {exc})"
+            )
+            if journal is not None:
+                journal.write_entry(
+                    action=operation.mode,
+                    source=operation.source,
+                    destination=final_destination,
+                    status="error",
+                    error=f"promotion failed: {exc}",
+                    staging=True,
+                    **extra,
+                )
             continue
 
         if heic_preview:
             _try_generate_heic_preview(final_destination)
 
         promotion_logs.append(f"[INFO] {line_suffix}")
+        if journal is not None:
+            journal.write_entry(
+                action=operation.mode,
+                source=operation.source,
+                destination=final_destination,
+                status="success",
+                staging=True,
+                **extra,
+            )
 
-    # Clean up the (now empty) staging area.
     _cleanup_staging(staging_dir)
     logger.info("Staging area cleaned up: staging_dir=%s", staging_dir)
     return promotion_logs

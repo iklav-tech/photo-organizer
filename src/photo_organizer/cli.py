@@ -33,6 +33,7 @@ from photo_organizer.executor import (
 )
 from photo_organizer.geocoding import reverse_geocode_coordinates
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
+from photo_organizer.journal import JOURNAL_EXTENSIONS, JournalWriter
 from photo_organizer.logging_config import LOG_LEVEL_CHOICES, configure_logging
 from photo_organizer.metadata import (
     DATE_HEURISTICS_DEFAULT,
@@ -1841,6 +1842,18 @@ def _add_organize_arguments(
         "--report",
         metavar="PATH",
         help="Write a structured execution report to this .json or .csv path.",
+    )
+    report_group.add_argument(
+        "--journal",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Append every operation to a persistent journal file. "
+            "Supports .jsonl (one JSON object per line) and .csv formats. "
+            "The file is created if it does not exist; existing entries are "
+            "preserved (append mode). "
+            "Useful for long-term audit trails across multiple runs."
+        ),
     )
 
     mode_arguments = parser.add_argument_group("Operation mode")

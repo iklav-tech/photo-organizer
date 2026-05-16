@@ -38,6 +38,7 @@ class OrganizationConfig:
     heic_preview: bool | None = None
     dng_candidates: bool | None = None
     staging_dir: str | None = None
+    journal: str | None = None
 
 
 def _load_yaml(path: Path) -> Any:
