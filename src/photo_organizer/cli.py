@@ -1387,6 +1387,8 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos
   photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.json
+  photo-organizer import /Volumes/SDCARD --output ./Photos
+  photo-organizer import ./PhoneDump --output ./Photos --dry-run
 """,
     )
     parser.add_argument(
@@ -1630,21 +1632,60 @@ def build_parser() -> argparse.ArgumentParser:
   photo-organizer organize ./Photos --output ./OrganizedPhotos --report audit.csv
 """,
     )
-    path_group = organize_parser.add_argument_group("Paths")
+    _add_organize_arguments(organize_parser, default_copy=False)
+
+    import_parser = subparsers.add_parser(
+        "import",
+        help="Import photos from a folder, card or backup into date-based folders.",
+        description=(
+            "Import supported image files from a source directory (SD card, "
+            "phone dump, old backup, etc.) into organised date-based folders. "
+            "Copies files by default so the source is never modified. "
+            "Applies the same date, location and naming rules as the organize "
+            "command. "
+            f"Supported extensions: {supported_extensions}."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  photo-organizer import /Volumes/SDCARD --output ./Photos
+  photo-organizer import /Volumes/SDCARD --output ./Photos --dry-run
+  photo-organizer import ./PhoneDump --output ./Photos --by city-state-month
+  photo-organizer import ./OldBackup --output ./Photos --clock-offset=+3h
+  photo-organizer import ./OldBackup --output ./Photos --correction-manifest fixes.yaml
+  photo-organizer import ./OldBackup --output ./Photos --report import.json
+""",
+    )
+    _add_organize_arguments(import_parser, default_copy=True)
+
+    return parser
+
+
+def _add_organize_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    default_copy: bool = False,
+) -> None:
+    """Attach all organize/import arguments to *parser*.
+
+    Both the ``organize`` and ``import`` subcommands share the same argument
+    set.  The only behavioural difference is the default operation mode:
+    ``organize`` defaults to *move* while ``import`` defaults to *copy*.
+    """
+    path_group = parser.add_argument_group("Paths")
     path_group.add_argument(
         "source",
         metavar="SOURCE",
-        help="Directory containing photos to organize.",
+        help="Directory containing photos to process.",
     )
     path_group.add_argument(
         "--output",
         metavar="DIR",
-        help="Directory where organized photos will be written.",
+        help="Directory where organised photos will be written.",
     )
     path_group.add_argument(
         "--config",
         metavar="PATH",
-        help="Read organization rules from a .json, .yaml or .yml file.",
+        help="Read organisation rules from a .json, .yaml or .yml file.",
     )
     path_group.add_argument(
         "--correction-manifest",
@@ -1652,13 +1693,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Read batch correction overrides from a .csv, .json, .yaml or .yml file.",
     )
 
-    execution_group = organize_parser.add_argument_group("Execution")
+    execution_group = parser.add_argument_group("Execution")
     execution_group.add_argument(
         "--by",
         choices=["date", "location", "location-date", "city-state-month"],
         default=None,
         help=(
-            "Organization strategy: date, location, location-date, or "
+            "Organisation strategy: date, location, location-date, or "
             "city-state-month."
         ),
     )
@@ -1726,13 +1767,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="dng_candidates",
         help="Disable DNG interoperability candidate marking.",
     )
-    organize_parser.set_defaults(dng_candidates=None)
+    parser.set_defaults(dng_candidates=None)
     preview_group = execution_group.add_mutually_exclusive_group()
     preview_group.add_argument(
         "--heic-preview",
         action="store_true",
         dest="heic_preview",
-        help="Generate optional JPEG previews for HEIC/HEIF files after organizing.",
+        help="Generate optional JPEG previews for HEIC/HEIF files after organising.",
     )
     preview_group.add_argument(
         "--no-heic-preview",
@@ -1740,7 +1781,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="heic_preview",
         help="Disable optional HEIC/HEIF preview generation.",
     )
-    organize_parser.set_defaults(heic_preview=None)
+    parser.set_defaults(heic_preview=None)
     heuristics_group = execution_group.add_mutually_exclusive_group()
     heuristics_group.add_argument(
         "--date-heuristics",
@@ -1754,7 +1795,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="date_heuristics",
         help="Disable inferred date heuristics and require supported date metadata.",
     )
-    organize_parser.set_defaults(date_heuristics=None)
+    parser.set_defaults(date_heuristics=None)
     location_inference_group = execution_group.add_mutually_exclusive_group()
     location_inference_group.add_argument(
         "--location-inference",
@@ -1766,9 +1807,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-location-inference",
         action="store_false",
         dest="location_inference",
-        help="Disable inferred location and organize location strategies under UnknownLocation.",
+        help="Disable inferred location and organise location strategies under UnknownLocation.",
     )
-    organize_parser.set_defaults(location_inference=None)
+    parser.set_defaults(location_inference=None)
     geocoding_group = execution_group.add_mutually_exclusive_group()
     geocoding_group.add_argument(
         "--reverse-geocode",
@@ -1781,29 +1822,39 @@ def build_parser() -> argparse.ArgumentParser:
         dest="reverse_geocode",
         help="Disable reverse geocoding (default).",
     )
-    organize_parser.set_defaults(reverse_geocode=None)
+    parser.set_defaults(reverse_geocode=None)
 
-    report_group = organize_parser.add_argument_group("Audit report")
+    report_group = parser.add_argument_group("Audit report")
     report_group.add_argument(
         "--report",
         metavar="PATH",
         help="Write a structured execution report to this .json or .csv path.",
     )
 
-    mode_arguments = organize_parser.add_argument_group("Operation mode")
+    mode_arguments = parser.add_argument_group("Operation mode")
     mode_group = mode_arguments.add_mutually_exclusive_group()
-    mode_group.add_argument(
-        "--copy",
-        action="store_true",
-        help="Copy files instead of moving them.",
-    )
-    mode_group.add_argument(
-        "--move",
-        action="store_true",
-        help="Move files (default behavior).",
-    )
-
-    return parser
+    if default_copy:
+        mode_group.add_argument(
+            "--copy",
+            action="store_true",
+            help="Copy files (default behavior for import).",
+        )
+        mode_group.add_argument(
+            "--move",
+            action="store_true",
+            help="Move files instead of copying them.",
+        )
+    else:
+        mode_group.add_argument(
+            "--copy",
+            action="store_true",
+            help="Copy files instead of moving them.",
+        )
+        mode_group.add_argument(
+            "--move",
+            action="store_true",
+            help="Move files (default behavior).",
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2116,7 +2167,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    if args.command == "organize":
+    if args.command in {"organize", "import"}:
+        # "import" defaults to copy (non-destructive); "organize" defaults to move.
+        default_mode = "copy" if args.command == "import" else "move"
+        command_label = args.command
         try:
             config = load_organization_config(args.config) if args.config else None
         except ConfigurationError as exc:
@@ -2159,7 +2213,7 @@ def main(argv: list[str] | None = None) -> int:
             else (
                 config.mode
                 if config is not None and config.mode is not None
-                else "move"
+                else default_mode
             )
         )
         dry_run = args.dry_run or (
@@ -2232,12 +2286,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if not output:
             parser.error(
-                "organize requires --output DIR. Example: "
-                "photo-organizer organize ./Photos --output ./OrganizedPhotos"
+                f"{command_label} requires --output DIR. Example: "
+                f"photo-organizer {command_label} ./Photos --output ./OrganizedPhotos"
             )
         if args.report and Path(args.report).suffix.lower() not in {".json", ".csv"}:
             parser.error(
-                "organize --report must end with .json or .csv. "
+                f"{command_label} --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
         if (
@@ -2260,7 +2314,8 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error(f"invalid --clock-offset: {exc}")
 
         logger.info(
-            "Execution started: organize source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
+            "Execution started: %s source=%s output=%s mode=%s dry_run=%s plan_only=%s reverse_geocode=%s",
+            command_label,
             args.source,
             output,
             mode,
@@ -2288,11 +2343,11 @@ def main(argv: list[str] | None = None) -> int:
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
             logger.error("Source directory does not exist: %s", args.source)
-            logger.info("Execution finished: organize processed_files=0")
+            logger.info("Execution finished: %s processed_files=0", command_label)
             return 1
         except NotADirectoryError:
             logger.error("Source path is not a directory: %s", args.source)
-            logger.info("Execution finished: organize processed_files=0")
+            logger.info("Execution finished: %s processed_files=0", command_label)
             return 1
 
         logger.info(
@@ -2346,7 +2401,8 @@ def main(argv: list[str] | None = None) -> int:
                 summary["organization_fallback_files"],
             )
             logger.info(
-                "Execution finished: organize processed_files=0 planned_files=%d",
+                "Execution finished: %s processed_files=0 planned_files=%d",
+                command_label,
                 len(operations),
             )
             return 0
@@ -2414,7 +2470,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             logger.info("Execution report written: path=%s", args.report)
 
-        logger.info("Execution finished: organize processed_files=%d", processed_files)
+        logger.info("Execution finished: %s processed_files=%d", command_label, processed_files)
         return 0
 
     parser.print_help()
