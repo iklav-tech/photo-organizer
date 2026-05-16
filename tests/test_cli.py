@@ -1720,6 +1720,12 @@ def test_organize_writes_valid_structured_execution_report(
             "date_field": "mtime",
             "date_confidence": "low",
             "date_raw_value": json.dumps(expected_ts),
+            "chosen_date": "2024-08-15T14:32:09",
+            "chosen_location": "",
+            "metadata_source": "filesystem:mtime",
+            "conflict": False,
+            "conflict_sources": "",
+            "conflict_reason": "",
             "date_kind": "inferred",
             "event_name": "",
             "sidecar_count": 0,
@@ -1782,6 +1788,12 @@ def test_organize_report_includes_error_status_and_observation(
             "date_field": "",
             "date_confidence": "",
             "date_raw_value": "",
+            "chosen_date": "",
+            "chosen_location": "",
+            "metadata_source": "",
+            "conflict": False,
+            "conflict_sources": "",
+            "conflict_reason": "",
             "date_kind": "captured",
             "event_name": "",
             "sidecar_count": 0,
@@ -2050,6 +2062,13 @@ def test_organize_report_includes_date_reconciliation_conflict(
         "reason=selected by metadata precedence policy; "
         "conflicting_sources=EXIF:DateTimeOriginal, XMP:xmp:CreateDate"
     )
+    assert report["operations"][0]["conflict"] is True
+    assert report["operations"][0]["conflict_sources"] == (
+        "EXIF:DateTimeOriginal; XMP:xmp:CreateDate"
+    )
+    assert report["operations"][0]["conflict_reason"] == (
+        "selected by metadata precedence policy"
+    )
 
 
 def test_organize_report_includes_resolved_location(
@@ -2135,6 +2154,8 @@ def test_organize_report_includes_resolved_location(
     assert report["operations"][0]["date_source"] == "EXIF"
     assert report["operations"][0]["date_field"] == "DateTimeOriginal"
     assert report["operations"][0]["date_confidence"] == "high"
+    assert report["operations"][0]["chosen_location"] == "Sao Paulo, Sao Paulo, Brazil"
+    assert report["operations"][0]["metadata_source"] == "EXIF:DateTimeOriginal"
     assert report["operations"][0]["date_raw_value"] == json.dumps(
         "2024:08:15 14:32:09"
     )
@@ -2311,6 +2332,69 @@ def test_organize_report_marks_correction_manifest_source(
     assert str(manifest_path) in operation["observations"]
 
 
+def test_import_report_is_final_batch_manifest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    report_path = tmp_path / "import-manifest.json"
+    chosen_date = datetime(2024, 8, 15, 14, 32, 9)
+    planned = [
+        FileOperation(
+            source=Path("camera/IMG_0001.jpg"),
+            destination=Path("library/2024/08/15/IMG_0001.jpg"),
+            mode="copy",
+            chosen_date=chosen_date,
+            date_provenance=MetadataProvenance(
+                source="EXIF",
+                field="DateTimeOriginal",
+                confidence="high",
+                raw_value="2024:08:15 14:32:09",
+            ),
+            location=ReverseGeocodedLocation(
+                city="Paraty",
+                state="RJ",
+                country="Brazil",
+            ),
+            location_provenance=MetadataProvenance(
+                source="Reverse geocoding",
+                field="GPSLatitudeDecimal,GPSLongitudeDecimal",
+                confidence="medium",
+                raw_value={"latitude": -23.2, "longitude": -44.7},
+            ),
+            location_status="resolved",
+            location_kind="gps",
+        )
+    ]
+
+    monkeypatch.setattr(
+        "photo_organizer.cli.plan_organization_operations",
+        lambda *_args, **_kwargs: planned,
+    )
+    monkeypatch.setattr(
+        "photo_organizer.cli.apply_operations",
+        lambda *_args, **_kwargs: [
+            "[INFO] COPY camera/IMG_0001.jpg -> library/2024/08/15/IMG_0001_01.jpg"
+        ],
+    )
+
+    result = main([
+        "import",
+        "./camera",
+        "--output",
+        "./library",
+        "--report",
+        str(report_path),
+    ])
+
+    assert result == 0
+    operation = json.loads(report_path.read_text(encoding="utf-8"))["operations"][0]
+    assert operation["source"] == "camera/IMG_0001.jpg"
+    assert operation["destination"] == "library/2024/08/15/IMG_0001_01.jpg"
+    assert operation["chosen_date"] == "2024-08-15T14:32:09"
+    assert operation["chosen_location"] == "Paraty, RJ, Brazil"
+    assert operation["metadata_source"] == "EXIF:DateTimeOriginal"
+    assert operation["conflict"] is False
+
+
 def test_organize_writes_valid_csv_execution_report(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -2367,6 +2451,12 @@ def test_organize_writes_valid_csv_execution_report(
             "date_field": "",
             "date_confidence": "",
             "date_raw_value": "",
+            "chosen_date": "",
+            "chosen_location": "",
+            "metadata_source": "",
+            "conflict": "False",
+            "conflict_sources": "",
+            "conflict_reason": "",
             "date_kind": "captured",
             "event_name": "",
             "sidecar_count": "0",
@@ -2388,6 +2478,12 @@ def test_organize_writes_valid_csv_execution_report(
             "date_field": "",
             "date_confidence": "",
             "date_raw_value": "",
+            "chosen_date": "",
+            "chosen_location": "",
+            "metadata_source": "",
+            "conflict": "False",
+            "conflict_sources": "",
+            "conflict_reason": "",
             "date_kind": "captured",
             "event_name": "",
             "sidecar_count": "0",

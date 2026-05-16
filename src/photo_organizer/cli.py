@@ -127,6 +127,50 @@ def _provenance_report_fields(prefix: str, provenance) -> dict[str, str]:
     }
 
 
+def _provenance_label(provenance) -> str:
+    if provenance is None:
+        return ""
+    return ":".join(part for part in (provenance.source, provenance.field) if part)
+
+
+def _chosen_location_text(operation: FileOperation | None) -> str:
+    if operation is None or operation.location is None:
+        return ""
+    parts = [
+        part
+        for part in (
+            operation.location.city,
+            operation.location.state,
+            operation.location.country,
+        )
+        if part
+    ]
+    if parts:
+        return ", ".join(parts)
+    if operation.coordinates is not None:
+        return f"{operation.coordinates.latitude},{operation.coordinates.longitude}"
+    return ""
+
+
+def _conflict_report_fields(operation: FileOperation | None) -> dict[str, object]:
+    reconciliation = (
+        operation.date_reconciliation
+        if operation is not None
+        else None
+    )
+    if reconciliation is None or not reconciliation.conflict:
+        return {
+            "conflict": False,
+            "conflict_sources": "",
+            "conflict_reason": "",
+        }
+    return {
+        "conflict": True,
+        "conflict_sources": "; ".join(reconciliation.conflicting_sources),
+        "conflict_reason": reconciliation.reason,
+    }
+
+
 def _write_execution_report(
     report_path: str | Path,
     operation_logs: list[str],
@@ -268,6 +312,19 @@ def _write_execution_report(
                 else None,
             )
         )
+        operation["chosen_date"] = (
+            planned_operation.chosen_date.isoformat()
+            if planned_operation is not None
+            and planned_operation.chosen_date is not None
+            else ""
+        )
+        operation["chosen_location"] = _chosen_location_text(planned_operation)
+        operation["metadata_source"] = _provenance_label(
+            planned_operation.date_provenance
+            if planned_operation is not None
+            else None
+        )
+        operation.update(_conflict_report_fields(planned_operation))
         operation["date_kind"] = (
             planned_operation.date_kind if planned_operation is not None else ""
         )
@@ -331,6 +388,12 @@ def _write_execution_report(
             "date_field",
             "date_confidence",
             "date_raw_value",
+            "chosen_date",
+            "chosen_location",
+            "metadata_source",
+            "conflict",
+            "conflict_sources",
+            "conflict_reason",
             "date_kind",
             "event_name",
             "sidecar_count",
@@ -2371,7 +2434,7 @@ def main(argv: list[str] | None = None) -> int:
             staging_dir or "disabled",
         )
         try:
-            operations = plan_organization_operations(
+            plan_result = plan_organization_operations(
                 args.source,
                 output,
                 mode=mode,
@@ -2387,6 +2450,14 @@ def main(argv: list[str] | None = None) -> int:
                 clock_offset=clock_offset,
                 dng_candidates=dng_candidates,
             )
+            if (
+                isinstance(plan_result, tuple)
+                and len(plan_result) == 2
+                and isinstance(plan_result[0], list)
+            ):
+                operations, _quarantine_operations = plan_result
+            else:
+                operations = plan_result
             ignored_files = _count_ignored_files(args.source)
         except FileNotFoundError:
             logger.error("Source directory does not exist: %s", args.source)

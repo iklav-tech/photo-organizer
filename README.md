@@ -779,7 +779,9 @@ date path.
 - summary distinguishes `dry-run`, `execute` and `plan` modes;
 - `--report path.json` exports a structured JSON report;
 - `--report path.csv` exports a CSV report;
-- report rows include source, destination, action, status and observations;
+- on `import`, the report is the final import manifest and audit trail;
+- report rows include source, final destination, action, status, observations,
+  chosen date, chosen location, metadata source and reconciliation conflicts;
 - report rows include RAW sidecar linkage fields: `sidecar_count`,
   `sidecar_sources` and `sidecar_destinations`;
 - execution reports identify RAW-family operations with `raw_family`,
@@ -1197,7 +1199,13 @@ If the directory does not exist, the CLI returns a clear error message and non-z
 [INFO] Execution finished: organize processed_files=248
 ```
 
-## Audit report format
+## Import manifest and audit report format
+
+`organize --report` and `import --report` write the final batch manifest. The
+manifest is the audit trail for the run: each row records the original source,
+the final destination actually used after conflict suffixes, the chosen date,
+the chosen location, the metadata source that drove the date decision and any
+metadata reconciliation conflicts.
 
 JSON reports include a summary and operation rows:
 
@@ -1221,6 +1229,18 @@ JSON reports include a summary and operation rows:
       "action": "move",
       "status": "success",
       "observations": "",
+      "date_source": "filesystem",
+      "date_field": "mtime",
+      "date_confidence": "low",
+      "date_raw_value": "1700000000.0",
+      "chosen_date": "2024-08-15T14:32:09",
+      "chosen_location": "",
+      "metadata_source": "filesystem:mtime",
+      "conflict": false,
+      "conflict_sources": "",
+      "conflict_reason": "",
+      "date_kind": "inferred",
+      "event_name": "",
       "raw_family": false,
       "raw_format": "",
       "raw_flow": "",
@@ -1234,7 +1254,7 @@ JSON reports include a summary and operation rows:
 CSV reports use the following columns:
 
 ```text
-source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,raw_family,raw_format,raw_flow,dng_candidate,dng_candidate_reason
+source,destination,action,status,observations,date_source,date_field,date_confidence,date_raw_value,chosen_date,chosen_location,metadata_source,conflict,conflict_sources,conflict_reason,date_kind,event_name,sidecar_count,sidecar_sources,sidecar_destinations,raw_family,raw_format,raw_flow,dng_candidate,dng_candidate_reason
 ```
 
 When reverse geocoding is enabled, execution reports also include location

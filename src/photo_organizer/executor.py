@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import json
 import logging
 from pathlib import Path
@@ -182,6 +183,7 @@ class FileOperation:
     source: Path
     destination: Path
     mode: str
+    chosen_date: datetime | None = None
     date_fallback: bool = False
     date_provenance: MetadataProvenance | None = None
     date_reconciliation: ReconciliationDecision | None = None
@@ -371,7 +373,7 @@ def plan_organization_operations(
     correction_priority: CorrectionPriority | None = None,
     clock_offset: str | None = None,
     dng_candidates: bool = False,
-) -> tuple[list[FileOperation], list[QuarantineOperation]]:
+) -> list[FileOperation]:
     """Plan organization operations for all supported images in source_dir.
 
     When *clock_offset* is provided it is applied as a global time correction to
@@ -382,10 +384,8 @@ def plan_organization_operations(
 
     Accepted offset formats: ``+3h``, ``-1d``, ``+00:30``, ``-5:45``, ``+12``.
 
-    Returns ``(operations, quarantine_operations)`` where *quarantine_operations*
-    contains files that could not be planned due to metadata or naming errors.
-    These files are not silently dropped — callers can pass them to
-    :func:`apply_quarantine` to isolate them in a dedicated directory.
+    Files that cannot be planned due to metadata or naming errors are logged and
+    skipped so the rest of the batch can still be processed.
     """
     reconciliation_policy = validate_reconciliation_policy(reconciliation_policy)
     source_path = Path(source_dir)
@@ -666,6 +666,7 @@ def plan_organization_operations(
                 source=image_path,
                 destination=destination_file,
                 mode=mode,
+                chosen_date=dt,
                 date_fallback=resolved_dt.used_fallback,
                 date_provenance=resolved_dt.provenance,
                 date_reconciliation=resolved_dt.reconciliation,
@@ -690,7 +691,7 @@ def plan_organization_operations(
             )
         )
 
-    return operations, quarantine_ops
+    return operations
 
 
 def apply_operations(
