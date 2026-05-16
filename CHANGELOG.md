@@ -8,6 +8,121 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 
 No unreleased changes.
 
+## [0.8.0] - 2026-05-16
+
+### Added
+
+- Safe-copy import workflow:
+  - `photo-organizer import SOURCE --output DIR`
+  - `import` defaults to copy mode so inbound batches are not modified by
+    default
+  - `import` shares organization, naming, metadata, correction, conflict and
+    reporting behavior with `organize`
+- Final batch manifests through `--report` for `organize` and `import`:
+  - JSON output
+  - CSV output
+  - source path
+  - final destination actually used
+  - chosen date
+  - chosen location
+  - metadata source
+  - reconciliation conflict fields
+  - observations for sidecars, corrections, clock offsets and derived assets
+- Destination conflict policy selection:
+  - `--conflict-policy suffix`
+  - `--conflict-policy skip`
+  - `--conflict-policy overwrite-never`
+  - `--conflict-policy quarantine`
+  - `--conflict-policy fail-fast`
+  - configuration through `behavior.conflict_policy`
+- Conflict quarantine behavior:
+  - incoming conflicting files can be copied to `<output>/.quarantine`
+  - each quarantined file receives a JSON reason sidecar
+  - destination conflicts use the explicit `destination-conflict` reason code
+- Optional original/derived asset segregation:
+  - `--segregate-derivatives`
+  - `--no-segregate-derivatives`
+  - `--derived-path DIR`
+  - repeatable `--derived-pattern PATTERN`
+  - configuration through `derivatives.enabled`, `derivatives.path` and
+    `derivatives.patterns`
+- Default derived-file classification patterns for common edited, exported and
+  derived filename variants.
+- Execution report fields for derived classification:
+  - `asset_role`
+  - `derived`
+  - `derived_reason`
+- README consolidation for all delivered work through the current post-v0.7.0
+  scope, including import manifests, configurable conflict policies and
+  original/derived segregation.
+- Sample configuration documentation for:
+  - `behavior.conflict_policy`
+  - `derivatives.enabled`
+  - `derivatives.path`
+  - `derivatives.patterns`
+
+### Changed
+
+- Execution reports are now positioned as final import/organization manifests
+  and audit trails.
+- JSON and CSV execution report rows now include:
+  - `chosen_date`
+  - `chosen_location`
+  - `metadata_source`
+  - `conflict`
+  - `conflict_sources`
+  - `conflict_reason`
+  - `asset_role`
+  - `derived`
+  - `derived_reason`
+- Report parsing now recognizes skipped operations as `status: skipped`.
+- Summary `processed_files` no longer counts skipped operations as processed.
+- The default destination conflict behavior remains `suffix`, preserving the
+  previous safe non-overwriting behavior.
+- Derived assets, when segregation is enabled, are written below the configured
+  derived subtree while preserving the normal date/location structure below it.
+- CLI help and examples now expose `import`, conflict policy options and
+  derivative segregation controls.
+- README current-status, implemented-feature and roadmap sections now include
+  the post-v0.7.0 scope.
+
+### Behavior guarantees
+
+- Existing files are still not overwritten by default.
+- `suffix` remains the default conflict policy and creates deterministic
+  `_01`, `_02`, `_03`, ... destinations.
+- `skip` leaves source and destination untouched and records a skipped
+  operation.
+- `overwrite-never` leaves source and destination untouched, records an error
+  and continues with the rest of the batch.
+- `quarantine` preserves the existing destination and copies the incoming file
+  to quarantine with an audit sidecar.
+- `fail-fast` stops the batch immediately on the first destination conflict.
+- Derived segregation is opt-in and does not change destination layout unless
+  explicitly enabled.
+- Derived classification is driven by configurable glob patterns.
+- Report rows clearly identify whether an item was treated as an original or a
+  derived asset.
+- `import` is non-destructive by default because it copies rather than moves.
+
+### Validation
+
+- Tests cover import manifest fields and final destination reporting.
+- Tests cover JSON and CSV report fields for chosen date, location, metadata
+  source, conflicts and derived classification.
+- Tests cover CLI and configuration plumbing for `behavior.conflict_policy`.
+- Tests cover executor behavior for `suffix`, `skip`, `overwrite-never`,
+  `quarantine` and `fail-fast`.
+- Tests cover fail-fast CLI behavior preserving source and existing
+  destination.
+- Tests cover skipped-operation report status and processed-file accounting.
+- Tests cover CLI and configuration plumbing for derivative segregation.
+- Tests cover default and custom derived filename patterns.
+- Tests cover derived destination planning under the configured subtree.
+- Tests cover validation of unsafe absolute derived paths.
+- The test suite passed with 346 tests and 1 skipped test after the v0.8.0
+  changes.
+
 ## [0.7.0] - 2026-05-13
 
 ### Added

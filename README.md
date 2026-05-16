@@ -7,7 +7,7 @@ Repository: https://github.com/iklav-tech/photo-organizer
 ## Changelog
 
 Release history is tracked in [CHANGELOG.md](CHANGELOG.md). This README also
-consolidates the delivered v0.1.0 through the current post-v0.7.0 scope below.
+consolidates the delivered v0.1.0 through the current v0.8.0 scope below.
 
 ## Current status
 
@@ -1879,7 +1879,7 @@ scope.
 - README documents a RAW compatibility matrix by manufacturer/container with
   full, partial and experimental status, supported fields and known limitations.
 
-## Post-v0.7.0 import, conflict and asset-role delivered scope
+## Version v0.8.0 import, conflict and asset-role delivered scope
 
 This section consolidates the batch-audit and library-layout work delivered
 after the RAW-family scope.
@@ -1970,10 +1970,10 @@ after the RAW-family scope.
 - RAW inspect audit, RAW execution report fields, RAW corpus tests, large-file
   performance policy and compatibility matrix are implemented;
 
-### Post-v0.7.0 delivered scope
+### Version 0.8.0
 - import final manifests, configurable destination conflict policies and
   optional original/derived asset segregation are implemented and documented
-  (see the post-v0.7.0 delivered scope section).
+  (see the Version v0.8.0 delivered scope section).
 
 ### Future work
 - support for more media types (including videos);
