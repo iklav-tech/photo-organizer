@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Roadmap
 permalink: /roadmap/
 ---
 
 # Roadmap
-
-[Inicio](index.md) | [Instalacao](installation.md) | [Uso](usage.md) | [Configuracao](configuration.md) | [Exemplos](examples.md) | [Changelog](changelog.md)
 
 ## Versao atual: 0.8.0
 
@@ -21,12 +20,13 @@ Ja implementado e documentado no projeto:
 - Deteccao de burst com marcacao `REVIEW_BURST`/`BURST`, sem exclusao automatica.
 - Suporte de auditoria para HEIC/HEIF e escopo inicial RAW.
 - Testes automatizados cobrindo fluxos principais.
+- Publicacao da documentacao via GitHub Pages a partir de `docs/`.
+- Layout Jekyll com design system escuro derivado dos prototipos Stitch.
 
 ## Proxima versao
 
 Planejado, sem tratar como funcionalidade ja entregue:
 
-- Publicacao da documentacao via GitHub Pages a partir de `docs/`.
 - Melhoria continua da documentacao de instalacao, uso, exemplos e configuracao.
 - Estabilizacao da experiencia da CLI com mensagens de ajuda e erros cada vez mais claras.
 - Logs mais claros para lotes grandes e casos de metadados ausentes.
@@ -36,7 +36,7 @@ Planejado, sem tratar como funcionalidade ja entregue:
 
 Itens candidatos para versoes futuras:
 
-- Deteccao de fotos burst ou sequencias visualmente relacionadas.
+- Deteccao visual mais rica de fotos burst ou sequencias relacionadas.
 - Controles mais ricos de nomes de eventos.
 - Suporte a mais tipos de midia, incluindo videos.
 - Filtros mais ricos de inclusao/exclusao e profundidade de varredura.

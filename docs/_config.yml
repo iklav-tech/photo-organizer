@@ -1,6 +1,9 @@
 title: photo-organizer
-description: CLI tool to organize photos by metadata and date.
-baseurl: /photo-organizer
+description: Documentacao oficial do photo-organizer
+baseurl: "/photo-organizer"
+url: "https://iklav-tech.github.io"
+markdown: kramdown
+theme: null
 
 defaults:
   - scope:

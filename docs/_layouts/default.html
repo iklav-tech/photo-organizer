@@ -1,28 +1,39 @@
 <!doctype html>
-<html lang="pt-BR">
+<html class="dark" lang="pt-BR">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ page.title }} | {{ site.title }}</title>
+    <meta name="description" content="{{ page.description | default: site.description }}">
+    <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Hanken Grotesk", "system-ui", "sans-serif"],
+              mono: ["JetBrains Mono", "ui-monospace", "monospace"]
+            }
+          }
+        }
+      };
+    </script>
     <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
   </head>
   <body>
-    <header class="site-header">
-      <div class="container">
-        <a class="site-title" href="{{ '/' | relative_url }}">photo-organizer</a>
-        <nav class="site-nav" aria-label="Documentacao">
-          <a href="{{ '/' | relative_url }}">Inicio</a>
-          <a href="{{ '/installation/' | relative_url }}">Instalacao</a>
-          <a href="{{ '/usage/' | relative_url }}">Uso</a>
-          <a href="{{ '/configuration/' | relative_url }}">Configuracao</a>
-          <a href="{{ '/examples/' | relative_url }}">Exemplos</a>
-          <a href="{{ '/roadmap/' | relative_url }}">Roadmap</a>
-          <a href="{{ '/changelog/' | relative_url }}">Changelog</a>
-        </nav>
-      </div>
-    </header>
-    <main class="container content">
-      {{ content }}
-    </main>
+    <a class="skip-link" href="#content">Ir para o conteudo</a>
+    {% include topnav.html %}
+    <div class="site-shell">
+      {% include sidebar.html %}
+      <main class="doc-main" id="content">
+        <article class="doc-content">
+          {{ content }}
+        </article>
+      </main>
+    </div>
   </body>
 </html>

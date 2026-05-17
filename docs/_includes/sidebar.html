@@ -1,0 +1,45 @@
+<aside class="sidebar" aria-label="Navegacao da documentacao">
+  <div class="sidebar__panel">
+    <div class="sidebar__header">
+      <span class="sidebar__eyebrow">Docs</span>
+      <strong>photo-organizer</strong>
+      <span class="sidebar__version">GitHub Pages</span>
+    </div>
+
+    <nav class="sidebar__nav">
+      <a class="sidebar__link {% if page.url == '/' %}is-active{% endif %}" href="{{ site.baseurl }}/">
+        <span class="material-symbols-outlined" aria-hidden="true">home</span>
+        <span>Home</span>
+      </a>
+      <a class="sidebar__link {% if page.url == '/installation/' %}is-active{% endif %}" href="{{ site.baseurl }}/installation/">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+        <span>Instalacao</span>
+      </a>
+      <a class="sidebar__link {% if page.url == '/usage/' %}is-active{% endif %}" href="{{ site.baseurl }}/usage/">
+        <span class="material-symbols-outlined" aria-hidden="true">terminal</span>
+        <span>Uso</span>
+      </a>
+      <a class="sidebar__link {% if page.url == '/configuration/' %}is-active{% endif %}" href="{{ site.baseurl }}/configuration/">
+        <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+        <span>Configuracao</span>
+      </a>
+      <a class="sidebar__link {% if page.url == '/examples/' %}is-active{% endif %}" href="{{ site.baseurl }}/examples/">
+        <span class="material-symbols-outlined" aria-hidden="true">code_blocks</span>
+        <span>Exemplos</span>
+      </a>
+      <a class="sidebar__link {% if page.url == '/roadmap/' %}is-active{% endif %}" href="{{ site.baseurl }}/roadmap/">
+        <span class="material-symbols-outlined" aria-hidden="true">route</span>
+        <span>Roadmap</span>
+      </a>
+      <a class="sidebar__link {% if page.url == '/changelog/' %}is-active{% endif %}" href="{{ site.baseurl }}/changelog/">
+        <span class="material-symbols-outlined" aria-hidden="true">history</span>
+        <span>Changelog</span>
+      </a>
+    </nav>
+
+    <div class="sidebar__meta" aria-label="Resumo tecnico">
+      <span class="chip">Python CLI</span>
+      <span class="chip chip--secondary">Jekyll</span>
+    </div>
+  </div>
+</aside>

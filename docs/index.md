@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Inicio
 permalink: /
 ---
 
 # photo-organizer
-
-[Instalacao](installation.md) | [Uso](usage.md) | [Configuracao](configuration.md) | [Exemplos](examples.md) | [Roadmap](roadmap.md) | [Changelog](changelog.md)
 
 `photo-organizer` e uma ferramenta CLI em Python para organizar colecoes de fotos localmente, com renomeacao e separacao em diretorios a partir de data, hora, metadados e regras configuraveis.
 
@@ -41,7 +40,7 @@ photo-organizer import /Volumes/SDCARD --output ./Photos --report import.json
 Este site foi preparado para ser publicado pelo proprio repositorio `photo-organizer`, em:
 
 ```text
-https://<usuario-ou-organizacao>.github.io/photo-organizer/
+https://iklav-tech.github.io/photo-organizer/
 ```
 
 No GitHub, configure `Settings > Pages > Source` como `GitHub Actions`. O workflow `.github/workflows/pages.yml` publicara o conteudo de `docs/` em pushes para a branch `main` e tambem pode ser executado manualmente.

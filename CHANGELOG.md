@@ -27,6 +27,12 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Burst report and journal fields, configurable through `--burst-detection`,
   `--burst-window-seconds`, `--burst-min-photos`,
   `--burst-similarity-threshold` and `bursts.*` config.
+- Jekyll documentation layout for `docs/`, keeping Markdown as the canonical
+  content source.
+- Dark technical documentation design system adapted from the Google Stitch
+  prototypes under `design/stitch/`.
+- GitHub Pages configuration adjusted for the project URL
+  `https://iklav-tech.github.io/photo-organizer/`.
 
 ## [0.8.0] - 2026-05-16
 

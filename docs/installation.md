@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Instalacao
 permalink: /installation/
 ---
 
 # Instalacao
-
-[Inicio](index.md) | [Uso](usage.md) | [Configuracao](configuration.md) | [Exemplos](examples.md) | [Roadmap](roadmap.md) | [Changelog](changelog.md)
 
 ## Requisitos
 
@@ -73,5 +72,13 @@ Para publicar esta documentacao pelo repositorio atual:
 O site esperado e:
 
 ```text
-https://<usuario-ou-organizacao>.github.io/photo-organizer/
+https://iklav-tech.github.io/photo-organizer/
 ```
+
+Para revisar a documentacao renderizada localmente, use Jekyll se ele estiver disponivel no ambiente:
+
+```bash
+jekyll serve --source docs --baseurl /photo-organizer
+```
+
+Depois acesse `http://127.0.0.1:4000/photo-organizer/`.

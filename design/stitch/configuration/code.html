@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Configuração - photo-organizer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#6c04de",
+                    "tertiary-fixed-dim": "#a9c7ff",
+                    "on-primary-container": "#004c66",
+                    "background": "#121315",
+                    "surface-bright": "#38393a",
+                    "surface": "#121315",
+                    "on-error-container": "#ffdad6",
+                    "primary": "#92d9ff",
+                    "error": "#ffb4ab",
+                    "inverse-surface": "#e3e2e3",
+                    "on-secondary-fixed-variant": "#5d00c2",
+                    "on-error": "#690005",
+                    "tertiary": "#b8d0ff",
+                    "tertiary-fixed": "#d6e3ff",
+                    "surface-container-highest": "#343536",
+                    "surface-tint": "#75d1ff",
+                    "on-surface": "#e3e2e3",
+                    "on-primary": "#003548",
+                    "on-tertiary": "#043061",
+                    "surface-container-high": "#292a2b",
+                    "on-tertiary-fixed": "#001b3d",
+                    "on-secondary-container": "#d4baff",
+                    "on-tertiary-container": "#234678",
+                    "on-secondary": "#41008b",
+                    "secondary": "#d4bbff",
+                    "on-surface-variant": "#bcc8d1",
+                    "tertiary-container": "#95b5ee",
+                    "error-container": "#93000a",
+                    "secondary-fixed-dim": "#d4bbff",
+                    "on-tertiary-fixed-variant": "#244779",
+                    "inverse-primary": "#006688",
+                    "inverse-on-surface": "#303032",
+                    "primary-fixed-dim": "#75d1ff",
+                    "outline-variant": "#3d484f",
+                    "surface-dim": "#121315",
+                    "on-primary-fixed": "#001e2b",
+                    "secondary-fixed": "#ebdcff",
+                    "primary-fixed": "#c2e8ff",
+                    "on-primary-fixed-variant": "#004d67",
+                    "on-background": "#e3e2e3",
+                    "on-secondary-fixed": "#270058",
+                    "surface-container-lowest": "#0d0e0f",
+                    "outline": "#86929a",
+                    "surface-container": "#1f2021",
+                    "surface-container-low": "#1b1c1d",
+                    "primary-container": "#00c2ff",
+                    "surface-variant": "#343536"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-desktop": "64px",
+                    "unit": "4px",
+                    "container-max": "1280px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Hanken Grotesk"],
+                    "label-sm": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "code-md": ["JetBrains Mono"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .cli-glow {
+            box-shadow: 0 0 15px rgba(146, 217, 255, 0.1);
+        }
+        .code-block-header {
+            background: rgba(61, 72, 79, 0.2);
+            border-bottom: 1px solid rgba(134, 146, 154, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased">
+<!-- TopNavBar -->
+<header class="bg-background/80 backdrop-blur-md dark:bg-background/80 docked full-width top-0 sticky z-50 border-b border-outline-variant shadow-sm transition-all duration-200 ease-in-out">
+<div class="flex items-center justify-between px-margin-desktop py-4 max-w-container-max mx-auto">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary tracking-tight">photo-organizer</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Installation</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Usage</a>
+<a class="font-body-md text-body-md text-primary border-b-2 border-primary pb-1" href="#">Configuration</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Examples</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Roadmap</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Changelog</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex items-center bg-surface-container rounded-xl px-3 py-1.5 border border-outline-variant">
+<span class="material-symbols-outlined text-outline text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-label-sm font-label-sm w-32 placeholder:text-outline" placeholder="Search docs..." type="text"/>
+<span class="text-outline text-[10px] border border-outline px-1 rounded">/</span>
+</div>
+<button class="hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl p-2 transition-all">
+<span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+</button>
+<button class="hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl p-2 transition-all">
+<span class="material-symbols-outlined text-primary" data-icon="code">code</span>
+</button>
+</div>
+</div>
+</header>
+<div class="max-w-container-max mx-auto flex">
+<!-- SideNavBar -->
+<aside class="bg-surface-container-low dark:bg-surface-container-low h-screen w-64 fixed left-0 top-0 pt-20 border-r border-outline-variant flat no shadows hidden lg:flex flex-col gap-2 p-4">
+<div class="px-4 py-6">
+<h2 class="font-headline-md text-headline-md text-primary mb-1">Documentation</h2>
+<p class="font-label-sm text-label-sm text-on-surface-variant opacity-70">v1.2.4-stable</p>
+</div>
+<nav class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full font-label-sm text-label-sm transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="rocket_launch">rocket_launch</span>
+                    Getting Started
+                </a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full font-label-sm text-label-sm transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+                    CLI Reference
+                </a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full font-label-sm text-label-sm transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="api">api</span>
+                    API Hooks
+                </a>
+<a class="flex items-center gap-3 px-4 py-2.5 bg-secondary-container text-on-secondary-container rounded-r-full font-bold font-label-sm text-label-sm transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+                    Advanced Workflows
+                </a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full font-label-sm text-label-sm transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="build_circle">build_circle</span>
+                    Troubleshooting
+                </a>
+<a class="flex items-center gap-3 px-4 py-2.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full font-label-sm text-label-sm transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+                    Community
+                </a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant flex flex-col gap-2 pb-8">
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-primary transition-colors font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined" data-icon="bug_report">bug_report</span>
+                    Report Issue
+                </a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-primary transition-colors font-label-sm text-label-sm" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+                    Sponsor
+                </a>
+<div class="px-4 mt-4">
+<button class="w-full py-2 bg-primary text-on-primary font-bold rounded-xl text-label-sm cli-glow">View GitHub</button>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 ml-0 lg:ml-64 px-mobile md:px-margin-desktop py-12">
+<nav class="flex gap-4 mb-8 text-label-sm font-label-sm text-outline">
+<a class="hover:text-primary transition-colors" href="#">Home</a>
+<span>/</span>
+<span class="text-primary-fixed-dim">Configuration</span>
+</nav>
+<h1 class="font-display-lg text-display-lg text-primary mb-6 tracking-tight">Configuração</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-3xl mb-12">
+                O projeto aceita configuração externa para <code class="bg-surface-container text-primary-container px-1.5 py-0.5 rounded">organize</code> e <code class="bg-surface-container text-primary-container px-1.5 py-0.5 rounded">import</code> com <code class="font-code-md text-code-md">--config PATH</code>. Argumentos passados explicitamente na CLI têm precedência sobre valores equivalentes do arquivo.
+            </p>
+<!-- YAML Example Card -->
+<section class="mb-16">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-secondary" data-icon="settings_ethernet">settings_ethernet</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Exemplo YAML</h2>
+</div>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden cli-glow">
+<div class="code-block-header px-4 py-2 flex justify-between items-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant">config/organizer_sample.yaml</span>
+<button class="flex items-center gap-1.5 font-label-sm text-label-sm text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="content_copy">content_copy</span>
+                            Copy
+                        </button>
+</div>
+<pre class="p-6 font-code-md text-code-md overflow-x-auto text-on-surface-variant"><span class="text-tertiary">output</span>: <span class="text-primary">./OrganizedPhotos</span>
+<span class="text-tertiary">naming</span>:
+  <span class="text-tertiary">pattern</span>: <span class="text-primary">"{date:%Y%m%d_%H%M%S}_{stem}{ext}"</span>
+<span class="text-tertiary">destination</span>:
+  <span class="text-tertiary">pattern</span>: <span class="text-primary">"{date:%Y}/{date:%m}"</span>
+  <span class="text-tertiary">strategy</span>: <span class="text-primary">date</span>
+<span class="text-tertiary">behavior</span>:
+  <span class="text-tertiary">mode</span>: <span class="text-primary">copy</span>
+  <span class="text-tertiary">dry_run</span>: <span class="text-secondary">true</span>
+  <span class="text-tertiary">plan</span>: <span class="text-secondary">false</span>
+  <span class="text-tertiary">reverse_geocode</span>: <span class="text-secondary">false</span>
+  <span class="text-tertiary">reconciliation_policy</span>: <span class="text-primary">precedence</span>
+  <span class="text-tertiary">conflict_policy</span>: <span class="text-primary">suffix</span>
+  <span class="text-tertiary">date_heuristics</span>: <span class="text-secondary">true</span>
+  <span class="text-tertiary">location_inference</span>: <span class="text-secondary">true</span>
+  <span class="text-tertiary">correction_manifest</span>: <span class="text-primary">corrections.yaml</span>
+  <span class="text-tertiary">correction_priority</span>: <span class="text-primary">highest</span>
+  <span class="text-tertiary">clock_offset</span>: <span class="text-primary">"+01:00"</span>
+<span class="text-tertiary">preview</span>:
+  <span class="text-tertiary">heic</span>: <span class="text-secondary">false</span>
+<span class="text-tertiary">interop</span>:
+  <span class="text-tertiary">dng_candidates</span>: <span class="text-secondary">false</span>
+<span class="text-tertiary">derivatives</span>:
+  <span class="text-tertiary">enabled</span>: <span class="text-secondary">false</span>
+  <span class="text-tertiary">path</span>: <span class="text-primary">Derivatives</span>
+  <span class="text-tertiary">patterns</span>: <span class="text-primary">"*_edit*,*-edit*,*_edited*,*-edited*,*_export*,*-export*"</span>
+<span class="text-tertiary">events</span>:
+  <span class="text-tertiary">window_minutes</span>: <span class="text-secondary">60</span>
+  <span class="text-tertiary">directory</span>: <span class="text-secondary">false</span>
+  <span class="text-tertiary">directory_pattern</span>: <span class="text-primary">"{date:%Y}/{date:%Y-%m-%d}_{event}"</span>
+<span class="text-tertiary">bursts</span>:
+  <span class="text-tertiary">enabled</span>: <span class="text-secondary">false</span>
+  <span class="text-tertiary">window_seconds</span>: <span class="text-secondary">2</span>
+  <span class="text-tertiary">min_photos</span>: <span class="text-secondary">3</span>
+  <span class="text-tertiary">similarity_threshold</span>: <span class="text-secondary">0.8</span></pre>
+</div>
+<p class="mt-4 font-label-sm text-label-sm text-outline italic">Um exemplo completo existe em config/organizer_sample.yaml.</p>
+</section>
+<!-- Supported Fields Bento Grid -->
+<section class="mb-16">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-secondary" data-icon="list_alt">list_alt</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Campos Suportados</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Field Card -->
+<div class="bg-surface-container rounded-xl p-6 border border-outline-variant hover:border-primary transition-all group">
+<div class="font-label-sm text-label-sm text-primary mb-2 opacity-80">General</div>
+<h3 class="font-code-md text-code-md text-on-surface font-bold mb-3">output</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Diretório raiz de destino para as fotos organizadas.</p>
+</div>
+<div class="bg-surface-container rounded-xl p-6 border border-outline-variant hover:border-primary transition-all">
+<div class="font-label-sm text-label-sm text-primary mb-2 opacity-80">Organization</div>
+<h3 class="font-code-md text-code-md text-on-surface font-bold mb-3">naming.pattern</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Padrão de nome com <code class="text-secondary">{date}</code>, <code class="text-secondary">{stem}</code>, <code class="text-secondary">{ext}</code> e <code class="text-secondary">{original}</code>.</p>
+</div>
+<div class="bg-surface-container rounded-xl p-6 border border-outline-variant hover:border-primary transition-all">
+<div class="font-label-sm text-label-sm text-primary mb-2 opacity-80">Location</div>
+<h3 class="font-code-md text-code-md text-on-surface font-bold mb-3">destination.strategy</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Estratégias: date, event, location, location-date ou city-state-month.</p>
+</div>
+<div class="bg-surface-container rounded-xl p-6 border border-outline-variant hover:border-primary transition-all">
+<div class="font-label-sm text-label-sm text-primary mb-2 opacity-80">Logic</div>
+<h3 class="font-code-md text-code-md text-on-surface font-bold mb-3">behavior.conflict_policy</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Opções: suffix, skip, overwrite-never, quarantine ou fail-fast.</p>
+</div>
+<div class="bg-surface-container rounded-xl p-6 border border-outline-variant hover:border-primary transition-all">
+<div class="font-label-sm text-label-sm text-primary mb-2 opacity-80">Temporal</div>
+<h3 class="font-code-md text-code-md text-on-surface font-bold mb-3">behavior.clock_offset</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Correção global de relógio, como <code class="text-secondary">+3h</code> ou <code class="text-secondary">-05:45</code>.</p>
+</div>
+<div class="bg-surface-container rounded-xl p-6 border border-outline-variant hover:border-primary transition-all">
+<div class="font-label-sm text-label-sm text-primary mb-2 opacity-80">Processing</div>
+<h3 class="font-code-md text-code-md text-on-surface font-bold mb-3">bursts.enabled</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Habilita marcação de prováveis sequências burst (disparos contínuos).</p>
+</div>
+</div>
+</section>
+<!-- Environment Vars & Correction Manifest -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-16">
+<!-- Env Vars -->
+<section class="bg-surface-container-highest/30 rounded-2xl p-8 border border-outline-variant/50 backdrop-blur-sm">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="variable">variables</span>
+                        Variáveis de Ambiente
+                    </h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6">
+                        Não há configuração operacional obrigatória por variável de ambiente documentada no código da CLI.
+                    </p>
+<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant">
+<code class="text-primary-fixed-dim font-code-md">PHOTO_ORGANIZER_REAL_RAW_DIR</code>
+<p class="text-label-sm text-outline mt-2">Suporte a validação local com RAWs reais.</p>
+</div>
+</section>
+<!-- Correction Manifest -->
+<section class="bg-surface-container-highest/30 rounded-2xl p-8 border border-outline-variant/50 backdrop-blur-sm">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="edit_calendar">edit_calendar</span>
+                        Manifesto de Correções
+                    </h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4">
+                        Permite corrigir lotes antigos por caminho, pasta, glob, padrão de arquivo ou perfil de câmera.
+                    </p>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden">
+<pre class="p-4 font-code-md text-code-md text-on-surface-variant"><span class="text-tertiary">priority</span>: <span class="text-primary">highest</span>
+<span class="text-tertiary">rules</span>:
+  - <span class="text-tertiary">glob</span>: <span class="text-primary">"old-camera/*.jpg"</span>
+    <span class="text-tertiary">city</span>: <span class="text-primary">"Houston"</span>
+    <span class="text-tertiary">event</span>: <span class="text-primary">"Viagem Paraty"</span></pre>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest full-width bottom border-t border-outline-variant mt-20 flat">
+<div class="py-12 px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-8 max-w-container-max mx-auto">
+<div class="flex flex-col gap-2">
+<span class="font-label-sm text-label-sm text-primary">photo-organizer</span>
+<p class="font-body-md text-body-md text-on-surface-variant opacity-80">© 2024 iKlav Technologies. MIT License.</p>
+</div>
+<nav class="flex gap-8 items-center">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="font-body-md text-body-md text-primary underline opacity-80 hover:opacity-100" href="#">Documentation</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">npm</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Discord</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Twitter</a>
+</nav>
+<div class="flex gap-4">
+<div class="h-10 w-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</div>
+</div>
+</div>
+</footer>
+</body></html>

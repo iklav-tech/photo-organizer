@@ -1,0 +1,17 @@
+<header class="topnav">
+  <div class="topnav__inner">
+    <a class="brand" href="{{ site.baseurl }}/" aria-label="photo-organizer home">
+      <span class="material-symbols-outlined brand__icon" aria-hidden="true">photo_library</span>
+      <span>photo-organizer</span>
+    </a>
+    <nav class="topnav__links" aria-label="Navegacao principal">
+      <a {% if page.url == "/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/">Home</a>
+      <a {% if page.url == "/installation/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/installation/">Instalacao</a>
+      <a {% if page.url == "/usage/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/usage/">Uso</a>
+      <a {% if page.url == "/configuration/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/configuration/">Configuracao</a>
+      <a {% if page.url == "/examples/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/examples/">Exemplos</a>
+      <a {% if page.url == "/roadmap/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/roadmap/">Roadmap</a>
+      <a {% if page.url == "/changelog/" %}class="is-active"{% endif %} href="{{ site.baseurl }}/changelog/">Changelog</a>
+    </nav>
+  </div>
+</header>

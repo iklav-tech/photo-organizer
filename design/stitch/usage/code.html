@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Uso - photo-organizer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#6c04de",
+                    "tertiary-fixed-dim": "#a9c7ff",
+                    "on-primary-container": "#004c66",
+                    "background": "#121315",
+                    "surface-bright": "#38393a",
+                    "surface": "#121315",
+                    "on-error-container": "#ffdad6",
+                    "primary": "#92d9ff",
+                    "error": "#ffb4ab",
+                    "inverse-surface": "#e3e2e3",
+                    "on-secondary-fixed-variant": "#5d00c2",
+                    "on-error": "#690005",
+                    "tertiary": "#b8d0ff",
+                    "tertiary-fixed": "#d6e3ff",
+                    "surface-container-highest": "#343536",
+                    "surface-tint": "#75d1ff",
+                    "on-surface": "#e3e2e3",
+                    "on-primary": "#003548",
+                    "on-tertiary": "#043061",
+                    "surface-container-high": "#292a2b",
+                    "on-tertiary-fixed": "#001b3d",
+                    "on-secondary-container": "#d4baff",
+                    "on-tertiary-container": "#234678",
+                    "on-secondary": "#41008b",
+                    "secondary": "#d4bbff",
+                    "on-surface-variant": "#bcc8d1",
+                    "tertiary-container": "#95b5ee",
+                    "error-container": "#93000a",
+                    "secondary-fixed-dim": "#d4bbff",
+                    "on-tertiary-fixed-variant": "#244779",
+                    "inverse-primary": "#006688",
+                    "inverse-on-surface": "#303032",
+                    "primary-fixed-dim": "#75d1ff",
+                    "outline-variant": "#3d484f",
+                    "surface-dim": "#121315",
+                    "on-primary-fixed": "#001e2b",
+                    "secondary-fixed": "#ebdcff",
+                    "primary-fixed": "#c2e8ff",
+                    "on-primary-fixed-variant": "#004d67",
+                    "on-background": "#e3e2e3",
+                    "on-secondary-fixed": "#270058",
+                    "surface-container-lowest": "#0d0e0f",
+                    "outline": "#86929a",
+                    "surface-container": "#1f2021",
+                    "surface-container-low": "#1b1c1d",
+                    "primary-container": "#00c2ff",
+                    "surface-variant": "#343536"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-desktop": "64px",
+                    "unit": "4px",
+                    "container-max": "1280px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Hanken Grotesk"],
+                    "label-sm": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "code-md": ["JetBrains Mono"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        pre code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .cli-glow {
+            box-shadow: 0 0 15px -3px rgba(146, 217, 255, 0.1);
+        }
+        .nav-active {
+            position: relative;
+        }
+        .nav-active::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #92d9ff;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary/30 selection:text-primary">
+<!-- TopNavBar -->
+<header class="bg-background/80 backdrop-blur-md dark:bg-background/80 docked full-width top-0 sticky z-50 border-b border-outline-variant shadow-sm transition-all duration-200 ease-in-out">
+<div class="flex items-center justify-between px-margin-desktop py-4 max-w-container-max mx-auto">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary tracking-tight">photo-organizer</span>
+<nav class="hidden md:flex gap-6">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Installation</a>
+<a class="font-body-md text-body-md text-primary border-b-2 border-primary pb-1" href="#">Usage</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Configuration</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Examples</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Roadmap</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Changelog</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden lg:flex items-center bg-surface-container-high rounded-xl px-4 py-2 border border-outline-variant">
+<span class="material-symbols-outlined text-outline mr-2 text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-on-surface w-48" placeholder="Pesquisar comandos..." type="text"/>
+</div>
+<button class="p-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl transition-colors">
+<span class="material-symbols-outlined text-primary">terminal</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl transition-colors">
+<span class="material-symbols-outlined text-primary">code</span>
+</button>
+</div>
+</div>
+</header>
+<div class="max-w-container-max mx-auto flex min-h-screen relative">
+<!-- SideNavBar -->
+<aside class="bg-surface-container-low dark:bg-surface-container-low h-screen w-64 fixed left-0 top-0 pt-24 border-r border-outline-variant hidden lg:flex flex-col gap-2 p-4">
+<div class="px-4 mb-6">
+<h3 class="font-headline-md text-headline-md text-primary font-bold">Documentation</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant opacity-60">v1.2.4-stable</p>
+</div>
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#getting-started">
+<span class="material-symbols-outlined">rocket_launch</span>
+<span class="font-label-sm text-label-sm">Getting Started</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container rounded-r-full font-bold transition-transform scale-95 active:scale-100" href="#cli-reference">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-label-sm text-label-sm">CLI Reference</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#api-hooks">
+<span class="material-symbols-outlined">api</span>
+<span class="font-label-sm text-label-sm">API Hooks</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#advanced">
+<span class="material-symbols-outlined">account_tree</span>
+<span class="font-label-sm text-label-sm">Advanced Workflows</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#troubleshooting">
+<span class="material-symbols-outlined">build_circle</span>
+<span class="font-label-sm text-label-sm">Troubleshooting</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#community">
+<span class="material-symbols-outlined">groups</span>
+<span class="font-label-sm text-label-sm">Community</span>
+</a>
+</div>
+<div class="mt-auto border-t border-outline-variant pt-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">bug_report</span>
+<span class="font-label-sm text-label-sm">Report Issue</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-label-sm text-label-sm">Sponsor</span>
+</a>
+<button class="mt-4 w-full bg-primary text-on-primary py-2 px-4 rounded-xl font-label-sm text-label-sm hover:brightness-110 transition-all">View GitHub</button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="lg:ml-64 flex-1 px-8 lg:px-16 py-12">
+<article class="max-w-4xl mx-auto space-y-12">
+<!-- Hero Section -->
+<header class="space-y-4">
+<nav class="flex items-center gap-2 text-on-surface-variant font-label-sm text-label-sm">
+<a class="hover:text-primary" href="#">Inicio</a>
+<span>/</span>
+<a class="hover:text-primary" href="#">Instalacao</a>
+<span>/</span>
+<span class="text-primary font-bold">Uso</span>
+</nav>
+<h1 class="font-display-lg text-display-lg text-on-surface">Uso</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl leading-relaxed">
+                        Aprenda a utilizar a ferramenta de linha de comando photo-organizer para escanear, auditar e organizar sua biblioteca de fotos com precisão técnica.
+                    </p>
+</header>
+<!-- Base Command -->
+<section class="space-y-6" id="base">
+<h2 class="font-headline-lg text-headline-lg text-on-surface border-l-4 border-primary pl-4">Comando base</h2>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden cli-glow">
+<div class="bg-surface-container px-4 py-2 flex items-center justify-between border-b border-outline-variant">
+<span class="font-label-sm text-label-sm text-on-surface-variant">bash</span>
+<button class="text-primary hover:bg-surface-container-high p-1 rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+<div class="p-6 overflow-x-auto">
+<code class="font-code-md text-code-md text-primary">photo-organizer [--version] [--log-level DEBUG|INFO|WARNING|ERROR|CRITICAL] &lt;comando&gt;</code>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="p-4 bg-surface-container-low border border-outline-variant rounded-xl group hover:border-primary transition-colors">
+<h4 class="font-code-md text-code-md text-primary mb-1">scan</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">lista imagens suportadas em uma pasta.</p>
+</div>
+<div class="p-4 bg-surface-container-low border border-outline-variant rounded-xl group hover:border-primary transition-colors">
+<h4 class="font-code-md text-code-md text-primary mb-1">dedupe</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">identifica duplicatas por hash de conteudo; somente leitura.</p>
+</div>
+<div class="p-4 bg-surface-container-low border border-outline-variant rounded-xl group hover:border-primary transition-colors">
+<h4 class="font-code-md text-code-md text-primary mb-1">inspect</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">audita metadados disponiveis e decisoes finais.</p>
+</div>
+<div class="p-4 bg-surface-container-low border border-outline-variant rounded-xl group hover:border-primary transition-colors">
+<h4 class="font-code-md text-code-md text-primary mb-1">organize</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">move fotos para uma estrutura organizada.</p>
+</div>
+</div>
+</section>
+<!-- Scan Section -->
+<section class="space-y-6 pt-12 border-t border-outline-variant" id="scan">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[32px]">folder_open</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">scan</h2>
+</div>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden">
+<div class="p-6">
+<code class="font-code-md text-code-md text-primary">photo-organizer scan ./Photos</code>
+</div>
+</div>
+<div class="bg-surface-container-high p-6 rounded-xl border border-outline-variant/30">
+<p class="font-label-sm text-label-sm text-tertiary mb-3 uppercase tracking-wider">Formatos suportados</p>
+<div class="flex flex-wrap gap-2">
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.arw</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.cr3</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.dng</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.heic</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.jpeg</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.nef</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.raf</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.tiff</span>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant rounded font-code-md text-[12px] border border-outline-variant">.webp</span>
+</div>
+</div>
+</section>
+<!-- Dedupe Section -->
+<section class="space-y-6 pt-12 border-t border-outline-variant" id="dedupe">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[32px]">content_copy</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">dedupe</h2>
+</div>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden">
+<div class="p-6 space-y-2">
+<code class="block font-code-md text-code-md text-primary">photo-organizer dedupe ./Photos</code>
+<code class="block font-code-md text-code-md text-primary">photo-organizer dedupe ./Photos --report duplicates.json</code>
+<code class="block font-code-md text-code-md text-primary">photo-organizer dedupe ./Photos --read-only</code>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4 bg-tertiary-container/10 border border-tertiary-container/30 rounded-xl">
+<span class="material-symbols-outlined text-tertiary">info</span>
+<p class="font-body-md text-body-md text-on-tertiary-container">
+                            O comando <code class="text-tertiary-fixed-dim">dedupe</code> não move, copia nem remove arquivos. O relatório aceita formatos <code class="text-tertiary-fixed-dim">.json</code> ou <code class="text-tertiary-fixed-dim">.csv</code>.
+                        </p>
+</div>
+</section>
+<!-- Inspect Section -->
+<section class="space-y-6 pt-12 border-t border-outline-variant" id="inspect">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[32px]">search_check</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">inspect</h2>
+</div>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden">
+<div class="p-6 space-y-2">
+<code class="block font-code-md text-code-md text-primary">photo-organizer inspect ./Photos</code>
+<code class="block font-code-md text-code-md text-primary">photo-organizer inspect ./Photos --report metadata-audit.csv</code>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container">
+<th class="p-4 font-label-sm text-label-sm text-tertiary">Opção</th>
+<th class="p-4 font-label-sm text-label-sm text-tertiary">Descrição</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30">
+<tr>
+<td class="p-4 font-code-md text-[13px] text-primary">--report PATH</td>
+<td class="p-4 font-body-md text-body-md text-on-surface-variant">Grava auditoria em .json ou .csv.</td>
+</tr>
+<tr>
+<td class="p-4 font-code-md text-[13px] text-primary">--clock-offset OFFSET</td>
+<td class="p-4 font-body-md text-body-md text-on-surface-variant">Ajuste de fuso horário: +3h, -1d, etc.</td>
+</tr>
+<tr>
+<td class="p-4 font-code-md text-[13px] text-primary">--reverse-geocode</td>
+<td class="p-4 font-body-md text-body-md text-on-surface-variant">Resolve coordenadas em endereços.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Organize & Import Bento -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-12 border-t border-outline-variant">
+<div class="lg:col-span-2 space-y-6">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-[32px]">architecture</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">organize &amp; import</h2>
+</div>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant p-6">
+<code class="block font-code-md text-code-md text-primary mb-4">photo-organizer organize ./Photos --output ./Organized --copy</code>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                                Por padrão, o comando <code class="text-primary">organize</code> move os arquivos. Use <code class="text-primary">--copy</code> para manter a origem intacta. O <code class="text-primary">import</code> faz o inverso: copia por padrão e só move se explicitado com <code class="text-primary">--move</code>.
+                            </p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="p-6 bg-surface-container-high rounded-xl border border-outline-variant space-y-2">
+<span class="material-symbols-outlined text-primary">calendar_month</span>
+<h4 class="font-headline-md text-headline-md text-on-surface">Agrupamento</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Organize por data, evento, local ou combinação via <code class="text-primary">--by</code>.</p>
+</div>
+<div class="p-6 bg-surface-container-high rounded-xl border border-outline-variant space-y-2">
+<span class="material-symbols-outlined text-primary">auto_fix_high</span>
+<h4 class="font-headline-md text-headline-md text-on-surface">Burst</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Detecção inteligente de disparos contínuos via <code class="text-primary">--burst-detection</code>.</p>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-highest rounded-2xl p-6 border border-outline-variant flex flex-col justify-between">
+<div>
+<h3 class="font-headline-md text-headline-md text-primary mb-4">Configurações Avançadas</h3>
+<ul class="space-y-4 font-label-sm text-label-sm text-on-surface">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+<span>Conflict Policy (suffix, skip, fail-fast)</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+<span>Event Window Configuration</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+<span>HEIC/DNG processing flags</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+<span>Journaling persistent records</span>
+</li>
+</ul>
+</div>
+<div class="mt-8">
+<img alt="Code representation" class="rounded-xl grayscale opacity-50 border border-outline-variant" data-alt="A dark, atmospheric high-angle shot of a mechanical keyboard and a high-resolution monitor displaying complex line code in a dark mode IDE. The workspace is lit by a soft neon cyan glow, reflecting off the clean metallic surfaces of the developer's hardware. The aesthetic is ultra-modern, professional, and tech-focused, perfectly matching a high-performance terminal utility style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUXVZH9Ij97-gbwXMzCtUFqU1MUIsT_CPgImHe6qS-88KCjWbIFiuL7mFnvmdRH69dRR48rW5LJjNXC12OI3BvIQN0mTTa2bbDuHnVqiTp44_QqdQammx9on2VKlZIDzURLfowG6kQc8qWIGGzemT8EvAfV8p3rrt12I6mPwhMFbLqsyQIxGTh_hGl7ZPrQHWr6rlsptX7d5kGbikkbRp1CZm2Ob6P3u82a2QBouX6Meu5RSJqpwn47WjUVFfqpSa5AQxO9D7-Eos"/>
+</div>
+</div>
+</section>
+</article>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest full-width bottom border-t border-outline-variant mt-20">
+<div class="py-12 px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-8 max-w-container-max mx-auto">
+<div class="space-y-2">
+<span class="font-label-sm text-label-sm text-primary">photo-organizer</span>
+<p class="font-body-md text-body-md text-on-surface-variant">© 2024 iKlav Technologies. MIT License.</p>
+</div>
+<div class="flex gap-8">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-colors" href="#">GitHub</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-colors" href="#">Documentation</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-colors" href="#">npm</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-colors" href="#">Discord</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary opacity-80 hover:opacity-100 transition-colors" href="#">Twitter</a>
+</div>
+<div class="text-tertiary dark:text-tertiary-fixed font-label-sm text-label-sm">
+                Desenvolvido para Máxima Eficiência.
+            </div>
+</div>
+</footer>
+</body></html>

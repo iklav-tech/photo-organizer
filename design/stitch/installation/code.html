@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Instalação | photo-organizer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#6c04de",
+                        "tertiary-fixed-dim": "#a9c7ff",
+                        "on-primary-container": "#004c66",
+                        "background": "#121315",
+                        "surface-bright": "#38393a",
+                        "surface": "#121315",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#92d9ff",
+                        "error": "#ffb4ab",
+                        "inverse-surface": "#e3e2e3",
+                        "on-secondary-fixed-variant": "#5d00c2",
+                        "on-error": "#690005",
+                        "tertiary": "#b8d0ff",
+                        "tertiary-fixed": "#d6e3ff",
+                        "surface-container-highest": "#343536",
+                        "surface-tint": "#75d1ff",
+                        "on-surface": "#e3e2e3",
+                        "on-primary": "#003548",
+                        "on-tertiary": "#043061",
+                        "surface-container-high": "#292a2b",
+                        "on-tertiary-fixed": "#001b3d",
+                        "on-secondary-container": "#d4baff",
+                        "on-tertiary-container": "#234678",
+                        "on-secondary": "#41008b",
+                        "secondary": "#d4bbff",
+                        "on-surface-variant": "#bcc8d1",
+                        "tertiary-container": "#95b5ee",
+                        "error-container": "#93000a",
+                        "secondary-fixed-dim": "#d4bbff",
+                        "on-tertiary-fixed-variant": "#244779",
+                        "inverse-primary": "#006688",
+                        "inverse-on-surface": "#303032",
+                        "primary-fixed-dim": "#75d1ff",
+                        "outline-variant": "#3d484f",
+                        "surface-dim": "#121315",
+                        "on-primary-fixed": "#001e2b",
+                        "secondary-fixed": "#ebdcff",
+                        "primary-fixed": "#c2e8ff",
+                        "on-primary-fixed-variant": "#004d67",
+                        "on-background": "#e3e2e3",
+                        "on-secondary-fixed": "#270058",
+                        "surface-container-lowest": "#0d0e0f",
+                        "outline": "#86929a",
+                        "surface-container": "#1f2021",
+                        "surface-container-low": "#1b1c1d",
+                        "primary-container": "#00c2ff",
+                        "surface-variant": "#343536"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-desktop": "64px",
+                        "unit": "4px",
+                        "container-max": "1280px",
+                        "gutter": "24px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Hanken Grotesk"],
+                        "label-sm": ["JetBrains Mono"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "code-md": ["JetBrains Mono"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .code-glow {
+            box-shadow: inset 0 0 15px rgba(146, 217, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary/30 selection:text-primary">
+<!-- TopNavBar -->
+<header class="bg-background/80 backdrop-blur-md dark:bg-background/80 border-b border-outline-variant shadow-sm docked full-width top-0 sticky z-50">
+<div class="flex items-center justify-between px-margin-desktop py-4 max-w-container-max mx-auto">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary tracking-tight">photo-organizer</span>
+<nav class="hidden md:flex items-center gap-6 font-body-md text-body-md">
+<a class="text-primary border-b-2 border-primary pb-1" href="#">Installation</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#">Usage</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#">Configuration</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#">Examples</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#">Roadmap</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors" href="#">Changelog</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden sm:flex bg-surface-container-high rounded-xl px-4 py-2 items-center gap-2 border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="search">search</span>
+<span class="text-on-surface-variant text-label-sm font-label-sm">Search docs...</span>
+</div>
+<div class="flex gap-2">
+<button class="p-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl transition-all duration-200 ease-in-out text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl transition-all duration-200 ease-in-out text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="code">code</span>
+</button>
+</div>
+</div>
+</div>
+</header>
+<div class="flex max-w-container-max mx-auto">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 pt-20 bg-surface-container-low dark:bg-surface-container-low border-r border-outline-variant hidden lg:flex flex-col gap-2 p-4">
+<div class="px-4 mb-6">
+<h3 class="font-headline-md text-headline-md text-primary">Documentation</h3>
+<p class="text-label-sm font-label-sm text-on-surface-variant">v1.2.4-stable</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 bg-secondary-container text-on-secondary-container rounded-r-full font-bold transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="rocket_launch">rocket_launch</span>
+<span class="font-label-sm text-label-sm">Getting Started</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span class="font-label-sm text-label-sm">CLI Reference</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="api">api</span>
+<span class="font-label-sm text-label-sm">API Hooks</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span class="font-label-sm text-label-sm">Advanced Workflows</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="build_circle">build_circle</span>
+<span class="font-label-sm text-label-sm">Troubleshooting</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-r-full transition-transform scale-95 active:scale-100" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="font-label-sm text-label-sm">Community</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-r-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="bug_report">bug_report</span>
+<span class="font-label-sm text-label-sm">Report Issue</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-r-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-label-sm text-label-sm">Sponsor</span>
+</a>
+<button class="mt-4 w-full bg-primary text-on-primary py-2 rounded-xl font-bold font-label-sm text-label-sm hover:shadow-[0_0_15px_rgba(146,217,255,0.4)] transition-all">
+                    View GitHub
+                </button>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 lg:ml-64 px-margin-mobile md:px-margin-desktop py-12">
+<div class="max-w-3xl mx-auto space-y-12">
+<!-- Hero Section -->
+<header class="space-y-4">
+<div class="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="download">download</span>
+<span class="text-primary font-label-sm text-label-sm">Guia de Instalação</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Instalação</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl leading-relaxed">
+                        Configure seu ambiente e prepare-se para organizar sua biblioteca de fotos com precisão cirúrgica e alta performance.
+                    </p>
+</header>
+<!-- Requirements Bento Grid -->
+<section class="space-y-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary" data-icon="checklist">checklist</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Requisitos</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="p-6 bg-surface-container-low border border-outline-variant rounded-xl hover:border-primary/50 transition-colors">
+<h3 class="font-headline-md text-headline-md text-primary mb-3">Runtime</h3>
+<ul class="space-y-2 font-body-md text-body-md text-on-surface-variant">
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary" data-icon="check_circle">check_circle</span>
+                                    Python &gt;= 3.10
+                                </li>
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary" data-icon="check_circle">check_circle</span>
+                                    pip e venv instalados
+                                </li>
+</ul>
+</div>
+<div class="p-6 bg-surface-container-low border border-outline-variant rounded-xl hover:border-primary/50 transition-colors">
+<h3 class="font-headline-md text-headline-md text-tertiary mb-3">Dependências</h3>
+<ul class="space-y-2 font-body-md text-body-md text-on-surface-variant">
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-tertiary" data-icon="check_circle">check_circle</span>
+                                    Pillow &amp; PyYAML
+                                </li>
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-tertiary" data-icon="check_circle">check_circle</span>
+                                    pillow-heif (opcional)
+                                </li>
+</ul>
+</div>
+</div>
+<div class="p-4 bg-tertiary-container/10 border border-tertiary-container/30 rounded-xl flex gap-4 items-start">
+<span class="material-symbols-outlined text-tertiary" data-icon="info">info</span>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                            Para suporte HEIC/HEIF, o backend nativo <code class="font-code-md text-primary px-1">libheif</code> pode ser necessário se o wheel local não trouxer suporte nativo suficiente.
+                        </p>
+</div>
+</section>
+<!-- Step-by-Step -->
+<section class="space-y-8">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Instalação para desenvolvimento</h2>
+</div>
+<!-- Step 1 -->
+<div class="space-y-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">Ambiente Virtual</h3>
+<p class="text-on-surface-variant">Recomendamos o uso de ambientes isolados para evitar conflitos de bibliotecas.</p>
+<div class="group relative bg-surface-container-lowest border border-outline-variant rounded-xl p-6 code-glow">
+<div class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="content_copy">content_copy</span>
+</button>
+</div>
+<pre class="font-code-md text-code-md text-primary-fixed overflow-x-auto"><code>python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"</code></pre>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="space-y-4">
+<h3 class="font-headline-md text-headline-md text-on-surface">Instalação Simples</h3>
+<p class="text-on-surface-variant">Alternativa utilizando o arquivo de requerimentos clássico:</p>
+<div class="group relative bg-surface-container-lowest border border-outline-variant rounded-xl p-6 code-glow">
+<div class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="content_copy">content_copy</span>
+</button>
+</div>
+<pre class="font-code-md text-code-md text-primary-fixed overflow-x-auto"><code>pip install -r requirements.txt</code></pre>
+</div>
+</div>
+</section>
+<!-- CLI Verification -->
+<section class="space-y-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="verified">verified</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Verificar a CLI</h2>
+</div>
+<div class="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden">
+<div class="px-4 py-2 border-b border-outline-variant bg-surface-container-high flex justify-between items-center">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-error"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+</div>
+<span class="text-label-sm font-label-sm text-on-surface-variant">zsh — photo-organizer</span>
+</div>
+<div class="p-6 font-code-md text-code-md text-on-surface leading-loose">
+<div class="flex gap-3">
+<span class="text-primary">$</span>
+<span>photo-organizer scan ./Photos</span>
+</div>
+<div class="flex gap-3">
+<span class="text-primary">$</span>
+<span>photo-organizer inspect ./Photos --report metadata-audit.json</span>
+</div>
+<div class="flex gap-3">
+<span class="text-primary">$</span>
+<span class="text-secondary">photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Testing -->
+<section class="p-8 bg-gradient-to-br from-surface-container-low to-background border border-outline-variant rounded-2xl relative overflow-hidden">
+<div class="relative z-10 space-y-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="experiment">science</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Executar testes</h2>
+</div>
+<p class="text-on-surface-variant">Garanta a integridade do seu setup rodando a suíte de testes integrada com pytest.</p>
+<div class="bg-black/40 rounded-xl p-4 font-code-md text-emerald-400 border border-emerald-400/20">
+<span class="text-on-surface-variant mr-2">$</span> pytest
+                        </div>
+<p class="text-label-sm font-label-sm text-on-surface-variant/70 italic">
+                            Nota: Alguns testes de HEIC podem ser pulados se o ambiente local não suportar gravação via libheif.
+                        </p>
+</div>
+<div class="absolute -right-10 -bottom-10 opacity-10">
+<span class="material-symbols-outlined text-[160px]" data-icon="developer_board">developer_board</span>
+</div>
+</section>
+<!-- GitHub Pages -->
+<section class="space-y-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="auto_awesome">auto_awesome</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">GitHub Pages</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<div class="md:col-span-1 space-y-4">
+<div class="w-full aspect-square rounded-xl bg-surface-container-high border border-outline-variant flex items-center justify-center p-8 overflow-hidden">
+<img class="w-full h-full object-contain filter grayscale group-hover:grayscale-0 transition-all" data-alt="A futuristic digital representation of a code repository workflow, featuring glowing neon lines connecting nodes on a dark, technical surface. The aesthetic is clean and professional, using a primary palette of deep blacks and electric cyan, with soft lighting accents that highlight the technological precision of the design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdeUk9UdRrUQ0pA0fivCL4VVq87CeF5Ph4Oz6TAJOjmSVeVUFcPwTvK53U3BRHEEe0LXxBfEFJzF7xnzckB63pVNrzAD3_xzuAEhlYN0imNx1RZ4Pqi6_uIcsv3pG6_9lkpVsHimtD52qzXQnjjleXXA9QlCJh1b88DlQtSViRPNXh-VIpM2rRIQ9Dg57WQAn3rMmCyM9nxyjZcwT9sNaD0TkbypSWpZfa_3YMoYxBootykc6Ady895Sgue7DSsQpDADK56a9hZvs"/>
+</div>
+</div>
+<div class="md:col-span-3 bg-surface-container-low border border-outline-variant rounded-xl p-6 space-y-4">
+<ol class="space-y-3 font-body-md text-body-md text-on-surface-variant">
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">1</span>
+                                    Envie a branch <code class="bg-surface-container-high px-1 rounded">main</code> para o GitHub.
+                                </li>
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">2</span>
+                                    Abra Settings &gt; Pages.
+                                </li>
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">3</span>
+                                    Selecione GitHub Actions como Source.
+                                </li>
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">4</span>
+                                    Aguarde o workflow Publish documentation.
+                                </li>
+</ol>
+<div class="mt-6 p-4 bg-surface-container-highest rounded-lg border border-primary/30">
+<span class="text-label-sm font-label-sm text-primary uppercase block mb-1">Expected URL</span>
+<code class="font-code-md text-on-surface break-all">https://&lt;usuario-ou-organizacao&gt;.github.io/photo-organizer/</code>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest border-t border-outline-variant mt-20 full-width bottom">
+<div class="py-12 px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-8 max-w-container-max mx-auto">
+<div class="flex flex-col gap-2">
+<span class="font-label-sm text-label-sm text-primary">photo-organizer</span>
+<p class="text-on-surface-variant font-body-md text-body-md opacity-80">© 2024 iKlav Technologies. MIT License.</p>
+</div>
+<div class="flex flex-wrap gap-6 font-body-md text-body-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Documentation</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">npm</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Discord</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Twitter</a>
+</div>
+</div>
+</footer>
+</body></html>

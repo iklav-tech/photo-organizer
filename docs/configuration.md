@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Configuracao
 permalink: /configuration/
 ---
 
 # Configuracao
-
-[Inicio](index.md) | [Instalacao](installation.md) | [Uso](usage.md) | [Exemplos](examples.md) | [Roadmap](roadmap.md) | [Changelog](changelog.md)
 
 O projeto aceita configuracao externa para `organize` e `import` com `--config PATH`. Os formatos aceitos sao `.json`, `.yaml` e `.yml`. Argumentos passados explicitamente na CLI tem precedencia sobre valores equivalentes do arquivo.
 

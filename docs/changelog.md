@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Changelog
 permalink: /changelog/
 ---
 
 # Changelog
-
-[Inicio](index.md) | [Instalacao](installation.md) | [Uso](usage.md) | [Configuracao](configuration.md) | [Exemplos](examples.md) | [Roadmap](roadmap.md)
 
 O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md), seguindo o formato inspirado em Keep a Changelog e versionamento semantico.
 
@@ -18,6 +17,9 @@ O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](
 - Deteccao de eventos por proximidade temporal com janela configuravel, para relatorio ou diretorio.
 - Organizacao por evento com `--by event` e padrao configuravel de diretorio.
 - Deteccao de burst com marcacao em relatorios, sem apagar fotos automaticamente.
+- Layout Jekyll para a documentacao, mantendo Markdown como fonte principal.
+- Design system escuro integrado a partir dos prototipos do Google Stitch em `design/stitch/`.
+- Configuracao do GitHub Pages ajustada para `https://iklav-tech.github.io/photo-organizer/`.
 
 ## Versao atual
 

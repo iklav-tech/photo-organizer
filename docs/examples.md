@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Exemplos
 permalink: /examples/
 ---
 
 # Exemplos
-
-[Inicio](index.md) | [Instalacao](installation.md) | [Uso](usage.md) | [Configuracao](configuration.md) | [Roadmap](roadmap.md) | [Changelog](changelog.md)
 
 ## Organizar uma pasta de fotos
 

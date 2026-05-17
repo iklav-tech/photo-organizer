@@ -1,11 +1,10 @@
 ---
+layout: default
 title: Uso
 permalink: /usage/
 ---
 
 # Uso
-
-[Inicio](index.md) | [Instalacao](installation.md) | [Configuracao](configuration.md) | [Exemplos](examples.md) | [Roadmap](roadmap.md) | [Changelog](changelog.md)
 
 ## Comando base
 

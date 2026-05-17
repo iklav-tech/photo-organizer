@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>photo-organizer | High Performance CLI Tool</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#6c04de",
+                    "tertiary-fixed-dim": "#a9c7ff",
+                    "on-primary-container": "#004c66",
+                    "background": "#08090A",
+                    "surface-bright": "#38393a",
+                    "surface": "#121315",
+                    "on-error-container": "#ffdad6",
+                    "primary": "#92d9ff",
+                    "error": "#ffb4ab",
+                    "inverse-surface": "#e3e2e3",
+                    "on-secondary-fixed-variant": "#5d00c2",
+                    "on-error": "#690005",
+                    "tertiary": "#b8d0ff",
+                    "tertiary-fixed": "#d6e3ff",
+                    "surface-container-highest": "#343536",
+                    "surface-tint": "#75d1ff",
+                    "on-surface": "#e3e2e3",
+                    "on-primary": "#003548",
+                    "on-tertiary": "#043061",
+                    "surface-container-high": "#292a2b",
+                    "on-tertiary-fixed": "#001b3d",
+                    "on-secondary-container": "#d4baff",
+                    "on-tertiary-container": "#234678",
+                    "on-secondary": "#41008b",
+                    "secondary": "#d4bbff",
+                    "on-surface-variant": "#bcc8d1",
+                    "tertiary-container": "#95b5ee",
+                    "error-container": "#93000a",
+                    "secondary-fixed-dim": "#d4bbff",
+                    "on-tertiary-fixed-variant": "#244779",
+                    "inverse-primary": "#006688",
+                    "inverse-on-surface": "#303032",
+                    "primary-fixed-dim": "#75d1ff",
+                    "outline-variant": "#3d484f",
+                    "surface-dim": "#121315",
+                    "on-primary-fixed": "#001e2b",
+                    "secondary-fixed": "#ebdcff",
+                    "primary-fixed": "#c2e8ff",
+                    "on-primary-fixed-variant": "#004d67",
+                    "on-background": "#e3e2e3",
+                    "on-secondary-fixed": "#270058",
+                    "surface-container-lowest": "#0d0e0f",
+                    "outline": "#86929a",
+                    "surface-container": "#1f2021",
+                    "surface-container-low": "#1b1c1d",
+                    "primary-container": "#00c2ff",
+                    "surface-variant": "#343536"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-desktop": "64px",
+                    "unit": "4px",
+                    "container-max": "1280px",
+                    "gutter": "24px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Hanken Grotesk"],
+                    "label-sm": ["JetBrains Mono"],
+                    "headline-md": ["Hanken Grotesk"],
+                    "code-md": ["JetBrains Mono"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .code-block {
+            background: linear-gradient(180deg, #0d0e0f 0%, #08090a 100%);
+            border: 1px solid #3d484f;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px -3px rgba(146, 217, 255, 0.3);
+        }
+        .bento-card {
+            background-color: #1b1c1d;
+            border: 1px solid #3d484f;
+            transition: all 0.3s ease;
+        }
+        .bento-card:hover {
+            border-color: #92d9ff;
+            background-color: #1f2021;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden">
+<!-- TopNavBar -->
+<header class="bg-background/80 backdrop-blur-md dark:bg-background/80 flex items-center justify-between px-margin-desktop py-4 max-w-container-max mx-auto docked full-width top-0 sticky z-50 border-b border-outline-variant shadow-sm">
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary tracking-tight">photo-organizer</span>
+</div>
+<nav class="hidden md:flex gap-8 items-center">
+<a class="text-primary border-b-2 border-primary pb-1 font-body-md text-body-md" href="#">Home</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#">Installation</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#">Usage</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#">Configuration</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#">Examples</a>
+<a class="text-on-surface-variant hover:text-on-surface transition-colors font-body-md text-body-md" href="#">Roadmap</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined text-primary">terminal</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high rounded-xl transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined text-primary">code</span>
+</button>
+</div>
+</header>
+<main class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
+<!-- Hero Section -->
+<section class="py-20 lg:py-32 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+<div class="flex flex-col gap-6">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container/20 border border-secondary-container text-secondary text-label-sm font-label-sm w-fit">
+<span class="material-symbols-outlined scale-75">star</span>
+                    v1.2.4-stable Available Now
+                </div>
+<h1 class="font-display-lg text-display-lg text-primary tracking-tight">
+                    Master your digital <br/><span class="text-on-surface">photo collections.</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">
+                    A powerful Python CLI tool to organize local photo collections by renaming and sorting into directories based on metadata, date, time, and fully configurable custom rules.
+                </p>
+<div class="flex flex-wrap gap-4 pt-4">
+<button class="px-8 py-3 bg-primary text-on-primary font-bold rounded-lg hover:shadow-[0_0_20px_rgba(146,217,255,0.4)] transition-all">
+                        Get Started
+                    </button>
+<button class="px-8 py-3 border border-outline text-on-surface font-bold rounded-lg hover:bg-surface-container-low transition-all">
+                        View Documentation
+                    </button>
+</div>
+</div>
+<div class="relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-full blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
+<img alt="photo-organizer logo" class="relative w-full max-w-lg mx-auto" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC010FKu3qXX9J-tT_0Cad2JQm6euea1D9XFBl_lM4dzFrio8jUqeNVal7yPwU9vg4Z5mZNrnsBTGXMEw0c8lonzOKOWXhNeWhik-EanC4Jzz7JAyn80DXdcXTzwZYxv2y8dqYYYcpD_ESrg_GKoSAcKSf4YO74eJY5_7YPj6Yp7lnPhJ9NYBwvjmh5q88Jq6ISL4DcgN-6zioEyyMDPxnD9XgeWgqYmYNNPDJVbt3QcCpLQaf0fJ3v-tpocFrTtuSBtGGUm_-HJjM"/>
+</div>
+</section>
+<!-- Quick Start Section -->
+<section class="py-16">
+<div class="flex flex-col gap-4 mb-8">
+<h2 class="font-headline-lg text-headline-lg text-primary">Quick Start</h2>
+<div class="h-1 w-20 bg-primary"></div>
+</div>
+<div class="code-block rounded-xl p-6 shadow-2xl relative">
+<div class="flex gap-2 absolute top-4 right-4">
+<button class="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">content_copy</span>
+</button>
+</div>
+<div class="flex items-center gap-2 mb-6 border-b border-outline-variant pb-4">
+<div class="w-3 h-3 rounded-full bg-error"></div>
+<div class="w-3 h-3 rounded-full bg-amber-500"></div>
+<div class="w-3 h-3 rounded-full bg-green-500"></div>
+<span class="ml-4 text-label-sm font-label-sm text-on-surface-variant">terminal — bash</span>
+</div>
+<pre class="font-code-md text-code-md text-on-surface space-y-2 overflow-x-auto"><span class="text-secondary"># Create and activate environment</span>
+<span class="text-primary">$</span> python3 -m venv .venv
+<span class="text-primary">$</span> source .venv/bin/activate
+
+<span class="text-secondary"># Install the CLI</span>
+<span class="text-primary">$</span> pip install photo-organizer
+
+<span class="text-secondary"># Audit your current collection</span>
+<span class="text-primary">$</span> photo-organizer scan ./Photos
+
+<span class="text-secondary"># Organize with a dry-run first</span>
+<span class="text-primary">$</span> photo-organizer organize ./Photos --output ./Sorted --dry-run</pre>
+</div>
+</section>
+<!-- Core Features Section -->
+<section class="py-20">
+<div class="flex flex-col gap-4 mb-12">
+<h2 class="font-headline-lg text-headline-lg text-primary">Core Architecture</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Engineered for precision and predictability in large-scale data organization.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Card 1 -->
+<div class="bento-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">search</span>
+</div>
+<h3 class="font-headline-md text-headline-md">Deep Scanning</h3>
+<p class="text-on-surface-variant">Recursive scanning of supported images including RAW, HEIC, and PNG metadata extraction via high-performance libraries.</p>
+<div class="mt-auto pt-4 flex gap-2">
+<span class="px-2 py-1 bg-surface-container-highest rounded text-label-sm font-label-sm text-primary">EXIF</span>
+<span class="px-2 py-1 bg-surface-container-highest rounded text-label-sm font-label-sm text-primary">XMP</span>
+<span class="px-2 py-1 bg-surface-container-highest rounded text-label-sm font-label-sm text-primary">HEIC</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bento-card p-8 rounded-xl flex flex-col gap-4 lg:row-span-2">
+<div class="w-12 h-12 rounded-lg bg-secondary/10 border border-secondary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">content_paste_search</span>
+</div>
+<h3 class="font-headline-md text-headline-md">Smart Deduplication</h3>
+<p class="text-on-surface-variant">Advanced algorithms to detect and handle duplicates. Generate JSON/CSV reports for audit before committing changes.</p>
+<div class="mt-4 rounded-lg bg-black/40 p-4 border border-outline-variant">
+<div class="flex justify-between items-center mb-2">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Duplicate Ratio</span>
+<span class="text-label-sm font-label-sm text-secondary">14%</span>
+</div>
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary h-full w-[14%]"></div>
+</div>
+</div>
+<div class="data-alt" data-alt="A clean data visualization dashboard showing dark blue and purple graph charts with thin neon lines. The aesthetic is technical and minimalist, resembling a high-tech terminal interface for monitoring data deduplication processes. Soft glow accents highlight the key metrics.">
+<img alt="Data Audit Visualization" class="rounded-lg mt-4 opacity-60 mix-blend-luminosity border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7DTxQctqwWQKLqArPPRehLiryMUB4-MB7hduCMeEwEVn3hz2NTseq5w7RcXnTtm4vdHVC2moIJDcUmBsXlKsnN0q0LKVczleEcWPEU4_btMhLQlbvRFjF2PLngB2nut9ZyGu90MR3QSExKAAzFlkwsk7sdiQlfzgfMb67rh6A_WYkkfn7LRDjZBz_BcUQg43BX2sIUayXcIA2JYaHnkfXTgyheeS6nhTP4joxo8-okMTwK53onDQSBTCYR0jLzw35lPUp78Xp-Pc"/>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bento-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 rounded-lg bg-tertiary/10 border border-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">schema</span>
+</div>
+<h3 class="font-headline-md text-headline-md">Dynamic Grouping</h3>
+<p class="text-on-surface-variant">Organize by date, location, or custom events. High-density metadata cards for each organized unit.</p>
+<div class="mt-auto border-t border-outline-variant pt-4 flex justify-between items-center">
+<span class="text-label-sm font-label-sm text-tertiary">--plan enabled</span>
+<span class="material-symbols-outlined text-tertiary scale-75">check_circle</span>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bento-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 rounded-lg bg-error/10 border border-error/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-error">security</span>
+</div>
+<h3 class="font-headline-md text-headline-md">Zero-Risk Workflow</h3>
+<p class="text-on-surface-variant">Every operation can be simulated with dry-runs. No files are moved or renamed without your explicit approval via generated manifests.</p>
+</div>
+<!-- Card 5 -->
+<div class="bento-card p-8 rounded-xl flex flex-col gap-4 lg:col-span-2">
+<div class="flex items-start justify-between">
+<div class="flex flex-col gap-2">
+<h3 class="font-headline-md text-headline-md">Configurable Logic</h3>
+<p class="text-on-surface-variant max-w-md">Control every naming convention and directory structure through YAML, JSON, or YML configuration files.</p>
+</div>
+<div class="w-20 h-20 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[40px]">settings_input_component</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-4">
+<div class="p-3 bg-surface-container rounded border border-outline-variant font-code-md text-code-md">
+<span class="text-secondary">naming:</span> "{date}_{event}"
+                        </div>
+<div class="p-3 bg-surface-container rounded border border-outline-variant font-code-md text-code-md">
+<span class="text-secondary">conflict:</span> "rename"
+                        </div>
+</div>
+</div>
+</div>
+</section>
+<!-- Technical Specs Table -->
+<section class="py-20 mb-20">
+<div class="flex flex-col gap-4 mb-8">
+<h2 class="font-headline-lg text-headline-lg text-primary">Technical Specifications</h2>
+</div>
+<div class="overflow-hidden border border-outline-variant rounded-xl">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-high">
+<tr>
+<th class="px-6 py-4 font-label-sm text-label-sm text-on-surface-variant">PARAMETER</th>
+<th class="px-6 py-4 font-label-sm text-label-sm text-on-surface-variant">SUPPORTED VALUE</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-6 py-4 font-code-md text-code-md">Metadata Engines</td>
+<td class="px-6 py-4 text-on-surface-variant">EXIF, XMP, IPTC-IIM, PNG-Meta</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-6 py-4 font-code-md text-code-md">Special Formats</td>
+<td class="px-6 py-4 text-on-surface-variant">HEIC/HEIF (via pillow-heif), RAW scope</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-6 py-4 font-code-md text-code-md">Reporting</td>
+<td class="px-6 py-4 text-on-surface-variant">JSON Manifest, CSV Audit, Execution Plan</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-6 py-4 font-code-md text-code-md">Architecture</td>
+<td class="px-6 py-4 text-on-surface-variant">Python v3.10+ CLI with external YAML config</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+<!-- SideNavBar (Conditional for Doc Subpages - Suppressed for Home) -->
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest full-width bottom border-t border-outline-variant mt-20">
+<div class="py-12 px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-8 max-w-container-max mx-auto">
+<div class="flex flex-col gap-2">
+<div class="font-label-sm text-label-sm text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">terminal</span>
+                    photo-organizer
+                </div>
+<p class="text-on-surface-variant font-body-md text-body-md">© 2024 iKlav Technologies. MIT License.</p>
+</div>
+<div class="flex flex-wrap justify-center gap-8">
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body-md text-body-md opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body-md text-body-md opacity-80 hover:opacity-100" href="#">Documentation</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body-md text-body-md opacity-80 hover:opacity-100" href="#">npm</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body-md text-body-md opacity-80 hover:opacity-100" href="#">Discord</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-body-md text-body-md opacity-80 hover:opacity-100" href="#">Twitter</a>
+</div>
+</div>
+</footer>
+</body></html>

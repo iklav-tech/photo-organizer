@@ -13,10 +13,22 @@ with GitHub Pages at:
 
 https://iklav-tech.github.io/photo-organizer/
 
+The documentation keeps Markdown files as the content source and uses a Jekyll
+layout styled from the Google Stitch prototypes in [`design/stitch/`](design/stitch/).
+
 In the GitHub repository settings, configure `Settings > Pages > Source` as
 `GitHub Actions`. The workflow in `.github/workflows/pages.yml` publishes the
 site from the `docs/` directory on pushes to `main` and can also be run
 manually.
+
+To review the rendered site locally, use Jekyll if it is available in your
+environment:
+
+```bash
+jekyll serve --source docs --baseurl /photo-organizer
+```
+
+Then open `http://127.0.0.1:4000/photo-organizer/`.
 
 ## Changelog
 
