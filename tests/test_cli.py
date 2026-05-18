@@ -2343,12 +2343,55 @@ def test_review_report_contains_only_marked_items(tmp_path: Path) -> None:
                 "REVIEW_DATE: date is inferred, fallback, or conflicting; "
                 "REVIEW_LOCATION: location status is missing-gps"
             ),
+            "review_suggestion": (
+                "REVIEW_DATE: confirm the capture date or add a correction manifest rule; "
+                "REVIEW_LOCATION: confirm GPS/location data or add city/state/country metadata"
+            ),
             "chosen_date": "2024-08-15T10:00:00",
             "chosen_location": "",
             "date_kind": "inferred",
             "location_status": "missing-gps",
             "burst_group_id": "",
             "burst_mark": "",
+        }
+    ]
+
+
+def test_review_report_writes_csv_with_reason_and_suggestion(tmp_path: Path) -> None:
+    report_path = tmp_path / "review.csv"
+    operation = FileOperation(
+        source=Path("input/burst.jpg"),
+        destination=Path("out/burst.jpg"),
+        mode="copy",
+        burst_group_id="burst-001",
+        burst_mark="REVIEW_BURST",
+        burst_reason="temporal gap <= 2s",
+        review_flags=frozenset({"REVIEW_BURST"}),
+    )
+
+    cli._write_review_report(report_path, [operation])
+
+    with report_path.open(encoding="utf-8", newline="") as report_file:
+        rows = list(csv.DictReader(report_file))
+
+    assert rows == [
+        {
+            "source": "input/burst.jpg",
+            "destination": "out/burst.jpg",
+            "action": "copy",
+            "status": "planned",
+            "review_flags": "REVIEW_BURST",
+            "review_reason": "REVIEW_BURST: temporal gap <= 2s",
+            "review_suggestion": (
+                "REVIEW_BURST: inspect the sequence and keep, group, or discard "
+                "near-identical shots"
+            ),
+            "chosen_date": "",
+            "chosen_location": "",
+            "date_kind": "captured",
+            "location_status": "disabled",
+            "burst_group_id": "burst-001",
+            "burst_mark": "REVIEW_BURST",
         }
     ]
 

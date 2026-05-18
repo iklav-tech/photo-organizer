@@ -232,6 +232,32 @@ def _review_reasons(
     return "; ".join(reasons)
 
 
+def _review_suggestions(flags: list[str]) -> str:
+    suggestions = []
+    for flag in flags:
+        if flag == "REVIEW_DATE":
+            suggestions.append(
+                f"{flag}: confirm the capture date or add a correction manifest rule"
+            )
+        elif flag == "REVIEW_LOCATION":
+            suggestions.append(
+                f"{flag}: confirm GPS/location data or add city/state/country metadata"
+            )
+        elif flag == "REVIEW_DUPLICATE":
+            suggestions.append(
+                f"{flag}: choose the canonical file and decide whether duplicates stay"
+            )
+        elif flag == "REVIEW_BURST":
+            suggestions.append(
+                f"{flag}: inspect the sequence and keep, group, or discard near-identical shots"
+            )
+        elif flag == "REVIEW_CONFLICT":
+            suggestions.append(
+                f"{flag}: choose a conflict policy or rename one of the destinations"
+            )
+    return "; ".join(suggestions)
+
+
 def _add_review_summary(
     summary: dict[str, int | str],
     operations: list[FileOperation] | None,
@@ -285,6 +311,7 @@ def _review_item_from_operation(
         ),
         "review_flags": flags,
         "review_reason": _review_reasons(flags, operation, report_item),
+        "review_suggestion": _review_suggestions(flags),
         "chosen_date": operation.chosen_date.isoformat()
         if operation.chosen_date is not None
         else "",
@@ -340,6 +367,7 @@ def _write_review_report(
                     "status",
                     "review_flags",
                     "review_reason",
+                    "review_suggestion",
                     "chosen_date",
                     "chosen_location",
                     "date_kind",
