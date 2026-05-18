@@ -27,10 +27,13 @@ from photo_organizer.correction_manifest import (
     load_correction_manifest,
 )
 from photo_organizer.executor import (
+    ALL_REVIEW_FLAGS,
     CONFLICT_POLICIES,
     DestinationConflictError,
     FileOperation,
     QuarantineOperation,
+    REVIEW_FLAG_CONFLICT,
+    REVIEW_FLAG_DUPLICATE,
     apply_operations,
     apply_quarantine,
     filter_resumable_operations,
@@ -178,6 +181,194 @@ def _conflict_report_fields(operation: FileOperation | None) -> dict[str, object
     }
 
 
+def _sorted_review_flags(flags: object) -> list[str]:
+    if not flags:
+        return []
+    return sorted(str(flag) for flag in flags if str(flag) in ALL_REVIEW_FLAGS)
+
+
+def _review_flags_for_report(
+    operation: FileOperation | None,
+    report_item: dict[str, object] | None = None,
+) -> list[str]:
+    flags = set(_sorted_review_flags(operation.review_flags if operation else ()))
+    if report_item is not None:
+        observations = str(report_item.get("observations") or "")
+        if (
+            report_item.get("status") in {"skipped", "error"}
+            and "conflict" in observations.casefold()
+        ):
+            flags.add(REVIEW_FLAG_CONFLICT)
+    return sorted(flags)
+
+
+def _review_reasons(
+    flags: list[str],
+    operation: FileOperation | None,
+    report_item: dict[str, object] | None = None,
+) -> str:
+    reasons = []
+    for flag in flags:
+        if flag == "REVIEW_DATE":
+            if operation is not None and operation.date_reconciliation is not None:
+                reasons.append(f"{flag}: {operation.date_reconciliation.reason}")
+            else:
+                reasons.append(f"{flag}: date is inferred, fallback, or conflicting")
+        elif flag == "REVIEW_LOCATION":
+            status = operation.location_status if operation is not None else ""
+            reasons.append(f"{flag}: location status is {status or 'unknown'}")
+        elif flag == "REVIEW_DUPLICATE":
+            reasons.append(f"{flag}: duplicate file decision needed")
+        elif flag == "REVIEW_BURST":
+            reason = operation.burst_reason if operation is not None else ""
+            reasons.append(f"{flag}: {reason or 'burst candidate decision needed'}")
+        elif flag == "REVIEW_CONFLICT":
+            reason = (
+                str(report_item.get("observations") or "")
+                if report_item is not None
+                else ""
+            )
+            reasons.append(f"{flag}: {reason or 'destination conflict'}")
+    return "; ".join(reasons)
+
+
+def _add_review_summary(
+    summary: dict[str, int | str],
+    operations: list[FileOperation] | None,
+    report_items: list[dict[str, object]] | None = None,
+) -> None:
+    review_items = 0
+    flag_counts = {flag: 0 for flag in sorted(ALL_REVIEW_FLAGS)}
+    operation_by_source = {
+        str(operation.source): operation for operation in operations or []
+    }
+    items = report_items or [
+        {"source": str(operation.source)}
+        for operation in operations or []
+    ]
+    for item in items:
+        operation = operation_by_source.get(str(item.get("source") or ""))
+        flags = _review_flags_for_report(operation, item)
+        if not flags:
+            continue
+        review_items += 1
+        for flag in flags:
+            flag_counts[flag] += 1
+    summary["review_items"] = review_items
+    for flag, count in flag_counts.items():
+        summary[f"{flag.lower()}_items"] = count
+
+
+def _review_item_from_operation(
+    operation: FileOperation,
+    report_item: dict[str, object] | None = None,
+) -> dict[str, object] | None:
+    flags = _review_flags_for_report(operation, report_item)
+    if not flags:
+        return None
+    return {
+        "source": str(operation.source),
+        "destination": (
+            str(report_item.get("destination"))
+            if report_item is not None and report_item.get("destination")
+            else str(operation.destination)
+        ),
+        "action": (
+            str(report_item.get("action"))
+            if report_item is not None and report_item.get("action")
+            else operation.mode
+        ),
+        "status": (
+            str(report_item.get("status"))
+            if report_item is not None and report_item.get("status")
+            else "planned"
+        ),
+        "review_flags": flags,
+        "review_reason": _review_reasons(flags, operation, report_item),
+        "chosen_date": operation.chosen_date.isoformat()
+        if operation.chosen_date is not None
+        else "",
+        "chosen_location": _chosen_location_text(operation),
+        "date_kind": operation.date_kind,
+        "location_status": operation.location_status,
+        "burst_group_id": operation.burst_group_id,
+        "burst_mark": operation.burst_mark,
+    }
+
+
+def _write_review_report(
+    report_path: str | Path,
+    operations: list[FileOperation],
+    operation_logs: list[str] | None = None,
+) -> None:
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    report_items = (
+        [_report_item_from_operation_log(line) for line in operation_logs]
+        if operation_logs is not None
+        else []
+    )
+    report_by_source = {str(item["source"]): item for item in report_items}
+    review_items = [
+        item
+        for item in (
+            _review_item_from_operation(
+                operation,
+                report_by_source.get(str(operation.source)),
+            )
+            for operation in operations
+        )
+        if item is not None
+    ]
+    summary: dict[str, int | str] = {
+        "review_items": len(review_items),
+        "planned_files": len(operations),
+    }
+    for flag in sorted(ALL_REVIEW_FLAGS):
+        summary[f"{flag.lower()}_items"] = sum(
+            1 for item in review_items if flag in item["review_flags"]
+        )
+
+    if path.suffix.lower() == ".csv":
+        with path.open("w", encoding="utf-8", newline="") as report_file:
+            writer = csv.DictWriter(
+                report_file,
+                fieldnames=[
+                    "source",
+                    "destination",
+                    "action",
+                    "status",
+                    "review_flags",
+                    "review_reason",
+                    "chosen_date",
+                    "chosen_location",
+                    "date_kind",
+                    "location_status",
+                    "burst_group_id",
+                    "burst_mark",
+                ],
+            )
+            writer.writeheader()
+            for item in review_items:
+                row = dict(item)
+                row["review_flags"] = "; ".join(item["review_flags"])  # type: ignore[index]
+                writer.writerow(row)
+        return
+
+    if path.suffix.lower() != ".json":
+        raise ValueError("Review report path must end with .json or .csv")
+
+    path.write_text(
+        json.dumps(
+            {"summary": summary, "items": review_items},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def _write_execution_report(
     report_path: str | Path,
     operation_logs: list[str],
@@ -215,6 +406,14 @@ def _write_execution_report(
     )
     for operation in operations:
         planned_operation = planned_operation_by_source.get(operation["source"])
+        review_flags = _review_flags_for_report(planned_operation, operation)
+        operation["review_required"] = bool(review_flags)
+        operation["review_flags"] = review_flags
+        operation["review_reason"] = _review_reasons(
+            review_flags,
+            planned_operation,
+            operation,
+        )
         if planned_operation is not None and planned_operation.related_sidecars:
             sidecar_destinations = [
                 str(Path(operation["destination"]).with_suffix(sidecar.suffix))
@@ -490,6 +689,7 @@ def _write_execution_report(
             for planned_operation in planned_operations or []
             if planned_operation.burst_mark
         )
+    _add_review_summary(summary, planned_operations, operations)
 
     if path.suffix.lower() == ".csv":
         fieldnames = [
@@ -498,6 +698,9 @@ def _write_execution_report(
             "action",
             "status",
             "observations",
+            "review_required",
+            "review_flags",
+            "review_reason",
             "date_source",
             "date_field",
             "date_confidence",
@@ -576,7 +779,12 @@ def _write_execution_report(
                 fieldnames=fieldnames,
             )
             writer.writeheader()
-            writer.writerows(operations)
+            csv_operations = []
+            for operation in operations:
+                row = dict(operation)
+                row["review_flags"] = "; ".join(operation["review_flags"])  # type: ignore[index]
+                csv_operations.append(row)
+            writer.writerows(csv_operations)
         return
 
     if path.suffix.lower() != ".json":
@@ -601,6 +809,7 @@ def _duplicate_group_to_report_item(
         "group_id": group_id,
         "hash": group.content_hash,
         "quantity": len(paths),
+        "review_flags": [REVIEW_FLAG_DUPLICATE],
         "original": str(group.original),
         "duplicates": [str(path) for path in group.duplicates],
         "paths": paths,
@@ -623,6 +832,8 @@ def _write_dedupe_report(
         "total_files_in_duplicate_groups": sum(
             int(item["quantity"]) for item in group_items
         ),
+        "review_items": sum(int(item["quantity"]) for item in group_items),
+        "review_duplicate_items": sum(int(item["quantity"]) for item in group_items),
     }
 
     if path.suffix.lower() == ".csv":
@@ -633,6 +844,7 @@ def _write_dedupe_report(
                     "group_id",
                     "hash",
                     "quantity",
+                    "review_flags",
                     "role",
                     "path",
                 ],
@@ -644,6 +856,7 @@ def _write_dedupe_report(
                         "group_id": item["group_id"],
                         "hash": item["hash"],
                         "quantity": item["quantity"],
+                        "review_flags": "; ".join(item["review_flags"]),
                         "role": "original",
                         "path": item["original"],
                     }
@@ -654,6 +867,7 @@ def _write_dedupe_report(
                             "group_id": item["group_id"],
                             "hash": item["hash"],
                             "quantity": item["quantity"],
+                            "review_flags": "; ".join(item["review_flags"]),
                             "role": "duplicate",
                             "path": duplicate,
                         }
@@ -2168,6 +2382,13 @@ def _add_organize_arguments(
         help="Write a structured execution report to this .json or .csv path.",
     )
     report_group.add_argument(
+        "--review-report",
+        metavar="PATH",
+        help=(
+            "Write only items marked for human review to this .json or .csv path."
+        ),
+    )
+    report_group.add_argument(
         "--journal",
         metavar="PATH",
         default=None,
@@ -2744,6 +2965,14 @@ def main(argv: list[str] | None = None) -> int:
                 f"{command_label} --report must end with .json or .csv. "
                 "Example: --report audit.csv"
             )
+        if (
+            args.review_report
+            and Path(args.review_report).suffix.lower() not in {".json", ".csv"}
+        ):
+            parser.error(
+                f"{command_label} --review-report must end with .json or .csv. "
+                "Example: --review-report review.csv"
+            )
         derived_path_value = Path(derivative_path)
         if derived_path_value.is_absolute() or any(
             part == ".." for part in derived_path_value.parts
@@ -2899,6 +3128,9 @@ def main(argv: list[str] | None = None) -> int:
                 command_label,
                 len(operations),
             )
+            if args.review_report:
+                _write_review_report(args.review_report, operations)
+                logger.info("Review report written: path=%s", args.review_report)
             return 0
 
         if dry_run:
@@ -2977,6 +3209,9 @@ def main(argv: list[str] | None = None) -> int:
                 include_location_fields=reverse_geocode,
             )
             logger.info("Execution report written: path=%s", args.report)
+        if args.review_report:
+            _write_review_report(args.review_report, operations, logs)
+            logger.info("Review report written: path=%s", args.review_report)
 
         logger.info("Execution finished: %s processed_files=%d", command_label, processed_files)
         return 0

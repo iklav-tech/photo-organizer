@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import dataclasses
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 import fnmatch
@@ -325,6 +326,7 @@ class FileOperation:
     burst_group_size: int = 0
     burst_window_seconds: int = 0
     burst_similarity_score: float | None = None
+    review_flags: frozenset[str] = dataclasses.field(default_factory=frozenset)
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +484,85 @@ def _resolve_quarantine_destination(
         if not candidate.exists() and candidate not in reserved:
             return candidate
         counter += 1
+
+
+# ---------------------------------------------------------------------------
+# Review flags
+# ---------------------------------------------------------------------------
+
+#: Tags that can appear in :attr:`FileOperation.review_flags`.
+#:
+#: ``REVIEW_DATE``       – date is uncertain, inferred, or has unresolved conflicts.
+#: ``REVIEW_LOCATION``   – location is missing, inferred, or could not be resolved.
+#: ``REVIEW_DUPLICATE``  – file appears to be a duplicate of another in the batch.
+#: ``REVIEW_BURST``      – file is part of a burst sequence (temporal-only, no similarity).
+#: ``REVIEW_CONFLICT``   – planned destination conflicts with an existing file.
+REVIEW_FLAG_DATE = "REVIEW_DATE"
+REVIEW_FLAG_LOCATION = "REVIEW_LOCATION"
+REVIEW_FLAG_DUPLICATE = "REVIEW_DUPLICATE"
+REVIEW_FLAG_BURST = "REVIEW_BURST"
+REVIEW_FLAG_CONFLICT = "REVIEW_CONFLICT"
+
+ALL_REVIEW_FLAGS = frozenset({
+    REVIEW_FLAG_DATE,
+    REVIEW_FLAG_LOCATION,
+    REVIEW_FLAG_DUPLICATE,
+    REVIEW_FLAG_BURST,
+    REVIEW_FLAG_CONFLICT,
+})
+
+
+def compute_review_flags(operation: "FileOperation") -> frozenset[str]:
+    """Return the set of review flags that apply to *operation*.
+
+    Flags are computed from the operation's metadata fields:
+
+    ``REVIEW_DATE``
+        The chosen date came from a heuristic/fallback source, or there is an
+        unresolved conflict between metadata sources.
+
+    ``REVIEW_LOCATION``
+        No GPS coordinates were found, or the location was inferred from
+        textual context rather than real GPS data.
+
+    ``REVIEW_BURST``
+        The file is part of a burst group that was detected by temporal
+        proximity only (no filename-similarity confirmation).
+
+    ``REVIEW_CONFLICT``
+        Not set here — this flag is added by :func:`apply_operations` when a
+        destination conflict is detected at execution time.
+
+    ``REVIEW_DUPLICATE``
+        Not set here — this flag is added externally when duplicate detection
+        is run (e.g. via the ``dedupe`` command).
+    """
+    flags: set[str] = set()
+
+    # Date uncertainty
+    if operation.date_fallback or operation.date_kind == "inferred":
+        flags.add(REVIEW_FLAG_DATE)
+    if (
+        operation.date_reconciliation is not None
+        and operation.date_reconciliation.conflict
+    ):
+        flags.add(REVIEW_FLAG_DATE)
+
+    # Location uncertainty
+    if operation.location_status in {
+        "missing-gps",
+        "inferred",
+        "unknown-location",
+        "error",
+        "disabled",
+    }:
+        flags.add(REVIEW_FLAG_LOCATION)
+
+    # Burst (temporal-only, no similarity confirmation)
+    if operation.burst_mark == "REVIEW_BURST":
+        flags.add(REVIEW_FLAG_BURST)
+
+    return frozenset(flags)
 
 
 def _temporal_event_label(index: int, start: datetime) -> str:
@@ -1126,6 +1207,12 @@ def plan_organization_operations(
             min_photos=burst_min_photos,
             similarity_threshold=burst_similarity_threshold,
         )
+
+    # Compute review flags after all enrichment passes so burst_mark is final.
+    operations = [
+        dataclasses.replace(op, review_flags=compute_review_flags(op))
+        for op in operations
+    ]
 
     return operations
 

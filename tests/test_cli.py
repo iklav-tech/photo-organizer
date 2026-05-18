@@ -1705,12 +1705,15 @@ def test_dedupe_writes_structured_json_report(
         "duplicate_groups": 1,
         "duplicate_files": 1,
         "total_files_in_duplicate_groups": 2,
+        "review_items": 2,
+        "review_duplicate_items": 2,
     }
     assert report["duplicate_groups"] == [
         {
             "group_id": 1,
             "hash": expected_hash,
             "quantity": 2,
+            "review_flags": ["REVIEW_DUPLICATE"],
             "original": str(original),
             "duplicates": [str(duplicate)],
             "paths": [str(original), str(duplicate)],
@@ -1743,6 +1746,7 @@ def test_dedupe_writes_analysis_friendly_csv_report(
             "group_id": "1",
             "hash": expected_hash,
             "quantity": "2",
+            "review_flags": "REVIEW_DUPLICATE",
             "role": "original",
             "path": str(original),
         },
@@ -1750,6 +1754,7 @@ def test_dedupe_writes_analysis_friendly_csv_report(
             "group_id": "1",
             "hash": expected_hash,
             "quantity": "2",
+            "review_flags": "REVIEW_DUPLICATE",
             "role": "duplicate",
             "path": str(duplicate),
         },
@@ -1992,6 +1997,12 @@ def test_organize_writes_valid_structured_execution_report(
         "gps_files": 0,
         "missing_gps_files": 0,
         "organization_fallback_files": 0,
+        "review_items": 1,
+        "review_burst_items": 0,
+        "review_conflict_items": 0,
+        "review_date_items": 1,
+        "review_duplicate_items": 0,
+        "review_location_items": 1,
     }
     assert report["operations"] == [
         {
@@ -2000,6 +2011,12 @@ def test_organize_writes_valid_structured_execution_report(
             "action": "copy",
             "status": "success",
             "observations": "",
+            "review_required": True,
+            "review_flags": ["REVIEW_DATE", "REVIEW_LOCATION"],
+            "review_reason": (
+                "REVIEW_DATE: selected by metadata precedence policy; "
+                "REVIEW_LOCATION: location status is disabled"
+            ),
             "date_source": "filesystem",
             "date_field": "mtime",
             "date_confidence": "low",
@@ -2071,6 +2088,9 @@ def test_organize_report_includes_error_status_and_observation(
             "action": "copy",
             "status": "error",
             "observations": "permission denied",
+            "review_required": False,
+            "review_flags": [],
+            "review_reason": "",
             "date_source": "",
             "date_field": "",
             "date_confidence": "",
@@ -2286,6 +2306,51 @@ def test_execution_report_includes_burst_mark_fields(tmp_path: Path) -> None:
     assert report["operations"][0]["burst_mark"] == "BURST"
     assert report["operations"][0]["burst_group_size"] == 3
     assert report["operations"][0]["burst_similarity_score"] == 0.9
+
+
+def test_review_report_contains_only_marked_items(tmp_path: Path) -> None:
+    report_path = tmp_path / "review.json"
+    marked = FileOperation(
+        source=Path("input/needs-review.jpg"),
+        destination=Path("out/needs-review.jpg"),
+        mode="copy",
+        chosen_date=datetime(2024, 8, 15, 10, 0),
+        date_kind="inferred",
+        location_status="missing-gps",
+        review_flags=frozenset({"REVIEW_DATE", "REVIEW_LOCATION"}),
+    )
+    clean = FileOperation(
+        source=Path("input/clean.jpg"),
+        destination=Path("out/clean.jpg"),
+        mode="copy",
+        chosen_date=datetime(2024, 8, 15, 10, 1),
+    )
+
+    cli._write_review_report(report_path, [marked, clean])
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["summary"]["review_items"] == 1
+    assert report["summary"]["review_date_items"] == 1
+    assert report["summary"]["review_location_items"] == 1
+    assert report["items"] == [
+        {
+            "source": "input/needs-review.jpg",
+            "destination": "out/needs-review.jpg",
+            "action": "copy",
+            "status": "planned",
+            "review_flags": ["REVIEW_DATE", "REVIEW_LOCATION"],
+            "review_reason": (
+                "REVIEW_DATE: date is inferred, fallback, or conflicting; "
+                "REVIEW_LOCATION: location status is missing-gps"
+            ),
+            "chosen_date": "2024-08-15T10:00:00",
+            "chosen_location": "",
+            "date_kind": "inferred",
+            "location_status": "missing-gps",
+            "burst_group_id": "",
+            "burst_mark": "",
+        }
+    ]
 
 
 def test_organize_report_identifies_apple_proraw_flow(
@@ -2874,6 +2939,9 @@ def test_organize_writes_valid_csv_execution_report(
             "action": "copy",
             "status": "success",
             "observations": "",
+            "review_required": "False",
+            "review_flags": "",
+            "review_reason": "",
             "date_source": "",
             "date_field": "",
             "date_confidence": "",
@@ -2904,6 +2972,9 @@ def test_organize_writes_valid_csv_execution_report(
             "action": "copy",
             "status": "error",
             "observations": "permission denied",
+            "review_required": "False",
+            "review_flags": "",
+            "review_reason": "",
             "date_source": "",
             "date_field": "",
             "date_confidence": "",
@@ -3356,6 +3427,11 @@ def test_organize_skip_conflict_policy_reports_skipped_operation(
     assert report["summary"]["processed_files"] == 0
     assert report["operations"][0]["status"] == "skipped"
     assert report["operations"][0]["observations"] == "conflict: destination exists"
+    assert report["operations"][0]["review_flags"] == [
+        "REVIEW_CONFLICT",
+        "REVIEW_DATE",
+        "REVIEW_LOCATION",
+    ]
     assert destination.read_text() == "existing"
     assert source.exists()
 
