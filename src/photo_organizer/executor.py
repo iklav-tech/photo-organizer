@@ -580,13 +580,120 @@ def _event_slug(value: str) -> str:
     return slug or "evento"
 
 
-def _temporal_event_name(index: int, group: list[tuple[int, FileOperation]]) -> str:
+def validate_event_name_pattern(pattern: str) -> None:
+    """Validate fields accepted by generated event name patterns."""
+    formatter = string.Formatter()
+    allowed_fields = {
+        "city",
+        "country",
+        "date",
+        "event_id",
+        "folder",
+        "index",
+        "state",
+    }
+    for _, field_name, _, _ in formatter.parse(pattern):
+        if field_name is None:
+            continue
+        root_name = field_name.split(".", maxsplit=1)[0].split("[", maxsplit=1)[0]
+        if root_name not in allowed_fields:
+            allowed = ", ".join(sorted(allowed_fields))
+            raise ValueError(
+                f"Unknown event name pattern field '{root_name}'. Allowed: {allowed}"
+            )
+
+
+def _format_event_name_pattern(
+    pattern: str,
+    *,
+    start: datetime,
+    event_id: str,
+    event_index: int,
+    folder: str,
+    city: str,
+    state: str,
+    country: str,
+) -> str:
+    validate_event_name_pattern(pattern)
+    return pattern.format(
+        date=start,
+        event_id=event_id,
+        index=event_index,
+        folder=folder,
+        city=city,
+        state=state,
+        country=country,
+    )
+
+
+def _event_group_folder(
+    group: list[tuple[int, FileOperation]],
+    source_root: Path | None,
+) -> str:
+    if source_root is None:
+        return ""
+    folders = []
+    for _, operation in group:
+        try:
+            relative_parent = operation.source.parent.relative_to(source_root)
+        except ValueError:
+            continue
+        if relative_parent == Path("."):
+            continue
+        folders.append(relative_parent.parts[-1])
+    if not folders:
+        return ""
+    return sorted(set(folders), key=lambda value: (-folders.count(value), value))[0]
+
+
+def _event_group_location(group: list[tuple[int, FileOperation]]) -> tuple[str, str, str]:
+    for _, operation in group:
+        if operation.location is None:
+            continue
+        city = operation.location.city or ""
+        state = operation.location.state or ""
+        country = operation.location.country or ""
+        if city or state or country:
+            return city, state, country
+    return "", "", ""
+
+
+def _temporal_event_name(
+    index: int,
+    group: list[tuple[int, FileOperation]],
+    *,
+    start: datetime,
+    event_id: str,
+    source_root: Path | None = None,
+    event_name_pattern: str | None = None,
+) -> str:
     for _, operation in group:
         if (
             operation.correction_manifest is not None
             and operation.correction_manifest.event_name
         ):
             return _event_slug(operation.correction_manifest.event_name)
+
+    folder = _event_group_folder(group, source_root)
+    city, state, country = _event_group_location(group)
+    if event_name_pattern is not None:
+        rendered = _format_event_name_pattern(
+            event_name_pattern,
+            start=start,
+            event_id=event_id,
+            event_index=index,
+            folder=folder,
+            city=city,
+            state=state,
+            country=country,
+        )
+        slug = _event_slug(rendered)
+        return slug if slug else f"evento-{index:03d}"
+
+    place = next((part for part in (city, state, country) if part), "")
+    context = place or folder
+    if context:
+        return _event_slug(f"{start:%Y-%m-%d} {context}")
     return f"evento-{index:03d}"
 
 
@@ -654,6 +761,8 @@ def assign_temporal_events(
     output_dir: str | Path | None = None,
     use_event_directory: bool = False,
     event_directory_pattern: str | None = None,
+    event_name_pattern: str | None = None,
+    source_root: str | Path | None = None,
 ) -> list[FileOperation]:
     """Assign deterministic event groups using consecutive capture times."""
     if window_minutes <= 0:
@@ -694,6 +803,7 @@ def assign_temporal_events(
 
     planned = list(operations)
     output_path = Path(output_dir) if output_dir is not None else None
+    source_path = Path(source_root) if source_root is not None else None
     for event_index, group in enumerate(groups, start=1):
         dates = [
             operation.chosen_date
@@ -704,7 +814,14 @@ def assign_temporal_events(
         end = max(dates)
         event_label = _temporal_event_label(event_index, start)
         event_id = f"event-{event_index:03d}"
-        event_name = _temporal_event_name(event_index, group)
+        event_name = _temporal_event_name(
+            event_index,
+            group,
+            start=start,
+            event_id=event_id,
+            source_root=source_path,
+            event_name_pattern=event_name_pattern,
+        )
         event_dir = ""
         if event_directory_pattern is not None and output_path is not None:
             event_dir = str(
@@ -851,6 +968,7 @@ def plan_organization_operations(
     event_window_minutes: int | None = None,
     event_directory: bool = False,
     event_directory_pattern: str | None = None,
+    event_name_pattern: str | None = None,
     burst_detection: bool = False,
     burst_window_seconds: int = 2,
     burst_min_photos: int = 3,
@@ -1199,6 +1317,8 @@ def plan_organization_operations(
             output_dir=output_path,
             use_event_directory=event_directory,
             event_directory_pattern=event_directory_pattern,
+            event_name_pattern=event_name_pattern,
+            source_root=source_path,
         )
     if burst_detection:
         operations = mark_burst_groups(

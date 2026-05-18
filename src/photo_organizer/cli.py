@@ -39,6 +39,7 @@ from photo_organizer.executor import (
     filter_resumable_operations,
     plan_organization_operations,
     validate_event_directory_pattern,
+    validate_event_name_pattern,
 )
 from photo_organizer.geocoding import reverse_geocode_coordinates
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
@@ -2308,6 +2309,15 @@ def _add_organize_arguments(
             "'{date:%%Y}/{date:%%Y-%%m-%%d}_{event}'."
         ),
     )
+    execution_group.add_argument(
+        "--event-name-pattern",
+        metavar="PATTERN",
+        default=None,
+        help=(
+            "Pattern for generated temporal event names. Supported fields: "
+            "{date}, {folder}, {city}, {state}, {country}, {event_id}, {index}."
+        ),
+    )
     event_directory_group = execution_group.add_mutually_exclusive_group()
     event_directory_group.add_argument(
         "--event-directory",
@@ -2999,6 +3009,13 @@ def main(argv: list[str] | None = None) -> int:
             if config is not None and config.event_directory_pattern is not None
             else None
         )
+        event_name_pattern = (
+            args.event_name_pattern
+            if args.event_name_pattern is not None
+            else config.event_name_pattern
+            if config is not None and config.event_name_pattern is not None
+            else None
+        )
         if strategy == "event":
             if event_window_minutes is None:
                 event_window_minutes = 60
@@ -3086,6 +3103,11 @@ def main(argv: list[str] | None = None) -> int:
                 validate_event_directory_pattern(event_directory_pattern)
             except ValueError as exc:
                 parser.error(f"invalid --event-directory-pattern: {exc}")
+        if event_name_pattern is not None:
+            try:
+                validate_event_name_pattern(event_name_pattern)
+            except ValueError as exc:
+                parser.error(f"invalid --event-name-pattern: {exc}")
         if burst_window_seconds <= 0:
             parser.error("--burst-window-seconds must be greater than zero")
         if burst_min_photos < 2:
@@ -3129,6 +3151,7 @@ def main(argv: list[str] | None = None) -> int:
                 event_window_minutes=event_window_minutes,
                 event_directory=event_directory,
                 event_directory_pattern=event_directory_pattern,
+                event_name_pattern=event_name_pattern,
                 burst_detection=burst_detection,
                 burst_window_seconds=burst_window_seconds,
                 burst_min_photos=burst_min_photos,

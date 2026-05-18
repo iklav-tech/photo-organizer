@@ -345,6 +345,82 @@ def test_assign_temporal_events_uses_human_event_directory_pattern(
     )
 
 
+def test_assign_temporal_events_derives_human_name_from_location(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "organized"
+    operations = [
+        FileOperation(
+            source=tmp_path / "photos" / "a.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+            location=ReverseGeocodedLocation(
+                city="São Paulo",
+                state="SP",
+                country="Brasil",
+            ),
+        ),
+    ]
+
+    grouped = assign_temporal_events(
+        operations,
+        window_minutes=60,
+        output_dir=output_dir,
+    )
+
+    assert grouped[0].temporal_event_name == "2024-08-15-sao-paulo"
+
+
+def test_assign_temporal_events_derives_human_name_from_source_folder(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    operations = [
+        FileOperation(
+            source=source_root / "Casamento Ana" / "a.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+        ),
+    ]
+
+    grouped = assign_temporal_events(
+        operations,
+        window_minutes=60,
+        output_dir=output_dir,
+        source_root=source_root,
+    )
+
+    assert grouped[0].temporal_event_name == "2024-08-15-casamento-ana"
+
+
+def test_assign_temporal_events_accepts_custom_event_name_pattern(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "photos"
+    output_dir = tmp_path / "organized"
+    operations = [
+        FileOperation(
+            source=source_root / "Viagem" / "a.jpg",
+            destination=output_dir / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+            chosen_date=datetime(2024, 8, 15, 10, 0),
+        ),
+    ]
+
+    grouped = assign_temporal_events(
+        operations,
+        window_minutes=60,
+        output_dir=output_dir,
+        source_root=source_root,
+        event_name_pattern="{folder}_{index:02d}",
+    )
+
+    assert grouped[0].temporal_event_name == "viagem-01"
+
+
 def test_assign_temporal_events_derives_name_from_correction_event(
     tmp_path: Path,
 ) -> None:

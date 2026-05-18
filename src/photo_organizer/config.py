@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from photo_organizer.correction_manifest import validate_correction_priority
-from photo_organizer.executor import validate_conflict_policy
+from photo_organizer.executor import validate_conflict_policy, validate_event_name_pattern
 from photo_organizer.naming import validate_filename_pattern
 from photo_organizer.planner import validate_destination_pattern
 from photo_organizer.metadata import validate_clock_offset, validate_reconciliation_policy
@@ -47,6 +47,7 @@ class OrganizationConfig:
     event_window_minutes: int | None = None
     event_directory: bool | None = None
     event_directory_pattern: str | None = None
+    event_name_pattern: str | None = None
     burst_detection: bool | None = None
     burst_window_seconds: int | None = None
     burst_min_photos: int | None = None
@@ -364,6 +365,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         "directory_pattern",
         "events.directory_pattern",
     )
+    event_name_pattern = _optional_string(
+        events,
+        "name_pattern",
+        "events.name_pattern",
+    )
     bursts = _expect_mapping(config.get("bursts", {}), "bursts")
     burst_detection = _optional_bool(
         bursts,
@@ -445,6 +451,11 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
             validate_destination_pattern(destination_pattern)
         except ValueError as exc:
             raise ConfigurationError(f"Invalid destination.pattern: {exc}") from exc
+    if event_name_pattern is not None:
+        try:
+            validate_event_name_pattern(event_name_pattern)
+        except ValueError as exc:
+            raise ConfigurationError(f"Invalid events.name_pattern: {exc}") from exc
     _validate_relative_directory(derivative_path, "derivatives.path")
 
     return OrganizationConfig(
@@ -472,6 +483,7 @@ def load_organization_config(config_path: str | Path) -> OrganizationConfig:
         event_window_minutes=event_window_minutes,
         event_directory=event_directory,
         event_directory_pattern=event_directory_pattern,
+        event_name_pattern=event_name_pattern,
         burst_detection=burst_detection,
         burst_window_seconds=burst_window_seconds,
         burst_min_photos=burst_min_photos,

@@ -434,6 +434,31 @@ def test_organize_event_strategy_accepts_custom_event_directory_pattern(
     )
 
 
+def test_organize_accepts_custom_event_name_pattern_from_cli(monkeypatch) -> None:
+    captured = {}
+
+    def fake_plan(*_args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr("photo_organizer.cli.plan_organization_operations", fake_plan)
+    monkeypatch.setattr("photo_organizer.cli.apply_operations", lambda *_args, **_kwargs: [])
+
+    result = main([
+        "organize",
+        "./photos",
+        "--output",
+        "./organized",
+        "--by",
+        "event",
+        "--event-name-pattern",
+        "{date:%Y-%m-%d}_{folder}",
+    ])
+
+    assert result == 0
+    assert captured["event_name_pattern"] == "{date:%Y-%m-%d}_{folder}"
+
+
 def test_organize_accepts_temporal_event_options_from_config(
     tmp_path: Path,
     monkeypatch,
@@ -446,6 +471,7 @@ def test_organize_accepts_temporal_event_options_from_config(
                 "events": {
                     "window_minutes": 60,
                     "directory": True,
+                    "name_pattern": "{folder}_{index:02d}",
                 },
             }
         ),
@@ -465,6 +491,7 @@ def test_organize_accepts_temporal_event_options_from_config(
     assert result == 0
     assert captured["event_window_minutes"] == 60
     assert captured["event_directory"] is True
+    assert captured["event_name_pattern"] == "{folder}_{index:02d}"
 
 
 def test_organize_accepts_burst_detection_options_from_cli(monkeypatch) -> None:

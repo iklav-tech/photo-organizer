@@ -34,6 +34,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
                     "window_minutes": 45,
                     "directory": True,
                     "directory_pattern": "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}",
+                    "name_pattern": "{date:%Y-%m-%d}_{folder}",
                 },
                 "bursts": {
                     "enabled": True,
@@ -68,6 +69,7 @@ def test_load_organization_config_reads_json_rules(tmp_path: Path) -> None:
     assert config.event_directory_pattern == (
         "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}"
     )
+    assert config.event_name_pattern == "{date:%Y-%m-%d}_{folder}"
     assert config.burst_detection is True
     assert config.burst_window_seconds == 2
     assert config.burst_min_photos == 3
