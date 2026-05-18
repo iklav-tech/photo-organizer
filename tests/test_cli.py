@@ -1429,7 +1429,64 @@ def test_organize_plan_mode_shows_plan_without_execution(
 
     assert result == 0
     assert "Generated execution plan: operations=1" in caplog.text
+    assert "Final directory preview:" in caplog.text
+    assert "out/" in caplog.text
+    assert "2024-08-15_14-32-09.jpg" in caplog.text
     assert "Plan-only mode enabled" in caplog.text
+
+
+def test_final_structure_preview_renders_date_tree() -> None:
+    output = Path("out")
+    operations = [
+        FileOperation(
+            source=Path("input/a.jpg"),
+            destination=output / "2024" / "08" / "15" / "a.jpg",
+            mode="copy",
+        ),
+        FileOperation(
+            source=Path("input/b.jpg"),
+            destination=output / "2024" / "08" / "16" / "b.jpg",
+            mode="copy",
+        ),
+    ]
+
+    assert cli._final_structure_preview_lines(operations, output) == [
+        "Final directory preview:",
+        "out/",
+        "  2024/",
+        "    08/",
+        "      15/",
+        "        a.jpg",
+        "      16/",
+        "        b.jpg",
+    ]
+
+
+def test_final_structure_preview_renders_event_tree() -> None:
+    output = Path("out")
+    operations = [
+        FileOperation(
+            source=Path("input/a.jpg"),
+            destination=output / "2024" / "2024-08-15_event-001" / "a.jpg",
+            mode="copy",
+            temporal_event_id="event-001",
+        ),
+        FileOperation(
+            source=Path("input/b.jpg"),
+            destination=output / "2024" / "2024-08-15_event-001" / "b.jpg",
+            mode="copy",
+            temporal_event_id="event-001",
+        ),
+    ]
+
+    assert cli._final_structure_preview_lines(operations, output) == [
+        "Final directory preview:",
+        "out/",
+        "  2024/",
+        "    2024-08-15_event-001/",
+        "      a.jpg",
+        "      b.jpg",
+    ]
 
 
 def test_organize_reverse_geocode_option_is_passed_to_planner(monkeypatch) -> None:

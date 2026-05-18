@@ -397,6 +397,57 @@ def _write_review_report(
     )
 
 
+def _destination_preview_parts(destination: Path, output_root: Path) -> tuple[str, ...]:
+    try:
+        relative = destination.relative_to(output_root)
+        return (output_root.name or str(output_root), *relative.parts)
+    except ValueError:
+        return destination.parts
+
+
+def _insert_preview_path(tree: dict[str, dict], parts: tuple[str, ...]) -> None:
+    node = tree
+    for part in parts:
+        node = node.setdefault(part, {})
+
+
+def _render_preview_tree(tree: dict[str, dict], indent: int = 0) -> list[str]:
+    lines = []
+    for name in sorted(tree):
+        children = tree[name]
+        suffix = "/" if children else ""
+        lines.append(f"{'  ' * indent}{name}{suffix}")
+        if children:
+            lines.extend(_render_preview_tree(children, indent + 1))
+    return lines
+
+
+def _final_structure_preview_lines(
+    operations: list[FileOperation],
+    output_root: str | Path,
+) -> list[str]:
+    if not operations:
+        return ["Final directory preview:", "  (no files planned)"]
+
+    root = Path(output_root)
+    tree: dict[str, dict] = {}
+    for operation in operations:
+        _insert_preview_path(
+            tree,
+            _destination_preview_parts(operation.destination, root),
+        )
+
+    return ["Final directory preview:", *_render_preview_tree(tree)]
+
+
+def _log_final_structure_preview(
+    operations: list[FileOperation],
+    output_root: str | Path,
+) -> None:
+    for line in _final_structure_preview_lines(operations, output_root):
+        logger.info(line)
+
+
 def _write_execution_report(
     report_path: str | Path,
     operation_logs: list[str],
@@ -3113,6 +3164,7 @@ def main(argv: list[str] | None = None) -> int:
                 operation.source,
                 operation.destination,
             )
+        _log_final_structure_preview(operations, output)
 
         if plan_only:
             logger.info("Plan-only mode enabled: no files will be changed")
