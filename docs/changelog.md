@@ -13,6 +13,7 @@ O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](
 ### Added
 
 - Politica de versionamento documentada, incluindo SemVer, padrao de tags e checklist de release.
+- Cobertura de testes ampliada para journal/resume, normalizacao de texto e configuracao de logging.
 
 ## [0.9.0] - 2026-05-22
 

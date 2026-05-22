@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Documented the project versioning and release policy, including Semantic Versioning usage, Git tag format and release checklist.
+- Added focused coverage for journal/resume behavior, text normalization helpers and logging configuration.
 
 ## [0.9.0] - 2026-05-22
 
