@@ -8,6 +8,6 @@ __all__ = [
 ]
 
 __app_name__ = "photo-organizer"
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 __description__ = "Organize photos by metadata and date."
 __repository__ = "https://github.com/iklav-tech/photo-organizer"

@@ -10,10 +10,20 @@ O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](
 
 ## [Unreleased]
 
+Sem mudancas registradas ainda.
+
+## [1.0.0] - 2026-05-22
+
 ### Added
 
 - Politica de versionamento documentada, incluindo SemVer, padrao de tags e checklist de release.
 - Cobertura de testes ampliada para journal/resume, normalizacao de texto e configuracao de logging.
+- Metadados publicos de pacote adicionados para a release estavel, incluindo licença MIT, classificadores, palavras-chave, URL de documentacao e URL de changelog.
+
+### Changed
+
+- Projeto promovido para a primeira release publica estavel, versao `1.0.0`.
+- Dependencias de runtime revisadas e `requirements.txt` documentado como espelho de `pyproject.toml`.
 
 ## [0.9.0] - 2026-05-22
 
@@ -37,4 +47,4 @@ O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](
 
 ## Versao atual
 
-A versao mais recente registrada no changelog da raiz e `0.9.0` (`2026-05-22`). Consulte o [`CHANGELOG.md` completo](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md) para o historico completo e detalhes de cada release.
+A versao mais recente registrada no changelog da raiz e `1.0.0` (`2026-05-22`). Consulte o [`CHANGELOG.md` completo](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md) para o historico completo e detalhes de cada release.

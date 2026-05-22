@@ -321,12 +321,12 @@ Os manifestos de execucao registram origem, destino final, acao, status, data/lo
 
 O projeto adota Semantic Versioning para a versao do pacote, no formato `MAJOR.MINOR.PATCH`, e Keep a Changelog para o historico de mudancas.
 
-- Versao do pacote em `pyproject.toml` e `src/photo_organizer/__init__.py`: `0.9.0`.
-- Tag Git/GitHub: prefixo `v`, por exemplo `v0.9.0`.
+- Versao do pacote em `pyproject.toml` e `src/photo_organizer/__init__.py`: `1.0.0`.
+- Tag Git/GitHub: prefixo `v`, por exemplo `v1.0.0`.
 - Titulo de release no GitHub: `vX.Y.Z - resumo curto em ingles`.
 - Mudancas futuras devem entrar primeiro em `CHANGELOG.md` na secao `Unreleased`.
 
-Enquanto o projeto estiver em `0.y.z`, incrementos `MINOR` podem incluir mudancas relevantes de comportamento da CLI. Incrementos `PATCH` ficam reservados para correcoes compatíveis e melhorias documentais pequenas. A politica completa esta em [`docs/versioning.md`](docs/versioning.md).
+Depois da release `1.0.0`, mudancas incompatíveis em comportamento publico da CLI, formato de relatorios ou layout de destino exigem incremento `MAJOR`. Novas funcionalidades compatíveis usam `MINOR`; correcoes compatíveis usam `PATCH`. A politica completa esta em [`docs/versioning.md`](docs/versioning.md).
 
 ## Roadmap
 
@@ -335,7 +335,7 @@ O roadmap detalhado esta em [`docs/roadmap.md`](docs/roadmap.md). Temas ainda re
 - ampliar suporte de metadados para RAWs proprietarios por integracao opcional com ferramenta especializada;
 - melhorar validacoes com arquivos reais de camera;
 - evoluir revisao de duplicatas e bursts sem remover arquivos automaticamente;
-- preparar empacotamento/publicacao publica quando a API de CLI estabilizar.
+- evoluir o empacotamento publico e a experiencia de release.
 
 ## Contributing
 

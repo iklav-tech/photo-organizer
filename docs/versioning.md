@@ -19,7 +19,7 @@ MAJOR.MINOR.PATCH
 Exemplo:
 
 ```text
-0.9.0
+1.0.0
 ```
 
 Essa versao deve estar alinhada em:
@@ -40,7 +40,7 @@ vMAJOR.MINOR.PATCH
 Exemplo:
 
 ```text
-v0.9.0
+v1.0.0
 ```
 
 O prefixo `v` fica restrito a tags e releases. Metadados Python e referencias internas de pacote usam apenas `MAJOR.MINOR.PATCH`.
@@ -56,14 +56,14 @@ vMAJOR.MINOR.PATCH - short release summary
 Exemplo:
 
 ```text
-v0.9.0 - Documentation standardization and changelog cleanup
+v1.0.0 - First stable public release
 ```
 
 ## Quando incrementar versoes
 
-Enquanto o projeto estiver em `0.y.z`, a CLI ainda pode evoluir com mudancas de comportamento em releases minor. A regra pratica e:
+A partir da release `1.0.0`, a regra pratica e:
 
-- `MAJOR`: usado quando o projeto sair da fase inicial `0.y.z` ou quando houver quebra ampla e deliberada de compatibilidade publica.
+- `MAJOR`: mudancas incompatíveis no comportamento publico da CLI, nomes de flags, defaults, formato de relatorios, layout de destino ou contratos documentados.
 - `MINOR`: novas funcionalidades, novos comandos, novas opcoes de CLI, mudancas relevantes de comportamento, novos formatos suportados ou reorganizacoes documentais de maior alcance.
 - `PATCH`: correcoes compatíveis, ajustes pequenos de documentacao, melhorias internas sem mudanca esperada para o usuario e fixes de empacotamento.
 
@@ -98,14 +98,14 @@ Comandos tipicos:
 
 ```bash
 .venv/bin/python -m pytest
-git tag v0.9.0
-git push origin v0.9.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 Se a release for criada pela interface do GitHub, selecione a tag `vMAJOR.MINOR.PATCH` e use as notas da secao correspondente do `CHANGELOG.md`.
 
 ## Estado atual
 
-- Versao atual do pacote: `0.9.0`.
-- Tag correspondente: `v0.9.0`.
+- Versao atual do pacote: `1.0.0`.
+- Tag correspondente: `v1.0.0`.
 - Changelog canonico: [`CHANGELOG.md`](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md).

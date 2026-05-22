@@ -6,7 +6,7 @@ permalink: /roadmap/
 
 # Roadmap
 
-## Versao atual: 0.9.0
+## Versao atual: 1.0.0
 
 Ja implementado e documentado no projeto:
 
@@ -25,6 +25,7 @@ Ja implementado e documentado no projeto:
 - README padronizado como Standard Readme.
 - CHANGELOG padronizado como Keep a Changelog, com versoes semanticas e secao `Unreleased`.
 - Politica de versionamento documentada, com tags `vMAJOR.MINOR.PATCH` e checklist de release.
+- Metadados publicos de pacote revisados para a primeira release estavel.
 
 ## Proxima versao
 
@@ -32,7 +33,7 @@ Planejado, sem tratar como funcionalidade ja entregue:
 
 - Estabilizacao da experiencia da CLI com mensagens de ajuda e erros cada vez mais claras.
 - Logs mais claros para lotes grandes e casos de metadados ausentes.
-- Preparacao de empacotamento publico.
+- Melhorias incrementais no empacotamento publico.
 - Verificacao continua dos exemplos da documentacao contra a CLI real.
 
 ## Futuro
@@ -59,3 +60,4 @@ Itens candidatos para versoes futuras:
 - `0.7.0`: escopo inicial RAW.
 - `0.8.0`: importacao, politicas de conflito e segregacao de derivados.
 - `0.9.0`: padronizacao de README, CHANGELOG e documentacao do site.
+- `1.0.0`: primeira release publica estavel, com politica de versionamento, cobertura adicional e metadados publicos revisados.

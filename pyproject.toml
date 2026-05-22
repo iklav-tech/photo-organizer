@@ -4,16 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "photo-organizer"
-version = "0.9.0"
+version = "1.0.0"
 description = "CLI tool to organize photos by metadata and date."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "photo-organizer contributors" }]
+license = { file = "LICENSE" }
+keywords = ["photos", "metadata", "exif", "heic", "raw", "cli", "organization"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: System :: Archiving",
+    "Topic :: Utilities",
+]
 dependencies = ["Pillow>=10.0", "PyYAML>=6.0", "pillow-heif>=0.16.0"]
 
 [project.urls]
 Repository = "https://github.com/iklav-tech/photo-organizer"
 Issues = "https://github.com/iklav-tech/photo-organizer/issues"
+Documentation = "https://iklav-tech.github.io/photo-organizer/"
+Changelog = "https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pylint>=3.0", "pytest>=8.0"]

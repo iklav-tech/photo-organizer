@@ -1,3 +1,5 @@
+# Runtime dependencies. Keep this list aligned with [project].dependencies in
+# pyproject.toml for users who install without editable package metadata.
 Pillow>=10.0
 PyYAML>=6.0
 pillow-heif>=0.16.0

@@ -6,10 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-22
+
 ### Added
 
 - Documented the project versioning and release policy, including Semantic Versioning usage, Git tag format and release checklist.
 - Added focused coverage for journal/resume behavior, text normalization helpers and logging configuration.
+- Added public package metadata for the stable release, including MIT license metadata, classifiers, keywords, documentation URL and changelog URL.
+
+### Changed
+
+- Promoted the project to the first stable public release, version `1.0.0`.
+- Reviewed runtime dependencies and documented that `requirements.txt` mirrors `pyproject.toml`.
 
 ## [0.9.0] - 2026-05-22
 
