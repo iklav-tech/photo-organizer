@@ -1,926 +1,235 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
 
-The format is inspired by Keep a Changelog and follows semantic versioning.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-22
+
 ### Added
 
-- Initial project documentation site under `docs/`, including installation,
-  usage, configuration, examples, roadmap and changelog pages.
-- GitHub Pages publication workflow in `.github/workflows/pages.yml` to publish
-  the `docs/` site from the repository itself.
-- README documentation link and GitHub Pages setup note.
-- Temporal event grouping for `organize` and `import`, configurable with
-  `--event-window-minutes` or `events.window_minutes`.
-- Optional event destination directories with `--event-directory` or
-  `events.directory`.
-- Temporal event fields in execution reports when event grouping is enabled.
-- Event-based organization with `--by event`, defaulting to
-  `YYYY/YYYY-MM-DD_evento-001` style paths.
-- Configurable event directory patterns through `--event-directory-pattern` and
-  `events.directory_pattern`.
-- Burst detection that marks close temporal sequences as `REVIEW_BURST` or
-  `BURST` without deleting files.
-- Burst report and journal fields, configurable through `--burst-detection`,
-  `--burst-window-seconds`, `--burst-min-photos`,
-  `--burst-similarity-threshold` and `bursts.*` config.
-- Jekyll documentation layout for `docs/`, keeping Markdown as the canonical
-  content source.
-- Dark technical documentation design system adapted from the Google Stitch
-  prototypes under `design/stitch/`.
-- GitHub Pages configuration adjusted for the project URL
-  `https://iklav-tech.github.io/photo-organizer/`.
+- Standard Readme structure for the main `README.md`, making project purpose, installation, CLI usage, supported formats, limitations, contribution flow and license easier to scan.
+- Keep a Changelog structure for `CHANGELOG.md`, with semantic categories and an explicit `Unreleased` section.
+- Documentation site under `docs/`, with installation, usage, configuration, examples, roadmap and changelog pages.
+- Jekyll/GitHub Pages documentation layout and project Pages configuration.
+- Temporal event grouping for `organize` and `import`, configurable with `--event-window-minutes` or `events.window_minutes`.
+- Optional event destination directories through `--event-directory` or `events.directory`.
+- Event-based organization with `--by event` and configurable event directory patterns.
+- Burst detection that marks close temporal sequences as `REVIEW_BURST` or `BURST` without deleting files.
+
+### Changed
+
+- README content now focuses on the current user-facing project state instead of duplicating release history.
+- Changelog entries were consolidated into human-oriented release notes with consistent ordering and categories.
 
 ## [0.8.0] - 2026-05-16
 
 ### Added
 
-- Safe-copy import workflow:
-  - `photo-organizer import SOURCE --output DIR`
-  - `import` defaults to copy mode so inbound batches are not modified by
-    default
-  - `import` shares organization, naming, metadata, correction, conflict and
-    reporting behavior with `organize`
-- Final batch manifests through `--report` for `organize` and `import`:
-  - JSON output
-  - CSV output
-  - source path
-  - final destination actually used
-  - chosen date
-  - chosen location
-  - metadata source
-  - reconciliation conflict fields
-  - observations for sidecars, corrections, clock offsets and derived assets
-- Destination conflict policy selection:
-  - `--conflict-policy suffix`
-  - `--conflict-policy skip`
-  - `--conflict-policy overwrite-never`
-  - `--conflict-policy quarantine`
-  - `--conflict-policy fail-fast`
-  - configuration through `behavior.conflict_policy`
-- Conflict quarantine behavior:
-  - incoming conflicting files can be copied to `<output>/.quarantine`
-  - each quarantined file receives a JSON reason sidecar
-  - destination conflicts use the explicit `destination-conflict` reason code
-- Optional original/derived asset segregation:
-  - `--segregate-derivatives`
-  - `--no-segregate-derivatives`
-  - `--derived-path DIR`
-  - repeatable `--derived-pattern PATTERN`
-  - configuration through `derivatives.enabled`, `derivatives.path` and
-    `derivatives.patterns`
-- Default derived-file classification patterns for common edited, exported and
-  derived filename variants.
-- Execution report fields for derived classification:
-  - `asset_role`
-  - `derived`
-  - `derived_reason`
-- README consolidation for all delivered work through the current post-v0.7.0
-  scope, including import manifests, configurable conflict policies and
-  original/derived segregation.
-- Sample configuration documentation for:
-  - `behavior.conflict_policy`
-  - `derivatives.enabled`
-  - `derivatives.path`
-  - `derivatives.patterns`
+- Safe-copy `import` workflow for cards, phone dumps and backups.
+- Final JSON/CSV manifests for `organize` and `import`, including source, final destination, chosen date/location, metadata source, conflicts and observations.
+- Destination conflict policies: `suffix`, `skip`, `overwrite-never`, `quarantine` and `fail-fast`.
+- Quarantine flow under `<output>/.quarantine` with JSON reason sidecars.
+- Optional original/derived asset segregation with configurable path and glob patterns.
+- Report fields for derived classification: `asset_role`, `derived` and `derived_reason`.
+- CLI help and sample configuration coverage for import, conflict policies and derivative segregation.
 
 ### Changed
 
-- Execution reports are now positioned as final import/organization manifests
-  and audit trails.
-- JSON and CSV execution report rows now include:
-  - `chosen_date`
-  - `chosen_location`
-  - `metadata_source`
-  - `conflict`
-  - `conflict_sources`
-  - `conflict_reason`
-  - `asset_role`
-  - `derived`
-  - `derived_reason`
-- Report parsing now recognizes skipped operations as `status: skipped`.
-- Summary `processed_files` no longer counts skipped operations as processed.
-- The default destination conflict behavior remains `suffix`, preserving the
-  previous safe non-overwriting behavior.
-- Derived assets, when segregation is enabled, are written below the configured
-  derived subtree while preserving the normal date/location structure below it.
-- CLI help and examples now expose `import`, conflict policy options and
-  derivative segregation controls.
-- README current-status, implemented-feature and roadmap sections now include
-  the post-v0.7.0 scope.
+- Execution reports are treated as final organization/import manifests and audit trails.
+- Skipped operations are represented as `status: skipped`.
+- `processed_files` no longer counts skipped operations as processed.
+- Default conflict behavior remains the non-overwriting `suffix` policy.
+- Derived assets, when enabled, are written under the configured derived subtree while preserving the normal date/location layout below it.
 
-### Behavior guarantees
+### Fixed
 
-- Existing files are still not overwritten by default.
-- `suffix` remains the default conflict policy and creates deterministic
-  `_01`, `_02`, `_03`, ... destinations.
-- `skip` leaves source and destination untouched and records a skipped
-  operation.
-- `overwrite-never` leaves source and destination untouched, records an error
-  and continues with the rest of the batch.
-- `quarantine` preserves the existing destination and copies the incoming file
-  to quarantine with an audit sidecar.
-- `fail-fast` stops the batch immediately on the first destination conflict.
-- Derived segregation is opt-in and does not change destination layout unless
-  explicitly enabled.
-- Derived classification is driven by configurable glob patterns.
-- Report rows clearly identify whether an item was treated as an original or a
-  derived asset.
-- `import` is non-destructive by default because it copies rather than moves.
-
-### Validation
-
-- Tests cover import manifest fields and final destination reporting.
-- Tests cover JSON and CSV report fields for chosen date, location, metadata
-  source, conflicts and derived classification.
-- Tests cover CLI and configuration plumbing for `behavior.conflict_policy`.
-- Tests cover executor behavior for `suffix`, `skip`, `overwrite-never`,
-  `quarantine` and `fail-fast`.
-- Tests cover fail-fast CLI behavior preserving source and existing
-  destination.
-- Tests cover skipped-operation report status and processed-file accounting.
-- Tests cover CLI and configuration plumbing for derivative segregation.
-- Tests cover default and custom derived filename patterns.
-- Tests cover derived destination planning under the configured subtree.
-- Tests cover validation of unsafe absolute derived paths.
-- The test suite passed with 346 tests and 1 skipped test after the v0.8.0
-  changes.
+- Conflict handling now records skipped/error/quarantine outcomes consistently in reports.
+- Fail-fast conflict behavior preserves source and existing destination before stopping.
 
 ## [0.7.0] - 2026-05-13
 
 ### Added
 
-- Initial RAW format recognition scope:
-  - Apple ProRAW / DNG `.dng`
-  - Canon `.cr2`, `.cr3`, `.crw`
-  - Nikon `.nef`
-  - Sony `.arw`
-  - Panasonic `.rw2`
-  - Olympus/OM System `.orf`
-  - Fujifilm `.raf`
-- RAW extensions added to the centralized `IMAGE_FORMATS` list so scanner,
-  hash, dedupe, inspect and organize flows share the same initial scope.
-- RAW metadata backend for safe TIFF-style EXIF extraction:
-  - capture date/time
-  - camera manufacturer
-  - camera model
-  - GPS coordinates
-- Inspect and organize reports identify RAW-family files, including the
-  Apple ProRAW / Linear DNG flow for `.dng`.
-- `inspect` now emits a technical RAW audit with detected format, support
-  status, make, model, capture date/time, GPS, field origins and explicit
-  partial-support warnings.
-- `inspect` JSON reports now include a dedicated `raw` audit block with
-  `is_raw`, `format`, `extension`, `flow`, `status`, field-level
-  make/model/datetime/GPS entries, `found_fields`, `missing_fields` and
-  warnings.
-- `inspect` CSV reports now include RAW analysis fields:
-  - `raw_family`
-  - `raw_format`
-  - `raw_flow`
-  - `raw_status`
-  - `raw_found_fields`
-  - `raw_missing_fields`
-- Execution reports now identify RAW-family operations with:
-  - `raw_family`
-  - `raw_format`
-  - `raw_flow`
-- Synthetic RAW corpus fixtures cover every supported RAW-family extension,
-  corrupted RAW input, valid RAW without GPS and cross-manufacturer metadata
-  normalization.
-- RAW performance tests cover large sparse RAW files and batch planning without
-  full RAW reads.
-- Optional real-camera RAW performance validation can run with
-  `PHOTO_ORGANIZER_REAL_RAW_DIR`.
-- RAW metadata extraction now uses bounded TIFF range reads instead of loading
-  full RAW files, and RAW organization planning skips generic full-file
-  embedded XMP/IPTC scans to keep large batches responsive.
-- README now includes a formal RAW compatibility matrix by manufacturer and
-  container, with full, partial and experimental support status, supported
-  fields and known limitations.
-- Internal normalized metadata schema for:
-  - `date_taken`
-  - `camera_make`
-  - `camera_model`
-  - GPS coordinates
-- RAW sidecar organization support for same-basename `.xmp` files.
-- Optional DNG interoperability candidate marking:
-  - `--dng-candidates`
-  - `--no-dng-candidates`
-  - `interop.dng_candidates`
-- README documentation for the first supported RAW wave and its current
-  metadata limitations.
+- Initial RAW recognition for `.dng`, `.cr2`, `.cr3`, `.crw`, `.nef`, `.arw`, `.rw2`, `.orf` and `.raf`.
+- RAW metadata backend for bounded TIFF-style EXIF reads, including capture date/time, camera make/model and GPS when exposed.
+- RAW audit data in `inspect` JSON/CSV reports, including format, flow, status, found/missing fields and warnings.
+- RAW-family fields in execution reports: `raw_family`, `raw_format` and `raw_flow`.
+- Synthetic RAW fixtures and performance tests for supported RAW-family extensions.
+- Same-basename RAW `.xmp` sidecar organization.
+- Optional DNG interoperability candidate marking through `--dng-candidates` or `interop.dng_candidates`.
 
 ### Changed
 
-- CLI help for scan, dedupe, inspect and organize now reflects the RAW
-  extensions automatically through the centralized supported extension list.
-- Roadmap now distinguishes initial RAW file recognition from future
-  broader proprietary RAW metadata extraction.
-- Date resolution, GPS extraction and camera-profile matching can use RAW
-  EXIF/TIFF metadata when available.
-- Date resolution, GPS extraction and camera-profile matching now consume
-  normalized metadata fields instead of source-specific tag names.
-- Equivalent fields from EXIF, XMP sidecars, RAW TIFF-style metadata and common
-  vendor aliases are mapped before organization decisions are made.
-- Apple ProRAW `.dng` files are treated as RAW-family input through the
-  Linear DNG workflow, not as ordinary HEIC/JPEG files.
-- RAW organization planning now links same-basename `.xmp` sidecars to the RAW
-  operation.
-- Execution reports now include `sidecar_count`, `sidecar_sources` and
-  `sidecar_destinations`.
-- Execution reports now include `dng_candidate` and `dng_candidate_reason`
-  when optional DNG interoperability marking is enabled.
+- Scan, hash, dedupe, inspect and organize flows share the RAW extensions from the centralized format list.
+- Date resolution, GPS extraction and camera profile matching use normalized metadata fields across EXIF, XMP, RAW and aliases.
+- Apple ProRAW `.dng` is treated as RAW-family input through the Linear DNG workflow.
+- RAW organization planning skips generic full-file embedded XMP/IPTC scans for performance while preserving same-basename sidecar support.
 
-### Behavior guarantees
+### Fixed
 
-- RAW extensions in the initial scope are recognized case-insensitively.
-- RAW files are discoverable, hashable and eligible for organization planning.
-- RAW parsing failures are handled per file and do not stop the full batch.
-- When TIFF-style EXIF metadata is available, RAW files can provide capture
-  date/time, camera make/model and GPS.
-- Consumers do not need to know whether camera metadata came from `Make`,
-  `CameraManufacturer`, `tiff:Make` or another supported alias.
-- Original source tags remain available through `MetadataProvenance` for
-  inspect, explain and debug output.
-- Same-basename RAW `.xmp` sidecars are copied or moved with the RAW file and
-  renamed to match the organized RAW basename.
-- Sidecar destination collision handling follows the RAW destination suffix so
-  linked files do not overwrite existing files.
-- DNG candidate marking is optional and non-destructive; the app does not run
-  conversion or require DNG files to be created.
-- RAW files with missing or unsupported embedded metadata can still use
-  sidecars, correction manifests, heuristics or filesystem `mtime` fallback.
-- RAW metadata reads are bounded and range-based; the RAW backend reads TIFF
-  headers, IFDs and referenced metadata values without decoding pixels or
-  loading the full RAW payload.
-- Generic embedded XMP/IPTC full-file scans are skipped for RAW-family files to
-  preserve responsiveness on large batches; same-basename `.xmp` sidecars stay
-  supported.
-- RAW compatibility is documented per manufacturer/container as full, partial
-  or experimental.
-
-### Validation
-
-- Tests cover scanner recognition for the initial RAW extension set.
-- Tests cover case-insensitive scanner matching for RAW extensions.
-- CLI help tests cover RAW extension visibility.
-- Metadata tests cover RAW capture date/time, camera make/model and GPS
-  extraction.
-- Metadata tests cover safe handling of malformed RAW files.
-- Metadata tests cover vendor alias normalization and provenance preservation.
-- Tests cover RAW sidecar detection, copy, move and execution report linkage.
-- Tests cover DNG candidate marking from CLI/config, default disabled behavior
-  and report fields.
-- Tests cover Apple ProRAW / DNG classification inside the RAW family.
-- Tests cover RAW `inspect` audit fields, terminal output and partial-support
-  warnings.
-- Tests cover synthetic RAW corpus generation for every supported RAW-family
-  extension.
-- Tests cover corrupted RAW files and valid RAW files without GPS.
-- Tests cover large sparse RAW metadata reads and large RAW batch planning
-  without full-file RAW reads.
-- Optional tests can validate the bounded-read policy against local real RAW
-  files via `PHOTO_ORGANIZER_REAL_RAW_DIR`.
+- RAW parsing failures are isolated per file and do not stop the full batch.
+- Sidecar destination collision handling follows the RAW destination suffix so linked files do not overwrite existing files.
 
 ## [0.6.0] - 2026-05-11
 
 ### Added
 
-- HEIC/HEIF container detection for scan, hash, dedupe, inspect and organize
-  pipelines:
-  - `.heic`
-  - `.heif`
-  - `.hif`
-- HEIF/HEIC metadata backend abstraction:
-  - `photo_organizer.heif_backend.HeifBackend`
-  - `PillowHeifBackend`
-  - raw EXIF/XMP metadata access through `HeifMetadata`
-  - container structure access through `HeifContainerInfo`
-  - clear dependency guidance when `pillow-heif`/`libheif` is unavailable
-- HEIF/HEIC EXIF extraction for backend-exposed:
-  - date/time fields
-  - orientation
-  - camera make/model fields
-  - GPS fields
-- HEIF/HEIC XMP extraction for backend-exposed:
-  - date fields
-  - GPS fields
-  - textual location fields
-- HEIF container audit fields in `inspect` JSON and CSV reports:
-  - format
-  - container status
-  - found metadata
-  - missing metadata
-  - date evidence
-  - location evidence
-- Complex HEIF container reporting for:
-  - multiple images or sequence-like structures
-  - embedded thumbnails
-  - auxiliary images
-  - depth images
-  - selected primary image index
-  - backend selection warnings
-- Optional HEIC/HEIF JPEG preview generation:
-  - `photo-organizer organize SOURCE --output DIR --heic-preview`
-  - `photo-organizer organize SOURCE --output DIR --no-heic-preview`
-  - configuration through `preview.heic`
-  - previews written under `.previews` next to organized HEIC/HEIF files
-- `pillow-heif` added as a project dependency for HEIF/HEIC support.
-- `requirements.txt` added with Python dependencies and native `libheif`
-  installation guidance.
-- Synthetic HEIC corpus fixtures covering:
-  - iPhone-like HEIC with EXIF date and GPS
-  - iPhone-like HEIC with EXIF date and no GPS
-  - HEIC without EXIF
-  - malformed `.HEIC` input
-- Automated tests for:
-  - HEIC extension support
-  - HEIF backend metadata extraction
-  - primary image selection
-  - complex container reporting
-  - HEIC inspect report fields
-  - HEIC filesystem fallback
-  - HEIC organize dry-run planning
-  - optional JPEG preview generation
+- HEIC/HEIF support for `.heic`, `.heif` and `.hif` across scan, hash, dedupe, inspect and organize flows.
+- HEIF backend abstraction using `pillow-heif`/`libheif` for EXIF/XMP and container inspection.
+- HEIF/HEIC EXIF extraction for backend-exposed date/time, orientation, camera and GPS fields.
+- HEIF/HEIC XMP extraction for backend-exposed date, GPS and textual location fields.
+- HEIF container audit fields in `inspect` reports, including selected primary image, found/missing metadata and date/location evidence.
+- Optional JPEG preview generation for organized HEIC/HEIF files through `--heic-preview` or `preview.heic`.
+- Synthetic HEIC corpus fixtures and tests for backend behavior, malformed input and preview generation.
 
 ### Changed
 
-- Supported image formats now include `.heic`, `.heif` and `.hif` in the
-  centralized format list.
-- Scan, hash, dedupe, inspect and organize flows now share HEIC/HEIF extension
-  support.
-- HEIC/HEIF files preserve the original extension in generated destination
-  names.
-- HEIF metadata extraction now uses the same date reconciliation and GPS
-  normalization paths used by JPEG, TIFF and PNG metadata.
-- `inspect` now emits a `HEIF container` metadata source for HEIC/HEIF files.
-- `inspect` output now classifies HEIC date/location evidence as real metadata,
-  real GPS, inferred, missing or fallback.
-- HEIF primary image selection is deterministic:
-  - backend primary flag
-  - backend `primary_index`
-  - image index `0` with a warning
-- README updated to consolidate the delivered v0.6.0 workflow, HEIC/HEIF
-  dependency setup, platform limitations, troubleshooting, compatibility matrix
-  entries, preview behavior, project structure and roadmap.
+- Supported image formats include HEIC/HEIF extensions in the centralized format list.
+- HEIC/HEIF files preserve their original extension in generated destination names.
+- HEIF metadata uses the same date reconciliation and GPS normalization paths as JPEG, TIFF and PNG.
+- Primary image selection in complex HEIF containers is deterministic.
 
 ### Fixed
 
-- Missing HEIF native/backend dependencies now produce a clear warning with
-  installation guidance instead of an opaque decoder failure.
-- HEIF backend read errors are handled per file and do not stop unrelated files
-  from being scanned, audited or organized.
-- HEIC files with missing embedded metadata can fall back to sidecars,
-  heuristics or filesystem `mtime`.
-- Preview generation failures are logged as warnings and do not make the main
-  copy/move operation fail.
-- Malformed `.HEIC` inputs are handled safely during metadata extraction and
-  audit reporting.
-
-### Behavior guarantees in v0.6.0
-
-- `.heic`, `.heif` and `.hif` are supported by scan, hash, dedupe, inspect and
-  organize flows.
-- HEIC/HEIF metadata extraction depends on `pillow-heif` and native `libheif`
-  capability exposed in the local environment.
-- If the HEIF backend cannot expose EXIF/XMP metadata, organization can still
-  use sidecars, correction manifests, heuristics or filesystem `mtime`.
-- Complex HEIF structures are reported, but only one deterministic primary
-  image is used by the metadata pipeline.
-- Optional HEIC previews are generated only when explicitly enabled.
-- Preview failures do not roll back or fail successful organization operations.
-- `inspect` and `explain` remain read-only for HEIC/HEIF files.
-
-### Validation
-
-- Tests cover HEIC/HEIF extension recognition in CLI help, scan and organize
-  paths.
-- Tests cover HEIF backend EXIF date, GPS and XMP extraction.
-- Tests cover HEIF container inspection, complex container feature reporting
-  and primary image selection fallback.
-- Tests cover HEIC-specific `inspect` JSON and CSV report fields.
-- Tests cover filesystem fallback for HEIC files without readable embedded
-  metadata.
-- Tests cover optional preview destination planning and JPEG preview generation.
-- Generated HEIC corpus tests run when the local `pillow-heif`/`libheif` stack
-  can write HEIC files; otherwise they are skipped with an explicit reason.
+- Missing HEIF native/backend dependencies now produce clear installation guidance.
+- HEIF backend read errors, malformed HEIC files and preview failures are handled per file without stopping unrelated work.
 
 ## [0.5.0] - 2026-05-05
 
 ### Added
 
-- Read-only metadata audit command:
-  - `photo-organizer inspect SOURCE`
-  - `photo-organizer audit-metadata SOURCE`
-  - JSON and CSV reports through `--report`
-- Explainable decision report command:
-  - `photo-organizer explain SOURCE`
-  - JSON report through `--report explain.json`
-  - optional `--reverse-geocode`
-- Explain report fields for each file:
-  - `chosen_date`
-  - `chosen_location`
-  - `candidates`
-  - `sources`
-  - source field and confidence
-  - raw values when available
-- Metadata provenance model with:
-  - source
-  - field
-  - confidence
-  - raw value
-- Date reconciliation model that records:
-  - selected candidate
-  - all parsed candidates
-  - conflict status
-  - reconciliation policy
-  - selection reason
-- Configurable reconciliation policies:
-  - `precedence`
-  - `newest`
-  - `oldest`
-  - `filesystem`
-- Embedded XMP packet extraction for supported image files.
-- Same-basename `.xmp` sidecar extraction for date and GPS fields.
-- XMP sidecar precedence within the XMP tier.
-- PNG metadata support for:
-  - `eXIf`
-  - `iTXt`
-  - `tEXt`
-  - `zTXt`
-  - `tIME`
-  - XMP packets stored in `XML:com.adobe.xmp`
-- IPTC-IIM legacy dataset extraction for:
-  - date and time
-  - city, state and country
-  - title
-  - author
-  - description
-- Low-confidence date heuristics from:
-  - same-basename external sidecars
-  - filename patterns
-  - parent folder date patterns
-  - sibling batch context
-  - filesystem `mtime`
-- Non-GPS location inference from:
-  - IPTC-IIM textual location
-  - XMP textual location
-  - external manifests
-  - folder or album names
-  - sibling batch context
-- Correction manifests for batch overrides:
-  - CSV
-  - JSON
-  - YAML
-  - YML
-- Correction manifest selectors:
-  - exact file path
-  - folder
-  - glob
-  - filename pattern
-  - camera profile
-- Correction manifest fields:
-  - date
-  - timezone
-  - clock offset
-  - city
-  - state
-  - country
-  - event name
-- Correction priority options:
-  - `highest`
-  - `metadata`
-  - `heuristic`
-- Global `--clock-offset` support.
-- Config support for:
-  - `behavior.reconciliation_policy`
-  - `behavior.date_heuristics`
-  - `behavior.location_inference`
-  - `behavior.correction_manifest`
-  - `behavior.correction_priority`
-  - `behavior.clock_offset`
-- Text normalization observations in reports.
-- Format/source/field compatibility matrix in README.
-- Explicit metadata limitation documentation in README.
-- Synthetic legacy metadata corpus fixtures covering:
-  - JPEG/EXIF
-  - TIFF tags
-  - IPTC-IIM
-  - embedded XMP
-  - XMP sidecar
-  - PNG `eXIf`
-  - PNG `iTXt`/`tEXt`
-  - files without usable metadata
-  - conflicting metadata
-- Automated corpus tests for:
-  - successful extraction
-  - missing metadata
-  - metadata conflict
-  - date precedence matrix
+- Read-only `inspect`/`audit-metadata` command with JSON and CSV reports.
+- Read-only `explain` command with JSON decision reports.
+- Metadata provenance model with source, field, confidence and raw value.
+- Date reconciliation model with all parsed candidates, selected candidate, conflict status, policy and reason.
+- Reconciliation policies: `precedence`, `newest`, `oldest` and `filesystem`.
+- Embedded XMP packet extraction and same-basename `.xmp` sidecar extraction.
+- PNG metadata support for `eXIf`, `iTXt`, `tEXt`, `zTXt`, `tIME` and XMP text packets.
+- IPTC-IIM extraction for date/time, city, state, country, title, author and description.
+- Low-confidence date and location inference from sidecars, filenames, folders and sibling context.
+- Correction manifests in CSV, JSON, YAML and YML with selectors for path, folder, glob, filename pattern and camera profile.
+- Global `--clock-offset` and correction priority options.
+- Synthetic metadata corpus covering success, absence and conflict scenarios.
 
 ### Changed
 
-- Date resolution now uses an explicit metadata precedence matrix instead of a
-  simple EXIF/mtime chain.
-- Date decisions now distinguish captured values from inferred values.
-- Metadata conflict handling now keeps all candidates for reporting and debug
-  output.
-- Execution reports now include date provenance fields.
-- Location-aware execution reports now include GPS/location provenance fields.
-- Plan operations now carry date reconciliation, location provenance, location
-  status and correction manifest details.
-- XMP values from same-basename sidecars override embedded XMP values within
-  the XMP tier.
-- PNG `tIME` is treated as a low-confidence image modification timestamp rather
-  than an original capture timestamp.
-- Location-based organization can infer non-GPS location metadata when
-  configured.
-- README updated to consolidate the delivered v0.5.0 workflow, explain
-  reports, compatibility matrix, known limitations and metadata test corpus.
-- Project structure documentation now includes:
-  - `correction_manifest.py`
-  - `text_normalization.py`
-  - `tests/fixtures/metadata_corpus.py`
-  - `tests/test_metadata_corpus.py`
+- Date resolution now uses an explicit metadata precedence matrix instead of a simple EXIF/mtime chain.
+- Date decisions distinguish captured values from inferred values.
+- Metadata conflicts keep all candidates for reports and debug output.
+- Execution reports include date provenance, and location-aware reports include GPS/location provenance.
+- XMP sidecar values override embedded XMP values within the XMP tier.
+- PNG `tIME` is treated as a low-confidence modification timestamp.
 
 ### Fixed
 
-- Pillow-specific EXIF values such as rational numbers are now serialized
-  safely in explain JSON reports.
-- `pytest` and `.venv/bin/python -m pytest` both collect the metadata corpus
-  tests correctly.
-- Malformed XMP parse errors are handled without interrupting metadata audits.
-- Missing date metadata can be reported as an expected absence when heuristics
-  are disabled.
+- Pillow-specific EXIF values are serialized safely in explain JSON reports.
+- Malformed XMP parse errors no longer interrupt metadata audits.
+- Missing date metadata can be reported as expected absence when heuristics are disabled.
 - Correction clock offsets preserve the original datetime in provenance.
-- Text normalization changes are surfaced in report observations.
-
-### Behavior guarantees in v0.5.0
-
-- `inspect` and `explain` are read-only commands.
-- `explain --report` writes JSON only.
-- Explain reports include chosen date, chosen location, candidates, source and
-  confidence for debugging decisions without reading code.
-- Date reconciliation is deterministic for the default `precedence` policy.
-- `newest`, `oldest` and `filesystem` policies use precedence as a tie-breaker
-  where applicable.
-- Sidecar XMP values override embedded XMP values only inside the XMP tier; EXIF
-  still has higher default date precedence.
-- Inferred dates use low confidence.
-- Files without usable metadata fail clearly when date heuristics are disabled.
-- Unknown IPTC-IIM datasets are ignored safely.
-- WEBP and BMP remain supported for scan/hash flows but embedded metadata
-  is not read by the current metadata reader.
-
-### Validation
-
-- Local automated tests passing for v0.5.0 scope (`pytest`, 239 tests).
-- Tests cover explain report JSON generation and serialization of non-JSON EXIF
-  value types.
-- Tests cover inspect reports, metadata source audit and final date/location
-  decisions.
-- Tests cover correction manifests, correction priorities and clock offsets.
-- Tests cover XMP embedded metadata, XMP sidecars and sidecar precedence.
-- Tests cover IPTC-IIM date and textual metadata extraction.
-- Tests cover PNG `eXIf`, `iTXt`, `tEXt`, `zTXt` and `tIME` metadata paths.
-- Tests cover missing metadata and disabled date heuristics.
-- Tests cover metadata conflict recording and precedence winners.
-- Tests cover the synthetic legacy metadata corpus and compatibility matrix.
 
 ## [0.4.0] - 2026-05-01
 
 ### Added
 
-- External organization configuration files for `organize`:
-  - JSON (`.json`)
-  - YAML (`.yaml`)
-  - YML (`.yml`)
-- `--config PATH` CLI option for loading organization rules.
-- Configuration support for:
-  - output directory
-  - filename pattern
-  - destination pattern
-  - organization strategy
-  - operation mode
-  - dry-run mode
-  - plan mode
-  - reverse geocoding behavior
-- Minimal configuration validation with clear errors for:
-  - missing config files
-  - unsupported config extensions
-  - invalid JSON/YAML structure
-  - invalid field types
-  - invalid mode values
-  - invalid organization strategies
-  - invalid filename and destination pattern fields
-- Custom filename pattern support through config `naming.pattern`.
-- Custom filename pattern support through CLI `--name-pattern`.
-- Supported filename pattern fields:
-  - `{date}`
-  - `{stem}`
-  - `{ext}`
-  - `{original}`
-- Destination pattern support through config `destination.pattern`.
-- Supported destination pattern fields:
-  - `{date}`
-  - `{country}`
-  - `{state}`
-  - `{city}`
-- GPS coordinate extraction from EXIF metadata as decimal latitude/longitude.
-- Reverse geocoding helper for resolving GPS coordinates into:
-  - city
-  - state
-  - country
-- Location-aware organization strategies:
-  - `location`
-  - `location-date`
-- Hybrid city/state/month organization strategy:
-  - `city-state-month`
-  - example path: `Paraty-RJ/2024-08`
-- Location status tracking in planned operations:
-  - `disabled`
-  - `missing-gps`
-  - `unresolved`
-  - `resolved`
-  - `error`
-- Organization fallback tracking when a location strategy cannot resolve a location.
-- Execution summary counters for:
-  - resolved location files
-  - files with GPS coordinates
-  - files missing GPS
-  - organization fallback files
-- Location-aware audit report fields when reverse geocoding is enabled:
-  - location status
-  - organization fallback flag
-  - latitude
-  - longitude
-  - city
-  - state
-  - country
-- Tests for:
-  - GPS coordinate extraction
-  - absence of GPS metadata
-  - reverse geocoding behavior
-  - location fallback behavior
-  - external configuration loading and validation
-  - custom filename patterns
-  - custom destination patterns
-  - `city-state-month` strategy
+- External organization configuration files for JSON, YAML and YML.
+- `--config PATH` for `organize`.
+- Configurable output, naming pattern, destination pattern, organization strategy, operation mode, dry-run, plan and reverse geocoding behavior.
+- Custom filename patterns through config and `--name-pattern`.
+- Custom destination patterns with date and location fields.
+- EXIF GPS extraction and reverse geocoding helper for city, state and country.
+- Location-aware strategies: `location`, `location-date` and `city-state-month`.
+- Location status and fallback tracking in planned operations, summaries and reports.
 
 ### Changed
 
-- `organize --help` now documents:
-  - `--config`
-  - `--name-pattern`
-  - `city-state-month`
-  - supported organization strategies
-- CLI-provided values now take precedence over equivalent config values where applicable.
-- `--name-pattern` overrides config `naming.pattern`.
-- Location-based strategies automatically enable reverse geocoding unless the user explicitly disables it.
-- README updated to document the v0.4.0 workflow, configuration files, naming patterns, destination patterns, GPS/location behavior, fallback behavior and roadmap updates.
-- Project structure and module responsibility documentation now includes `config.py`, `geocoding.py`, `test_config.py` and `test_geocoding.py`.
-- Roadmap updated to mark v0.4.0 as implemented and add planned v0.6.0 HEIC/HEIF and v0.7.0 proprietary RAW work.
-- PyYAML added as a project dependency for YAML configuration support.
+- CLI-provided values take precedence over equivalent config values.
+- Location-based strategies enable reverse geocoding unless explicitly disabled.
+- PyYAML became a project dependency for YAML configuration support.
 
 ### Fixed
 
-- Invalid filename patterns now fail before planning instead of being discovered per file.
-- Filename patterns with path separators are rejected clearly.
-- Unknown filename and destination pattern fields now return clear validation errors.
-- Location organization strategies now fall back to date-based organization when GPS is missing or reverse geocoding cannot resolve a location.
+- Invalid filename and destination patterns now fail before planning with clear validation errors.
+- Location strategies fall back to date-based organization when GPS is missing or reverse geocoding fails.
 - Reverse geocoding network/service failures are handled as unresolved location data instead of aborting organization.
-
-### Behavior guarantees in v0.4.0
-
-- Default naming remains `YYYY-MM-DD_HH-MM-SS.ext` when no custom pattern is configured.
-- Original file extensions remain preserved unless the user explicitly changes the pattern.
-- CLI `--name-pattern` has precedence over config `naming.pattern`.
-- Configured organization behavior is validated before execution.
-- `date`, `location`, `location-date` and `city-state-month` are supported organization strategies.
-- `city-state-month` produces a stable `City-State/YYYY-MM` destination directory.
-- Missing GPS data does not fail the organization run.
-- Unresolved location data does not fail the organization run.
-- Location fallback is visible in operation metadata, summaries and location-aware reports.
-
-### Validation
-
-- Local automated tests passing for v0.4.0 scope (`pytest`, 135 tests).
-- Tests cover JSON and YAML config loading.
-- Tests cover invalid config and invalid pattern errors.
-- Tests cover CLI/config precedence for custom filename patterns.
-- Tests cover GPS coordinate extraction and missing GPS behavior.
-- Tests cover reverse geocoding resolution and failure handling.
-- Tests cover date fallback for location-based organization.
-- Tests cover `city-state-month` planning and end-to-end organization.
 
 ## [0.3.0] - 2026-04-28
 
 ### Added
 
-- File hashing utilities using deterministic SHA-256 by default.
-- Chunked file hashing so large files are processed without loading the whole file into memory.
-- Safe hash comparison using `hmac.compare_digest`.
-- Duplicate grouping by content hash with:
-  - content hash
-  - original file
-  - duplicate files
-- `dedupe` CLI subcommand for read-only duplicate discovery:
-  - `photo-organizer dedupe SOURCE`
-  - `photo-organizer dedupe SOURCE --read-only`
-- Human-readable duplicate output with:
-  - group number
-  - hash
-  - quantity
-  - original path
-  - duplicate paths
-- Structured duplicate reports with `dedupe --report`:
-  - JSON when the path ends in `.json`
-  - CSV when the path ends in `.csv`
-- JSON duplicate reports containing:
-  - summary
-  - duplicate groups
-  - hash
-  - quantity
-  - original
-  - duplicates
-  - all paths
-- CSV duplicate reports with analysis-friendly rows containing:
-  - group id
-  - hash
-  - quantity
-  - role (`original` or `duplicate`)
-  - path
-- Additional supported image extensions:
-  - `.tif`
-  - `.tiff`
-  - `.webp`
-  - `.bmp`
+- Deterministic file hashing with chunked reads.
+- Safe hash comparison with `hmac.compare_digest`.
+- Duplicate grouping by content hash.
+- Read-only `dedupe` command with human-readable output.
+- JSON and CSV duplicate reports.
+- Additional supported extensions: `.tif`, `.tiff`, `.webp` and `.bmp`.
 - Centralized image format configuration with per-format EXIF capability flags.
-- Resilient per-file error handling for:
-  - malformed EXIF data
-  - metadata planning failures
-  - hash calculation failures
-- Automated tests specific to hash and dedupe behavior.
+- Resilient per-file error handling for malformed EXIF, planning failures and hash failures.
 
 ### Changed
 
-- Supported image formats are now configured through `IMAGE_FORMATS` instead of a flat extension-only list.
-- Scanner and hash flows now share the centralized supported format configuration.
+- Scanner and hash flows now share the centralized supported format list.
 - EXIF extraction is attempted only for formats marked with real EXIF support.
-- PNG, WEBP and BMP safely skip EXIF extraction and use file modification time fallback.
-- README updated to describe the current v0.3.0 workflow, duplicate reports, supported formats, resilience and tests.
-- Roadmap updated to mark v0.3.0 as implemented and move future media/filtering work to later versions.
+- PNG, WEBP and BMP safely skip EXIF extraction and use date fallback behavior when needed.
 
 ### Fixed
 
-- A malformed EXIF payload no longer interrupts the full metadata flow.
-- A single problematic file no longer aborts organization planning for remaining files.
-- A single unreadable/problematic file no longer aborts duplicate detection for remaining files.
-- Different files are not reported as duplicate groups when their content hashes differ.
-
-### Behavior guarantees in v0.3.0
-
-- Hashes are deterministic for identical file content.
-- Hashing reads files in bounded chunks.
-- Duplicate detection groups only files with identical content hashes.
-- `dedupe` is read-only and does not move, copy or delete files.
-- Duplicate reports are valid JSON or CSV and include hash, quantity and paths.
-- Unsupported image formats are ignored by scan and dedupe flows.
-- Formats without real EXIF support are handled safely through date fallback.
-- Invalid files and malformed metadata are logged with context while processing continues.
-
-### Validation
-
-- Local automated tests passing for v0.3.0 scope (`pytest`, 83 tests).
-- Tests cover equal and different file content.
-- Tests cover duplicate grouping, no-duplicate output and duplicate reports.
-- Tests use temporary files and directories for hash and dedupe scenarios.
+- Malformed EXIF no longer interrupts metadata processing.
+- A single problematic file no longer aborts organization planning or duplicate detection for remaining files.
+- Different files are not reported as duplicates when content hashes differ.
 
 ## [0.2.0] - 2026-04-27
 
 ### Added
 
 - Safe move execution that copies the destination first and removes the source only after success.
-- Automatic destination directory creation before real copy/move operations.
-- Filename collision handling with deterministic suffixes:
-  - `_01`
-  - `_02`
-  - `_03`
-  - and the next available numeric suffix.
-- Execution summary at the end of `organize` with:
-  - processed file count
-  - ignored file count
-  - error count
-  - date fallback count
-  - execution mode (`dry-run`, `execute` or `plan`)
-- Audit report export with `--report`:
-  - JSON when the path ends in `.json`
-  - CSV when the path ends in `.csv`
-- Structured report rows containing:
-  - source
-  - destination
-  - action
-  - status
-  - observations
-- Improved CLI help with examples.
-- Grouped `organize --help` arguments:
-  - paths
-  - execution
-  - audit report
-  - operation mode
-- Integration tests for the complete planning and execution pipeline using temporary directories.
+- Automatic destination directory creation.
+- Deterministic filename collision suffixes such as `_01`, `_02` and `_03`.
+- Execution summaries for processed, ignored, error and date-fallback counts.
+- JSON and CSV audit report export with `--report`.
+- Improved CLI help with examples and grouped `organize --help` arguments.
+- Integration tests for planning and execution.
 
 ### Changed
 
-- `organize` now reports the effective destination path after collision resolution.
-- Move mode now behaves as a safer copy-then-remove operation instead of relying on direct move semantics.
-- `FileOperation` now records whether date resolution used the file modification time fallback.
-- Metadata date resolution now exposes fallback information while preserving the existing datetime-only helper.
-- README updated to document the delivered v0.2.0 scope, report formats and updated roadmap.
-- CLI validation now gives clearer errors for missing `--output`.
-- CLI validation now rejects unsupported report extensions before execution.
+- `organize` reports the effective destination after collision resolution.
+- Move mode uses copy-then-remove behavior instead of direct move semantics.
+- Date resolution exposes fallback information while preserving the datetime helper.
+- CLI validation gives clearer errors for missing `--output` and unsupported report extensions.
 
 ### Fixed
 
 - Existing destination files are no longer overwritten by default.
-- Multiple operations targeting the same planned destination now receive unique suffixes in the same batch.
-- Dry-run now reserves destination names consistently, matching real execution planning.
-- Source files are preserved when a move operation fails before successful source removal.
+- Multiple operations targeting the same destination receive unique suffixes in the same batch.
+- Dry-run reserves destination names consistently with real planning.
+- Source files are preserved when a move operation fails before source removal.
 - Copied destination artifacts are cleaned up when source removal fails during safe move.
-
-### Behavior guarantees in v0.2.0
-
-- Missing destination directories are created automatically for real operations.
-- Move operations remove the source only after the destination exists.
-- Name collisions are resolved predictably using the next available suffix.
-- Dry-run does not create output directories or output files.
-- JSON and CSV reports are valid and include one row per operation.
-- CLI help exposes practical examples for common workflows.
-
-### Validation
-
-- Local automated tests passing for v0.2.0 scope (`pytest -q`, 58 tests).
-- Integration tests cover copy, move, dry-run, directory creation and destination conflicts.
 
 ## [0.1.0] - 2026-04-24
 
 ### Added
 
-- CLI entrypoint with root command support.
-- Command help pages:
-  - `photo-organizer --help`
-  - `photo-organizer scan --help`
-  - `photo-organizer organize --help`
-- Root CLI options:
-  - `--version`
-  - `--log-level` with `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+- Initial CLI entrypoint with root command support.
 - `scan` command with recursive image discovery.
-- Supported image extensions centralized in one place (`.jpg`, `.jpeg`, `.png`).
+- `organize` command with date-based planning and execution.
+- Root options `--version` and `--log-level`.
+- Initial supported image extensions: `.jpg`, `.jpeg` and `.png`.
 - EXIF extraction for compatible JPEG files.
-- Best date resolution strategy with explicit priority chain.
+- Best date resolution with `DateTimeOriginal`, `CreateDate` and filesystem `mtime` fallback.
 - Deterministic default naming rule: `YYYY-MM-DD_HH-MM-SS.ext`.
 - Date-based destination planner using `YYYY/MM/DD`.
-- Planning layer with intermediate operation structure containing:
-  - source
-  - destination
-  - action (`move` or `copy`)
-- Execution modes:
-  - default `move`
-  - explicit `--move`
-  - `--copy`
-- Simulation mode `--dry-run` for non-destructive runs.
-- Plan inspection mode `--plan` for non-executing preview.
-- Structured logging configuration module.
-- Test suite covering CLI, scanner, metadata, naming, planner and executor.
-- End-to-end dry-run test for the organize flow.
+- Operation modes `move`, `copy`, `dry-run` and `plan`.
+- Structured logging setup.
+- Initial automated tests for CLI, scanner, metadata, naming, planner and executor.
 
 ### Changed
 
-- `organize` now follows a clear flow: scan -> metadata -> naming -> planning -> execute/simulate.
-- Logging now reports lifecycle events and counters for command execution.
-- README updated to document delivered v0.1.0 scope and usage options.
+- `organize` established the project flow: scan, metadata, naming, planning and execution/simulation.
+- Logging reports lifecycle events and command counters.
 
 ### Fixed
 
-- Friendly error handling for `scan` when source directory does not exist.
-- Friendly error handling for `organize` when source path is invalid.
-- EXIF absence/read failures now handled safely without breaking execution.
-
-### Behavior guarantees in v0.1.0
-
-- Unsupported files are ignored during scan.
-- Extension matching is case-insensitive.
-- Date fallback order is deterministic:
-  1. `DateTimeOriginal`
-  2. `CreateDate`
-  3. `mtime`
-- Name generation is deterministic and preserves original extension.
-- Dry-run does not move/copy files and does not create output artifacts.
-
-### Validation
-
-- Local automated tests passing for v0.1.0 scope (`pytest -q`).
+- Invalid source directories produce friendly errors for `scan` and `organize`.
+- Missing or unreadable EXIF is handled safely without breaking execution.

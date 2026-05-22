@@ -6,7 +6,7 @@ permalink: /roadmap/
 
 # Roadmap
 
-## Versao atual: 0.8.0
+## Versao atual: 0.9.0
 
 Ja implementado e documentado no projeto:
 
@@ -22,6 +22,8 @@ Ja implementado e documentado no projeto:
 - Testes automatizados cobrindo fluxos principais.
 - Publicacao da documentacao via GitHub Pages a partir de `docs/`.
 - Layout Jekyll com design system escuro derivado dos prototipos Stitch.
+- README padronizado como Standard Readme.
+- CHANGELOG padronizado como Keep a Changelog, com versoes semanticas e secao `Unreleased`.
 
 ## Proxima versao
 
@@ -30,7 +32,7 @@ Planejado, sem tratar como funcionalidade ja entregue:
 - Melhoria continua da documentacao de instalacao, uso, exemplos e configuracao.
 - Estabilizacao da experiencia da CLI com mensagens de ajuda e erros cada vez mais claras.
 - Logs mais claros para lotes grandes e casos de metadados ausentes.
-- Preparacao de empacotamento/release mais consistente entre `pyproject.toml`, pacote e changelog.
+- Preparacao de empacotamento/release publico.
 
 ## Futuro
 
@@ -55,3 +57,4 @@ Itens candidatos para versoes futuras:
 - `0.6.0`: HEIC/HEIF.
 - `0.7.0`: escopo inicial RAW.
 - `0.8.0`: importacao, politicas de conflito e segregacao de derivados.
+- `0.9.0`: padronizacao de README, CHANGELOG e documentacao do site.
