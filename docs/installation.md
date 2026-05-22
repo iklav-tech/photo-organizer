@@ -19,13 +19,19 @@ permalink: /installation/
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+photo-organizer --version
 ```
 
 Alternativa com `requirements.txt`:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+python -m photo_organizer --version
 ```
+
+Use `pip install -e ".[dev]"` quando for executar a suite de testes, porque a dependencia de desenvolvimento `pytest` vem do extra `dev` declarado em `pyproject.toml`.
 
 ## Instalacao como CLI local
 
@@ -54,10 +60,21 @@ Os testes usam arquivos temporarios e corpus sinteticos. Alguns testes de HEIC p
 
 ## Verificar a CLI
 
+Os comandos abaixo usam uma pasta de exemplo chamada `./Photos`. Troque esse caminho pela pasta real que deseja auditar ou organizar.
+
 ```bash
 photo-organizer scan ./Photos
 photo-organizer inspect ./Photos --report metadata-audit.json
 photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
+```
+
+Para uma verificacao sem fotos reais, crie uma pasta vazia e execute comandos somente de leitura ou `--dry-run`:
+
+```bash
+mkdir -p /tmp/photo-organizer-empty
+photo-organizer scan /tmp/photo-organizer-empty
+photo-organizer dedupe /tmp/photo-organizer-empty
+photo-organizer organize /tmp/photo-organizer-empty --output /tmp/photo-organizer-out --dry-run
 ```
 
 ## GitHub Pages

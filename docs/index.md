@@ -22,6 +22,7 @@ O projeto resolve um problema comum em acervos antigos: fotos espalhadas em past
 - Politicas de conflito de destino e segregacao opcional de arquivos derivados.
 - Agrupamento temporal de fotos em eventos, para relatorio ou diretorio.
 - Marcacao de sequencias burst para revisao, sem exclusao automatica.
+- Limitacoes conhecidas documentadas para HEIC/HEIF, RAW, WEBP/BMP, inferencias e execucao segura.
 
 ## Exemplo rapido
 

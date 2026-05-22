@@ -29,10 +29,10 @@ Ja implementado e documentado no projeto:
 
 Planejado, sem tratar como funcionalidade ja entregue:
 
-- Melhoria continua da documentacao de instalacao, uso, exemplos e configuracao.
 - Estabilizacao da experiencia da CLI com mensagens de ajuda e erros cada vez mais claras.
 - Logs mais claros para lotes grandes e casos de metadados ausentes.
 - Preparacao de empacotamento/release publico.
+- Verificacao continua dos exemplos da documentacao contra a CLI real.
 
 ## Futuro
 

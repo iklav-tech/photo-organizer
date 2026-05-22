@@ -6,6 +6,8 @@ permalink: /examples/
 
 # Exemplos
 
+Os exemplos usam `./Photos` como origem e `./OrganizedPhotos` como destino. Substitua esses caminhos pelos diretorios reais do seu ambiente. Quando quiser testar sem alterar arquivos, use sempre `--dry-run`, `--plan`, `scan`, `dedupe`, `inspect` ou `explain`.
+
 ## Organizar uma pasta de fotos
 
 ```bash
@@ -97,7 +99,7 @@ OrganizedPhotos/
       2024-08-15_14-32-09.jpg
 ```
 
-Se GPS/localizacao nao estiver disponivel, estrategias baseadas em local podem cair para organizacao por data ou usar `UnknownLocation`, conforme a estrategia e opcoes de inferencia.
+As estrategias `location`, `location-date` e `city-state-month` habilitam reverse geocoding por padrao. Se `--no-reverse-geocode` for usado junto com uma dessas estrategias, a CLI rejeita o comando com erro claro. Quando GPS/localizacao nao estiver disponivel, o planejamento registra fallback de organizacao e pode usar `UnknownLocation`, conforme a estrategia e opcoes de inferencia.
 
 ## Agrupar fotos em eventos temporais
 
@@ -119,6 +121,7 @@ Para tambem usar o evento como diretorio:
 photo-organizer organize ./Photos \
   --output ./OrganizedPhotos \
   --event-window-minutes 60 \
+  --dry-run \
   --event-directory
 ```
 
@@ -191,6 +194,15 @@ photo-organizer organize ./Photos \
 
 Campos documentados pelo codigo incluem origem, destino final, acao, status, observacoes, data escolhida, local escolhido, fonte de metadado, conflitos de reconciliacao, campos RAW, sidecars e classificacao de arquivo original/derivado.
 
+Para gerar apenas os itens que exigem revisao humana:
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --dry-run \
+  --review-report review.json
+```
+
 ## Marcar sequencias burst
 
 ```bash
@@ -216,3 +228,20 @@ photo-organizer organize ./Photos \
 ```
 
 Quando a similaridade configurada e atingida, a marcacao passa a ser `BURST`; caso contrario, o grupo temporal continua como `REVIEW_BURST`.
+
+## Retomar um lote com journal
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --copy \
+  --journal journal.jsonl
+
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --copy \
+  --journal journal.jsonl \
+  --resume
+```
+
+`--resume` exige `--journal` e pula apenas fontes ja registradas com `status=success`. Entradas com erro sao tentadas novamente.
