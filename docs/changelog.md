@@ -10,7 +10,9 @@ O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](
 
 ## [Unreleased]
 
-Sem mudancas registradas ainda.
+### Added
+
+- Politica de versionamento documentada, incluindo SemVer, padrao de tags e checklist de release.
 
 ## [0.9.0] - 2026-05-22
 

@@ -18,6 +18,7 @@ Repositorio: <https://github.com/iklav-tech/photo-organizer>
 - [Configuration](#configuration)
 - [Reports and Audit](#reports-and-audit)
 - [Known Limitations](#known-limitations)
+- [Versioning](#versioning)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -315,6 +316,17 @@ Os manifestos de execucao registram origem, destino final, acao, status, data/lo
 - `tIME` em PNG e `mtime` do filesystem sao tratados como baixa confianca.
 - Reverse geocoding requer GPS e pode falhar por rede, provedor ou ausencia de resultado.
 - A ferramenta nao apaga duplicatas automaticamente, nao converte RAW para DNG e nao edita metadados dentro dos arquivos originais.
+
+## Versioning
+
+O projeto adota Semantic Versioning para a versao do pacote, no formato `MAJOR.MINOR.PATCH`, e Keep a Changelog para o historico de mudancas.
+
+- Versao do pacote em `pyproject.toml` e `src/photo_organizer/__init__.py`: `0.9.0`.
+- Tag Git/GitHub: prefixo `v`, por exemplo `v0.9.0`.
+- Titulo de release no GitHub: `vX.Y.Z - resumo curto em ingles`.
+- Mudancas futuras devem entrar primeiro em `CHANGELOG.md` na secao `Unreleased`.
+
+Enquanto o projeto estiver em `0.y.z`, incrementos `MINOR` podem incluir mudancas relevantes de comportamento da CLI. Incrementos `PATCH` ficam reservados para correcoes compatíveis e melhorias documentais pequenas. A politica completa esta em [`docs/versioning.md`](docs/versioning.md).
 
 ## Roadmap
 

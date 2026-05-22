@@ -24,6 +24,7 @@ Ja implementado e documentado no projeto:
 - Layout Jekyll com design system escuro derivado dos prototipos Stitch.
 - README padronizado como Standard Readme.
 - CHANGELOG padronizado como Keep a Changelog, com versoes semanticas e secao `Unreleased`.
+- Politica de versionamento documentada, com tags `vMAJOR.MINOR.PATCH` e checklist de release.
 
 ## Proxima versao
 
@@ -31,7 +32,7 @@ Planejado, sem tratar como funcionalidade ja entregue:
 
 - Estabilizacao da experiencia da CLI com mensagens de ajuda e erros cada vez mais claras.
 - Logs mais claros para lotes grandes e casos de metadados ausentes.
-- Preparacao de empacotamento/release publico.
+- Preparacao de empacotamento publico.
 - Verificacao continua dos exemplos da documentacao contra a CLI real.
 
 ## Futuro

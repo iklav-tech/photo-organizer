@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Documented the project versioning and release policy, including Semantic Versioning usage, Git tag format and release checklist.
+
 ## [0.9.0] - 2026-05-22
 
 ### Added
