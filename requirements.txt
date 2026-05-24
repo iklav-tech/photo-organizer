@@ -1,9 +1,7 @@
-# Runtime dependencies. Keep this list aligned with [project].dependencies in
-# pyproject.toml for users who install without editable package metadata.
-Pillow>=10.0
-PyYAML>=6.0
-pillow-heif>=0.16.0
-
-# pillow-heif uses libheif for HEIF/HEIC support. If your platform wheel does
-# not bundle the native library, install libheif with the OS package manager,
-# for example: apt install libheif1, brew install libheif, or equivalent.
+Pillow==12.2.0
+pillow_heif==1.3.0
+pyside6==6.11.1
+pyside6_addons==6.11.1
+pyside6_essentials==6.11.1
+pytest==9.0.3
+PyYAML==6.0.3

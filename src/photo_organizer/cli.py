@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import logging
+import sys
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,17 @@ from photo_organizer.scanner import find_image_files, is_supported_image_file
 
 
 logger = logging.getLogger(__name__)
+
+
+def _run_gui(argv: list[str] | None = None) -> int:
+    """Start the optional GUI without importing Qt in normal CLI runs."""
+    from photo_organizer.gui import GuiDependencyError, run  # noqa: PLC0415
+
+    try:
+        return run(argv)
+    except GuiDependencyError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 def _count_ignored_files(source: str) -> int:
@@ -1901,6 +1913,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show project version and exit.",
     )
     parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Start the optional PySide6 graphical interface.",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=LOG_LEVEL_CHOICES,
@@ -2528,9 +2545,25 @@ def _add_organize_arguments(
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if "--gui" in raw_argv and "--help" not in raw_argv and "-h" not in raw_argv:
+        bootstrap_parser = argparse.ArgumentParser(add_help=False)
+        bootstrap_parser.add_argument("--gui", action="store_true")
+        bootstrap_parser.add_argument(
+            "--log-level",
+            default="INFO",
+            choices=LOG_LEVEL_CHOICES,
+        )
+        bootstrap_args, remaining = bootstrap_parser.parse_known_args(raw_argv)
+        configure_logging(bootstrap_args.log_level)
+        return _run_gui(remaining)
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
     configure_logging(args.log_level)
+
+    if args.gui:
+        return _run_gui([])
 
     if args.version:
         print(format_version_info())

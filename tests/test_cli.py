@@ -1,10 +1,12 @@
 import pytest
 import csv
 import hashlib
+import builtins
 import json
 from pathlib import Path
 import logging
 import os
+import sys
 from datetime import datetime
 
 from photo_organizer.cli import main
@@ -32,7 +34,55 @@ def test_root_help_works(capsys: pytest.CaptureFixture[str]) -> None:
     assert "inspect" in captured.out
     assert "explain" in captured.out
     assert "organize" in captured.out
+    assert "--gui" in captured.out
     assert "Examples:" in captured.out
+
+
+def test_cli_mode_does_not_import_gui(capsys: pytest.CaptureFixture[str]) -> None:
+    sys.modules.pop("photo_organizer.gui", None)
+
+    result = main(["--version"])
+
+    assert result == 0
+    assert "photo_organizer.gui" not in sys.modules
+    captured = capsys.readouterr()
+    assert "photo-organizer" in captured.out
+
+
+def test_gui_flag_delegates_before_cli_subcommand_validation(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run_gui(argv):
+        captured["argv"] = argv
+        return 0
+
+    monkeypatch.setattr(cli, "_run_gui", fake_run_gui)
+
+    result = main(["--gui", "scan"])
+
+    assert result == 0
+    assert captured["argv"] == ["scan"]
+
+
+def test_gui_flag_reports_missing_pyside6(
+    monkeypatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    original_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name.startswith("PySide6"):
+            raise ModuleNotFoundError("No module named 'PySide6'", name="PySide6")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    result = main(["--gui"])
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "A interface grafica requer PySide6" in captured.err
+    assert "python -m pip install 'photo-organizer[gui]'" in captured.err
 
 
 def test_scan_help_works(capsys: pytest.CaptureFixture[str]) -> None:
