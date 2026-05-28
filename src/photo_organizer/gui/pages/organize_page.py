@@ -11,10 +11,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
 from photo_organizer.executor import DestinationConflictError, FileOperation
 from photo_organizer.hashing import DuplicateGroup
 from photo_organizer.gui.adapters.organizer import GuiSettings, OrganizerAdapter
+from photo_organizer.gui.theme import SPACING, set_theme_role
 from photo_organizer.gui.widgets import PathPicker
 
 
@@ -39,6 +42,7 @@ class OrganizePage(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        set_theme_role(self, "page")
         self.source_picker = PathPicker(caption="Selecionar pasta de origem")
         self.output_picker = PathPicker(caption="Selecionar pasta de destino")
         self.mode_input = QComboBox()
@@ -51,10 +55,16 @@ class OrganizePage(QWidget):
         self.dry_run_input.setChecked(True)
         self.status_label = QLabel("Pronto")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        set_theme_role(self.status_label, "badgePrimary")
         self.output_log = QPlainTextEdit()
         self.output_log.setReadOnly(True)
+        self.output_log.setPlaceholderText("System engine output will appear here...")
+        set_theme_role(self.output_log, "logPanel")
 
         form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(SPACING.md)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         form.addRow("Origem", self.source_picker)
         form.addRow("Destino", self.output_picker)
         form.addRow("Modo", self.mode_input)
@@ -68,21 +78,172 @@ class OrganizePage(QWidget):
         plan_button = QPushButton("Planejar")
         plan_button.clicked.connect(self.preview_plan)
         execute_button = QPushButton("Executar")
+        set_theme_role(execute_button, "primaryButton")
         execute_button.clicked.connect(self.execute_plan)
 
         actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(SPACING.sm)
         actions.addWidget(scan_button)
         actions.addWidget(dedupe_button)
         actions.addWidget(plan_button)
         actions.addWidget(execute_button)
         actions.addStretch(1)
 
+        self.source_path_label = QLabel("SOURCE PATH: configure origem e destino")
+        set_theme_role(self.source_path_label, "metadata")
+        title = QLabel("Session Overview")
+        set_theme_role(title, "headline")
+        self.scan_badge = QLabel("SCAN_COMPLETE: --")
+        set_theme_role(self.scan_badge, "badge")
+        live_badge = QLabel("LIVE_TRACKING")
+        set_theme_role(live_badge, "badgePrimary")
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header_title = QVBoxLayout()
+        header_title.setSpacing(SPACING.xs)
+        header_title.addWidget(self.source_path_label)
+        header_title.addWidget(title)
+        header.addLayout(header_title)
+        header.addStretch(1)
+        header.addWidget(self.scan_badge)
+        header.addWidget(live_badge)
+
+        form_card = self._card("ORGANIZE SETTINGS", form)
+        stats_card = self._build_stats_card()
+        integrity_card = self._build_integrity_card()
+        hero_card = self._build_hero_card()
+        log_card = self._build_log_card()
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(SPACING.md)
+        grid.setVerticalSpacing(SPACING.md)
+        grid.addWidget(form_card, 0, 0, 1, 2)
+        grid.addWidget(stats_card, 1, 0)
+        grid.addWidget(integrity_card, 1, 1)
+        grid.addWidget(hero_card, 2, 0, 1, 2)
+
         layout = QVBoxLayout()
-        layout.addLayout(form)
+        layout.setContentsMargins(SPACING.lg, SPACING.lg, SPACING.lg, SPACING.lg)
+        layout.setSpacing(SPACING.md)
+        layout.addLayout(header)
+        layout.addLayout(grid)
         layout.addLayout(actions)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.output_log, 1)
+        layout.addWidget(self.status_label, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(log_card, 1)
         self.setLayout(layout)
+
+    def _card(self, title: str, body: QFormLayout | QVBoxLayout) -> QWidget:
+        card = QWidget()
+        set_theme_role(card, "card")
+        label = QLabel(title)
+        set_theme_role(label, "sectionLabel")
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.md)
+        layout.setSpacing(SPACING.md)
+        layout.addWidget(label)
+        layout.addLayout(body)
+        card.setLayout(layout)
+        return card
+
+    def _build_stats_card(self) -> QWidget:
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(SPACING.sm)
+        self.total_files_metric = QLabel("--")
+        set_theme_role(self.total_files_metric, "metric")
+        caption = QLabel("Arquivos escaneados")
+        set_theme_role(caption, "muted")
+        body.addWidget(self.total_files_metric)
+        body.addWidget(caption)
+        body.addWidget(self._mini_stat_row("JPG", "--"))
+        body.addWidget(self._mini_stat_row("RAW", "--"))
+        return self._card("TOTAL FILES INGESTED", body)
+
+    def _mini_stat_row(self, label: str, value: str) -> QWidget:
+        row = QWidget()
+        row_layout = QHBoxLayout()
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        name = QLabel(label)
+        set_theme_role(name, "code")
+        amount = QLabel(value)
+        set_theme_role(amount, "code")
+        row_layout.addWidget(name)
+        row_layout.addStretch(1)
+        row_layout.addWidget(amount)
+        row.setLayout(row_layout)
+        return row
+
+    def _build_integrity_card(self) -> QWidget:
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(SPACING.sm)
+        body.addLayout(self._progress_row("GPS Coordinates", 88))
+        body.addLayout(self._progress_row("Timestamp Sync", 100))
+        body.addLayout(self._progress_row("Camera Profiles", 92, secondary=True))
+        return self._card("EXIF INTEGRITY", body)
+
+    def _progress_row(
+        self,
+        label: str,
+        value: int,
+        *,
+        secondary: bool = False,
+    ) -> QVBoxLayout:
+        row = QVBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(SPACING.xs)
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        name = QLabel(label)
+        set_theme_role(name, "code")
+        percent = QLabel(f"{value}%")
+        set_theme_role(percent, "code")
+        header.addWidget(name)
+        header.addStretch(1)
+        header.addWidget(percent)
+        progress = QProgressBar()
+        progress.setRange(0, 100)
+        progress.setValue(value)
+        progress.setTextVisible(False)
+        if secondary:
+            set_theme_role(progress, "secondaryProgress")
+        row.addLayout(header)
+        row.addWidget(progress)
+        return row
+
+    def _build_hero_card(self) -> QWidget:
+        card = QWidget()
+        set_theme_role(card, "heroCard")
+        title = QLabel("Intelligent Sort")
+        set_theme_role(title, "heroTitle")
+        text = QLabel(
+            "Distribua fotos em hierarquias por data, local e metadados "
+            "mantendo rastreabilidade operacional."
+        )
+        text.setWordWrap(True)
+        set_theme_role(text, "heroText")
+        time = QLabel("EST. TIME: depende do volume")
+        set_theme_role(time, "metadata")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.md)
+        layout.setSpacing(SPACING.sm)
+        layout.addWidget(title)
+        layout.addWidget(text)
+        layout.addStretch(1)
+        layout.addWidget(time)
+        card.setLayout(layout)
+        return card
+
+    def _build_log_card(self) -> QWidget:
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(SPACING.sm)
+        body.addWidget(self.output_log)
+        return self._card("SYSTEM ENGINE OUTPUT", body)
 
     def _settings(self, *, require_output: bool) -> GuiSettings | None:
         source = self.source_picker.text()
@@ -133,6 +294,9 @@ class OrganizePage(QWidget):
 
         def action() -> str:
             files = self._adapter.scan(settings.source)
+            self.total_files_metric.setText(f"{len(files):,}")
+            self.scan_badge.setText("SCAN_COMPLETE: 100%")
+            self.source_path_label.setText(f"SOURCE PATH: {settings.source}")
             lines = [f"Arquivos suportados: {len(files)}", ""]
             lines.extend(str(path) for path in files[:500])
             if len(files) > 500:

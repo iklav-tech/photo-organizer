@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PhotoMaster Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            background-color: #08090a;
+            color: #e3e2e4;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #121315;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #40484d;
+        }
+        .glow-primary {
+            box-shadow: 0 0 15px rgba(146, 217, 255, 0.15);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0d0e10",
+                        "on-primary-fixed": "#001e2b",
+                        "primary-fixed-dim": "#88cff5",
+                        "on-secondary-fixed": "#240d48",
+                        "error-container": "#93000a",
+                        "primary-container": "#92d9ff",
+                        "background": "#121315",
+                        "on-tertiary": "#163056",
+                        "primary": "#d8f0ff",
+                        "surface-container-high": "#292a2c",
+                        "surface": "#121315",
+                        "on-tertiary-fixed": "#001b3e",
+                        "error": "#ffb4ab",
+                        "on-background": "#e3e2e4",
+                        "surface-variant": "#343537",
+                        "outline": "#899298",
+                        "tertiary-fixed": "#d6e3ff",
+                        "on-secondary-container": "#c5adf0",
+                        "tertiary": "#e6ecff",
+                        "on-primary-container": "#006080",
+                        "on-surface-variant": "#bfc8ce",
+                        "surface-container-highest": "#343537",
+                        "surface-tint": "#88cff5",
+                        "secondary-container": "#533e78",
+                        "inverse-primary": "#066687",
+                        "on-primary-fixed-variant": "#004d67",
+                        "outline-variant": "#40484d",
+                        "surface-dim": "#121315",
+                        "on-tertiary-container": "#425982",
+                        "on-secondary": "#39255e",
+                        "inverse-surface": "#e3e2e4",
+                        "on-surface": "#e3e2e4",
+                        "secondary-fixed-dim": "#d4bbff",
+                        "secondary": "#d4bbff",
+                        "surface-container-low": "#1b1c1e",
+                        "inverse-on-surface": "#303032",
+                        "on-tertiary-fixed-variant": "#2f476e",
+                        "on-error": "#690005",
+                        "surface-bright": "#38393b",
+                        "on-primary": "#003548",
+                        "primary-fixed": "#c2e8ff",
+                        "surface-container": "#1f2022",
+                        "tertiary-fixed-dim": "#afc7f6",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed": "#ebdcff",
+                        "tertiary-container": "#b9d1ff",
+                        "on-secondary-fixed-variant": "#503c76"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "inspector_width": "320px",
+                        "sidebar_width": "280px",
+                        "gutter": "24px",
+                        "unit": "4px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Hanken Grotesk"],
+                        "label-sm": ["JetBrains Mono"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "code-md": ["JetBrains Mono"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "code-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md">
+<!-- SideNavBar Shell -->
+<aside class="w-sidebar_width h-screen fixed left-0 top-0 bg-surface-container-low border-r border-outline-variant flex flex-col h-full py-lg z-50">
+<div class="px-md mb-xl">
+<h1 class="font-headline-md text-headline-md font-bold tracking-tighter text-on-surface">PHOTOMASTER</h1>
+<p class="font-code-md text-code-md text-primary opacity-80">V1.0.4 PRO</p>
+</div>
+<nav class="flex-grow space-y-1">
+<!-- Active Navigation -->
+<a class="flex items-center gap-md px-md py-sm border-l-4 border-primary bg-primary/10 text-on-surface font-bold transition-all scale-[0.98] opacity-90" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-sm text-label-sm">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="auto_awesome_motion">auto_awesome_motion</span>
+<span class="font-label-sm text-label-sm">Organize</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-label-sm text-label-sm">Audit</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</a>
+</nav>
+<div class="px-md mt-auto pt-lg space-y-md">
+<button class="w-full py-sm border border-outline-variant text-on-surface font-label-sm text-label-sm hover:bg-surface-variant transition-colors flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="folder_open">folder_open</span>
+                Select Folder
+            </button>
+<div class="space-y-1">
+<a class="flex items-center gap-md px-md py-xs text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="help">help</span>
+                    Support
+                </a>
+<a class="flex items-center gap-md px-md py-xs text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]" data-icon="terminal">terminal</span>
+                    Logs
+                </a>
+</div>
+<div class="flex items-center gap-md px-md pt-md border-t border-outline-variant/30">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center text-on-primary-container font-bold">JD</div>
+<div class="overflow-hidden">
+<p class="font-label-sm text-label-sm truncate">Admin Mode</p>
+<p class="text-[10px] text-primary/60 font-code-md">id: 0822-1X</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="h-16 fixed top-0 right-0 left-sidebar_width z-40 bg-surface border-b border-outline-variant flex items-center justify-between px-lg w-full">
+<div class="flex items-center gap-xl">
+<span class="font-headline-md text-headline-md font-black text-on-surface">Photo Organizer</span>
+<div class="hidden md:flex items-center gap-md border-x border-outline-variant px-md h-16">
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Import</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Export</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Batch Edit</a>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors" data-icon="cloud_done">cloud_done</span>
+</div>
+<button class="bg-primary-container text-on-primary-container px-md py-xs font-label-sm text-label-sm font-bold rounded hover:opacity-90 active:scale-95 transition-all">
+                Execute Move
+            </button>
+</div>
+</header>
+<!-- Main Canvas Content -->
+<main class="ml-sidebar_width pt-16 pb-12 min-h-screen bg-background flex flex-col">
+<div class="p-lg flex-grow custom-scrollbar overflow-y-auto">
+<!-- Dashboard Header Section -->
+<div class="mb-lg flex items-end justify-between">
+<div>
+<p class="font-code-md text-code-md text-primary-fixed-dim uppercase tracking-widest mb-xs">Source Path: /Volumes/SSD_01/Project_Alpha/Raw_Ingest</p>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Session Overview</h2>
+</div>
+<div class="flex items-center gap-sm">
+<span class="px-sm py-1 bg-surface-container-high border border-outline-variant rounded font-code-md text-[10px] text-on-surface-variant">SCAN_COMPLETE: 100%</span>
+<span class="px-sm py-1 bg-primary/10 border border-primary/30 rounded font-code-md text-[10px] text-primary">LIVE_TRACKING</span>
+</div>
+</div>
+<!-- Bento Grid Dashboard -->
+<div class="grid grid-cols-12 gap-md">
+<!-- 1. Total Files Breakdown (Wide) -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-low border border-outline-variant p-md flex flex-col gap-md">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Total Files Ingested</span>
+<span class="material-symbols-outlined text-primary" data-icon="folder_zip">folder_zip</span>
+</div>
+<div class="flex items-baseline gap-sm">
+<span class="font-display-lg text-display-lg text-on-surface">12,482</span>
+<span class="font-code-md text-code-md text-primary">+42.1 GB</span>
+</div>
+<div class="grid grid-cols-3 gap-sm mt-auto">
+<div class="bg-surface-container-highest p-sm border-l-2 border-primary">
+<p class="font-label-sm text-[10px] text-on-surface-variant">JPG</p>
+<p class="font-headline-md text-headline-md">8,210</p>
+</div>
+<div class="bg-surface-container-highest p-sm border-l-2 border-secondary">
+<p class="font-label-sm text-[10px] text-on-surface-variant">RAW (DNG)</p>
+<p class="font-headline-md text-headline-md">3,122</p>
+</div>
+<div class="bg-surface-container-highest p-sm border-l-2 border-tertiary">
+<p class="font-label-sm text-[10px] text-on-surface-variant">HEIC</p>
+<p class="font-headline-md text-headline-md">1,150</p>
+</div>
+</div>
+</div>
+<!-- 2. Metadata Health (Square-ish) -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-low border border-outline-variant p-md flex flex-col gap-md">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">EXIF Integrity</span>
+<span class="material-symbols-outlined text-secondary" data-icon="health_and_safety">health_and_safety</span>
+</div>
+<div class="space-y-md">
+<div>
+<div class="flex justify-between font-code-md text-code-md mb-xs">
+<span>GPS Coordinates</span>
+<span class="text-primary">88%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest">
+<div class="h-full bg-primary glow-primary" style="width: 88%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-code-md text-code-md mb-xs">
+<span>Timestamp Sync</span>
+<span class="text-tertiary">100%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest">
+<div class="h-full bg-tertiary shadow-[0_0_8px_rgba(230,236,255,0.2)]" style="width: 100%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-code-md text-code-md mb-xs">
+<span>Camera Profiles</span>
+<span class="text-secondary">92%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest">
+<div class="h-full bg-secondary" style="width: 92%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- 3. Potential Duplicates (Mid) -->
+<div class="col-span-12 md:col-span-6 bg-surface-container-low border border-outline-variant p-md">
+<div class="flex items-center justify-between mb-md">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase block">Duplicate Clusters</span>
+<span class="font-headline-md text-headline-md text-error">428 Conflict Hits</span>
+</div>
+<span class="material-symbols-outlined text-error p-sm bg-error-container/20 rounded-full" data-icon="content_copy">content_copy</span>
+</div>
+<div class="flex gap-sm overflow-x-auto pb-sm custom-scrollbar">
+<div class="min-w-[100px] h-24 bg-surface-container-highest relative border border-outline-variant group">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="A professional DSLR camera lens focusing on a blurred urban background at night, neon lights creating bokeh circles. The style is technical and sharp with deep shadows and vibrant blue and magenta accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTsK4KhH_vMz7T_dZ7wGMYMd-2EARr-V4t5ne2W-q9y46Vhy_IdiVYVUQuSpZFv8wsi_G7ECetb8yhnuwVS3G6mqUyu1nOpqMo-Fl2OUulbWybmp0V3DvtDPVJiFWwFCO-Uaj0mav73xNmwbDq6cKQlD2TS2NhzwZYH9EmRByodX0ORUUKpJAKOP11NNj0Dn3aLi6RAJOsV2KO1s3bH6x0GEV-vJdAxsgbbkvl1aruFH0gV3GllB6pVmoabTFKYqY2yJvFeZ3IE64"/>
+<div class="absolute bottom-0 right-0 bg-error text-on-error font-code-md text-[10px] px-1">x3</div>
+</div>
+<div class="min-w-[100px] h-24 bg-surface-container-highest relative border border-outline-variant group">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Detailed macro photography of mechanical clockwork gears and springs, lit by a cold studio light. The aesthetic is industrial and precise, mirroring the mechanical nature of professional photography equipment in a dark-mode environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEmuwz3D7saArA2ZOW_qdhh49KhyMXCH_Ido1tKvcEOKNIb5nMn9uUtsOBTeXm9chrnpOQqPsC3U9W95W4xJnFRYljDbFqYtnHoNztmq6YDQ8hPT6qT3hdn9vNln5poM3Hr3wk_WarDH92FtV4p4Md0TsHEpwAZnzXiTJEikBw5KHcS6qgJvZdHPbOAJ2jRg-KJhyTmum_3TWXaGmQAnMaE6t08h5v8nUG_UX-CwA7sFghJe8ePG5K9AN9KpADYhzfwxZuSASU0co"/>
+<div class="absolute bottom-0 right-0 bg-error text-on-error font-code-md text-[10px] px-1">x2</div>
+</div>
+<div class="min-w-[100px] h-24 bg-surface-container-highest relative border border-outline-variant group">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="A minimalist architectural shot of a brutalist concrete building against a dark, moody twilight sky. High contrast lighting accentuates sharp edges and geometric patterns, adhering to a professional nocturnal design palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6jceXzGcHzd07YCX7WaiCJd9OAwTmZLBf5BY-kFB19WdxJM-TWUYMQsBFurI7GVaigHT9tNk-Q3SqoYVcjvvLzxrEG8hdkVDkis1UtONkuPXhWPvSaM4RoE9btk_Wo-bKXczsh80vb3uxQTCgovF00ttMfZVvW-t-B4KF9OLdojpCXjKGxonltQCjYcUq7-LjHDLJVC0-E1BmAu7mKlkicj0z0yBX7F84VCFvWNz-VHyf0Wof4q9tTwpC1G0QHevKUZro8cRYT2A"/>
+<div class="absolute bottom-0 right-0 bg-error text-on-error font-code-md text-[10px] px-1">x4</div>
+</div>
+</div>
+</div>
+<!-- 4. Quick CTA (Mid) -->
+<div class="col-span-12 md:col-span-6 bg-primary-container p-md relative overflow-hidden group">
+<!-- Subtle background decoration -->
+<div class="absolute -right-8 -bottom-8 opacity-10 group-hover:scale-110 transition-transform duration-500">
+<span class="material-symbols-outlined text-[160px]" data-icon="auto_fix_high">auto_fix_high</span>
+</div>
+<div class="relative z-10 flex flex-col h-full">
+<h3 class="font-headline-md text-headline-md text-on-primary-container mb-xs">Intelligent Sort</h3>
+<p class="font-body-md text-body-md text-on-primary-container/80 mb-lg">Automatically distribute 12k+ assets into folder hierarchies by Date, Location, and Content AI tags.</p>
+<div class="mt-auto flex items-center justify-between">
+<span class="font-code-md text-code-md text-on-primary-container font-bold">EST. TIME: 4m 20s</span>
+<button class="bg-on-primary-container text-primary-container px-lg py-sm font-label-sm text-label-sm font-black uppercase tracking-widest hover:bg-black transition-colors">
+                                Start Quick Organize
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Terminal Console Logs (Bottom of Content) -->
+<div class="mt-lg bg-surface-container-lowest border border-outline-variant p-md h-40 font-code-md text-code-md overflow-hidden flex flex-col">
+<div class="flex items-center justify-between border-b border-outline-variant/30 pb-xs mb-sm">
+<span class="text-on-surface-variant font-bold text-[10px] tracking-widest uppercase">System Engine Output</span>
+<div class="flex gap-xs">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+</div>
+</div>
+<div class="overflow-y-auto space-y-1 custom-scrollbar" id="log-terminal">
+<p class="text-on-surface-variant opacity-50">[09:14:22] - Initializing File System Crawler...</p>
+<p class="text-on-surface-variant opacity-50">[09:14:23] - Source Mounted: /Volumes/SSD_01</p>
+<p class="text-primary">[09:14:25] - Indexing 12,482 entities...</p>
+<p class="text-[#9ff2bd]">[09:14:40] - OK: Metadata hash validation successful.</p>
+<p class="text-[#ffd98a]">[09:14:42] - WARN: 428 duplicates detected via visual signature match.</p>
+<p class="text-on-surface-variant opacity-50">[09:14:45] - Ready for Batch Instruction.</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Shell -->
+<footer class="fixed bottom-0 right-0 left-sidebar_width h-12 bg-surface-container-lowest border-t border-outline-variant flex items-center justify-between px-md w-full z-40">
+<div class="flex items-center gap-md">
+<span class="font-code-md text-code-md text-primary">PHOTOMASTER.SYS</span>
+<span class="text-on-surface-variant font-label-sm text-label-sm">System Engine v1.0.4 - Ready</span>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-md">
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:bg-surface-variant px-sm py-1 transition-colors" href="#">Terminal Output</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:bg-surface-variant px-sm py-1 transition-colors" href="#">Process Monitor</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:bg-surface-variant px-sm py-1 transition-colors" href="#">Clear Cache</a>
+</div>
+<div class="flex items-center gap-xs px-sm py-1 bg-surface-container-high rounded border border-outline-variant">
+<span class="w-2 h-2 bg-[#9ff2bd] rounded-full animate-pulse"></span>
+<span class="font-code-md text-[10px] text-on-surface">9.2 ms</span>
+</div>
+</div>
+</footer>
+<script>
+        // Simple log ticker for atmospheric effect
+        const logLines = [
+            "[09:15:01] - Background task: Memory optimization running...",
+            "[09:15:12] - Cache status: 4.2GB utilized (82% available)",
+            "[09:15:25] - System: Awaiting user action: 'Start Quick Organize'",
+            "[09:15:44] - Update: GPS database version v2.1 synced.",
+            "[09:16:01] - Heartbeat: Engine stable."
+        ];
+        let logIndex = 0;
+        const terminal = document.getElementById('log-terminal');
+
+        setInterval(() => {
+            const newLine = document.createElement('p');
+            newLine.className = 'text-on-surface-variant opacity-50';
+            newLine.innerText = logLines[logIndex];
+            terminal.appendChild(newLine);
+            terminal.scrollTop = terminal.scrollHeight;
+            logIndex = (logIndex + 1) % logLines.length;
+            
+            // Limit terminal children to keep performance
+            if (terminal.children.length > 50) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }, 8000);
+    </script>
+</body></html>

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QPushButton, QWidget
 
+from photo_organizer.gui.theme import set_theme_role
+
 
 class PathPicker(QWidget):
     """A line edit plus a directory selection button."""
@@ -13,6 +15,7 @@ class PathPicker(QWidget):
         self._caption = caption
         self.line_edit = QLineEdit()
         self.button = QPushButton("Selecionar")
+        set_theme_role(self.button, "secondaryButton")
         self.button.clicked.connect(self.select_directory)
 
         layout = QHBoxLayout()
