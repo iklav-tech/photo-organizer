@@ -16,6 +16,13 @@ from photo_organizer import __app_name__
 from photo_organizer.gui.adapters import OrganizerAdapter
 from photo_organizer.gui.pages import OrganizePage, PlaceholderPage
 from photo_organizer.gui.theme import SPACING, set_active, set_theme_role
+from photo_organizer.gui.widgets import create_scrollable_page
+
+
+PAGE_DASHBOARD = 0
+PAGE_ORGANIZE = 1
+PAGE_AUDIT = 2
+PAGE_SETTINGS = 3
 
 
 class MainWindow(QMainWindow):
@@ -35,13 +42,15 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         self.stack = QStackedWidget()
+        self.dashboard_page = PlaceholderPage("Dashboard")
         self.organize_page = OrganizePage(adapter=self._adapter)
-        self.scan_page = PlaceholderPage("Organize")
-        self.dedupe_page = PlaceholderPage("Audit")
+        self.audit_page = PlaceholderPage("Audit")
+        self.settings_page = PlaceholderPage("Settings")
 
-        self.stack.addWidget(self.organize_page)
-        self.stack.addWidget(self.scan_page)
-        self.stack.addWidget(self.dedupe_page)
+        self.stack.addWidget(create_scrollable_page(self.dashboard_page))
+        self.stack.addWidget(create_scrollable_page(self.organize_page))
+        self.stack.addWidget(create_scrollable_page(self.audit_page))
+        self.stack.addWidget(create_scrollable_page(self.settings_page))
 
         shell = QWidget()
         set_theme_role(shell, "appShell")
@@ -54,7 +63,7 @@ class MainWindow(QMainWindow):
 
         shell.setLayout(layout)
         self.setCentralWidget(shell)
-        self.show_page(0)
+        self.show_page(PAGE_DASHBOARD)
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
@@ -75,13 +84,13 @@ class MainWindow(QMainWindow):
         nav_layout = QVBoxLayout()
         nav_layout.setContentsMargins(0, 0, 0, 0)
         nav_layout.setSpacing(SPACING.xs)
-        nav_layout.addWidget(self._make_nav_button("Dashboard", 0))
-        nav_layout.addWidget(self._make_nav_button("Organize", 1))
-        nav_layout.addWidget(self._make_nav_button("Audit", 2))
+        nav_layout.addWidget(self._make_nav_button("Dashboard", PAGE_DASHBOARD))
+        nav_layout.addWidget(self._make_nav_button("Organize", PAGE_ORGANIZE))
+        nav_layout.addWidget(self._make_nav_button("Audit", PAGE_AUDIT))
+        nav_layout.addWidget(self._make_nav_button("Settings", PAGE_SETTINGS))
 
         select_folder = QPushButton("Select Folder")
         set_theme_role(select_folder, "secondaryButton")
-        select_folder.clicked.connect(self.organize_page.source_picker.select_directory)
 
         support = QLabel("Support")
         set_theme_role(support, "code")
@@ -134,7 +143,6 @@ class MainWindow(QMainWindow):
         set_theme_role(workflow, "code")
         execute = QPushButton("Execute Move")
         set_theme_role(execute, "primaryButton")
-        execute.clicked.connect(self.organize_page.execute_plan)
 
         layout = QHBoxLayout()
         layout.setContentsMargins(SPACING.lg, 0, SPACING.lg, 0)

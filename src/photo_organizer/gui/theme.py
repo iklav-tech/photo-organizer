@@ -111,6 +111,15 @@ def app_stylesheet() -> str:
         background-color: {c.background};
     }}
 
+    QScrollArea {{
+        background-color: {c.background};
+        border: 0;
+    }}
+
+    QScrollArea > QWidget > QWidget {{
+        background-color: {c.background};
+    }}
+
     QWidget[themeRole="sidebar"] {{
         background-color: {c.surface_low};
         border-right: 1px solid {c.outline_variant};

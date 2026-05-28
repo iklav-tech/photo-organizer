@@ -34,10 +34,11 @@ def run(argv: list[str] | None = None) -> int:
     from photo_organizer.gui.adapters.organizer import OrganizerAdapter  # noqa: PLC0415
     from photo_organizer.gui.main_window import MainWindow  # noqa: PLC0415
     from photo_organizer.gui.theme import apply_app_theme  # noqa: PLC0415
+    from photo_organizer.gui.windowing import apply_startup_geometry  # noqa: PLC0415
 
     app = QApplication.instance() or QApplication(argv or [])
     apply_app_theme(app)
 
     window = MainWindow(adapter=OrganizerAdapter())
-    window.show()
+    apply_startup_geometry(window)
     return app.exec()
