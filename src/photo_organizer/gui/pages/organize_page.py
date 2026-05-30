@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from photo_organizer.executor import DestinationConflictError, FileOperation
 from photo_organizer.hashing import DuplicateGroup
 from photo_organizer.gui.adapters.organizer import GuiSettings, OrganizerAdapter
+from photo_organizer.gui.session import SessionMetrics, SessionState
 from photo_organizer.gui.theme import SPACING, set_theme_role
 from photo_organizer.gui.widgets import PathPicker
 
@@ -35,15 +36,20 @@ class OrganizePage(QWidget):
     def __init__(
         self,
         adapter: OrganizerAdapter,
+        session: SessionState,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._adapter = adapter
+        self.session = session
         self._build_ui()
+        self.session.source_directory_changed.connect(self._set_source_directory)
+        self.session.metrics_changed.connect(self._update_metrics)
 
     def _build_ui(self) -> None:
         set_theme_role(self, "page")
         self.source_picker = PathPicker(caption="Selecionar pasta de origem")
+        self.source_picker.directory_selected.connect(self._source_directory_selected)
         self.output_picker = PathPicker(caption="Selecionar pasta de destino")
         self.mode_input = QComboBox()
         self.mode_input.addItems(["copy", "move"])
@@ -90,7 +96,7 @@ class OrganizePage(QWidget):
         actions.addWidget(execute_button)
         actions.addStretch(1)
 
-        self.source_path_label = QLabel("SOURCE PATH: configure origem e destino")
+        self.source_path_label = QLabel("SOURCE PATH: not selected")
         set_theme_role(self.source_path_label, "metadata")
         title = QLabel("Session Overview")
         set_theme_role(title, "headline")
@@ -246,7 +252,7 @@ class OrganizePage(QWidget):
         return self._card("SYSTEM ENGINE OUTPUT", body)
 
     def _settings(self, *, require_output: bool) -> GuiSettings | None:
-        source = self.source_picker.text()
+        source = self.session.source_directory or self.source_picker.text()
         output = self.output_picker.text()
         if not source:
             QMessageBox.warning(
@@ -294,6 +300,8 @@ class OrganizePage(QWidget):
 
         def action() -> str:
             files = self._adapter.scan(settings.source)
+            self.session.set_scan_result(files)
+            self.session.add_log(f"Scan completed for {settings.source}: {len(files)} files")
             self.total_files_metric.setText(f"{len(files):,}")
             self.scan_badge.setText("SCAN_COMPLETE: 100%")
             self.source_path_label.setText(f"SOURCE PATH: {settings.source}")
@@ -305,25 +313,50 @@ class OrganizePage(QWidget):
 
         self._run_action("Escaneando", action)
 
+    def _source_directory_selected(self, source_directory: str) -> None:
+        self.session.set_source_directory(source_directory)
+        self.scan_source()
+
+    def _set_source_directory(self, source_directory: str) -> None:
+        if self.source_picker.text() != source_directory:
+            self.source_picker.set_text(source_directory)
+        self.source_path_label.setText(f"SOURCE PATH: {source_directory}")
+
+    def _update_metrics(self, metrics: SessionMetrics) -> None:
+        self.total_files_metric.setText(f"{metrics.total_files:,}")
+        self.scan_badge.setText(
+            "SCAN_COMPLETE: 100%" if metrics.total_files else "SCAN_COMPLETE: --"
+        )
+
     def find_duplicates(self) -> None:
         settings = self._settings(require_output=False)
         if settings is None:
             return
-        self._run_action(
-            "Procurando duplicadas",
-            lambda: self._format_duplicate_groups(
-                self._adapter.find_duplicates(settings.source)
-            ),
-        )
+
+        def action() -> str:
+            groups = self._adapter.find_duplicates(settings.source)
+            self.session.set_duplicate_groups(groups)
+            self.session.add_log(
+                f"Duplicate scan completed for {settings.source}: {len(groups)} groups"
+            )
+            return self._format_duplicate_groups(groups)
+
+        self._run_action("Procurando duplicadas", action)
 
     def preview_plan(self) -> None:
         settings = self._settings(require_output=True)
         if settings is None:
             return
-        self._run_action(
-            "Planejando",
-            lambda: self._format_plan_preview(self._adapter.plan(settings)),
-        )
+
+        def action() -> str:
+            operations = self._adapter.plan(settings)
+            self.session.set_preview_operations(operations)
+            self.session.add_log(
+                f"Plan preview completed for {settings.source}: {len(operations)} operations"
+            )
+            return self._format_plan_preview(operations)
+
+        self._run_action("Planejando", action)
 
     def execute_plan(self) -> None:
         settings = self._settings(require_output=True)

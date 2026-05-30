@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 
 from photo_organizer.gui import app as gui_app
 from photo_organizer.gui import windowing
@@ -178,3 +179,49 @@ def test_main_window_wraps_pages_in_scroll_areas() -> None:
         isinstance(window.stack.widget(index), QScrollArea)
         for index in range(window.stack.count())
     )
+
+
+def test_main_window_select_source_directory_updates_session_and_scans(monkeypatch, tmp_path) -> None:
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from photo_organizer.gui.main_window import MainWindow
+    from photo_organizer.gui.session import SessionState
+    from photo_organizer.gui.theme import apply_app_theme
+
+    app = QApplication.instance() or QApplication([])
+    apply_app_theme(app)
+
+    selected_source = tmp_path / "source"
+    selected_source.mkdir()
+    scanned_file = selected_source / "photo.jpg"
+    scanned_file.write_bytes(b"fake")
+
+    class FakeAdapter:
+        def __init__(self):
+            self.scanned_sources = []
+
+        def scan(self, source):
+            self.scanned_sources.append(source)
+            return [Path(source) / "photo.jpg"]
+
+    adapter = FakeAdapter()
+    session = SessionState()
+    monkeypatch.setattr(
+        "photo_organizer.gui.main_window.QFileDialog.getExistingDirectory",
+        lambda *args: str(selected_source),
+    )
+
+    window = MainWindow(adapter=adapter, session=session)
+    window.select_source_directory()
+
+    assert session.source_directory == str(selected_source)
+    assert session.scanned_files == [scanned_file]
+    assert session.metrics.total_files == 1
+    assert session.metrics.by_extension == {".jpg": 1}
+    assert adapter.scanned_sources == [str(selected_source)]
+    assert window.source_path_label.text() == f"SOURCE PATH: {selected_source}"
+    assert window.organize_page.source_picker.text() == str(selected_source)

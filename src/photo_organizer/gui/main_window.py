@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -15,6 +17,7 @@ from PySide6.QtWidgets import (
 from photo_organizer import __app_name__
 from photo_organizer.gui.adapters import OrganizerAdapter
 from photo_organizer.gui.pages import OrganizePage, PlaceholderPage
+from photo_organizer.gui.session import SessionMetrics, SessionState
 from photo_organizer.gui.theme import SPACING, set_active, set_theme_role
 from photo_organizer.gui.widgets import create_scrollable_page
 
@@ -31,10 +34,12 @@ class MainWindow(QMainWindow):
     def __init__(
         self,
         adapter: OrganizerAdapter,
+        session: SessionState | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._adapter = adapter
+        self.session = session or SessionState(self)
         self._nav_buttons: list[QPushButton] = []
         self.setWindowTitle(__app_name__)
         self.resize(1280, 780)
@@ -43,7 +48,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         self.stack = QStackedWidget()
         self.dashboard_page = PlaceholderPage("Dashboard")
-        self.organize_page = OrganizePage(adapter=self._adapter)
+        self.organize_page = OrganizePage(adapter=self._adapter, session=self.session)
         self.audit_page = PlaceholderPage("Audit")
         self.settings_page = PlaceholderPage("Settings")
 
@@ -91,6 +96,7 @@ class MainWindow(QMainWindow):
 
         select_folder = QPushButton("Select Folder")
         set_theme_role(select_folder, "secondaryButton")
+        select_folder.clicked.connect(self.select_source_directory)
 
         support = QLabel("Support")
         set_theme_role(support, "code")
@@ -139,19 +145,33 @@ class MainWindow(QMainWindow):
 
         title = QLabel("Photo Organizer")
         set_theme_role(title, "headline")
-        workflow = QLabel("Import   Export   Batch Edit")
-        set_theme_role(workflow, "code")
+        self.source_path_label = QLabel("SOURCE PATH: not selected")
+        self.source_path_label.setTextInteractionFlags(
+            self.source_path_label.textInteractionFlags()
+            | Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        set_theme_role(self.source_path_label, "metadata")
+        self.source_metrics_label = QLabel("SCAN: -- files")
+        set_theme_role(self.source_metrics_label, "code")
         execute = QPushButton("Execute Move")
         set_theme_role(execute, "primaryButton")
+
+        title_layout = QVBoxLayout()
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(SPACING.xs)
+        title_layout.addWidget(title)
+        title_layout.addWidget(self.source_path_label)
 
         layout = QHBoxLayout()
         layout.setContentsMargins(SPACING.lg, 0, SPACING.lg, 0)
         layout.setSpacing(SPACING.lg)
-        layout.addWidget(title)
-        layout.addWidget(workflow)
+        layout.addLayout(title_layout)
+        layout.addWidget(self.source_metrics_label)
         layout.addStretch(1)
         layout.addWidget(execute)
         topbar.setLayout(layout)
+        self.session.source_directory_changed.connect(self._update_source_path)
+        self.session.metrics_changed.connect(self._update_source_metrics)
         return topbar
 
     def _build_footer(self) -> QWidget:
@@ -183,3 +203,21 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         for button_index, button in enumerate(self._nav_buttons):
             set_active(button, button_index == index)
+
+    def select_source_directory(self) -> None:
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "Selecionar pasta de origem",
+            self.session.source_directory,
+        )
+        if not directory:
+            return
+        self.session.set_source_directory(directory)
+        self.show_page(PAGE_ORGANIZE)
+        self.organize_page.scan_source()
+
+    def _update_source_path(self, source_directory: str) -> None:
+        self.source_path_label.setText(f"SOURCE PATH: {source_directory}")
+
+    def _update_source_metrics(self, metrics: SessionMetrics) -> None:
+        self.source_metrics_label.setText(f"SCAN: {metrics.total_files:,} files")

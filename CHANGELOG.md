@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- GUI source folder selection with `QFileDialog`, shared session state and header display of the selected path.
+- GUI session state prepared for scanned file metrics, duplicate groups, operation preview data and logs.
+
 ## [1.1.0] - 2026-05-30
 
 ### Added

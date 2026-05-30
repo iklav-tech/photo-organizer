@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QPushButton, QWidget
 
 from photo_organizer.gui.theme import set_theme_role
@@ -9,6 +10,8 @@ from photo_organizer.gui.theme import set_theme_role
 
 class PathPicker(QWidget):
     """A line edit plus a directory selection button."""
+
+    directory_selected = Signal(str)
 
     def __init__(self, *, caption: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -34,3 +37,4 @@ class PathPicker(QWidget):
         directory = QFileDialog.getExistingDirectory(self, self._caption)
         if directory:
             self.set_text(directory)
+            self.directory_selected.emit(directory)
