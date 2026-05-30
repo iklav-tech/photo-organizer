@@ -239,3 +239,62 @@ def test_main_window_select_source_directory_updates_session_and_scans(monkeypat
     assert window.dashboard_page.total_files_card.value_label.text() == "1"
     assert window.dashboard_page.total_size_card.value_label.text() == "4 B"
     assert window.dashboard_page.formats_card.value_label.text() == "1"
+
+
+def test_dashboard_shows_metadata_health_and_duplicate_summary(tmp_path) -> None:
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from photo_organizer.gui.pages.dashboard_page import DashboardPage
+    from photo_organizer.gui.session import (
+        MetadataHealth,
+        MetadataRatio,
+        SessionState,
+    )
+    from photo_organizer.gui.theme import apply_app_theme
+    from photo_organizer.hashing import DuplicateGroup
+
+    app = QApplication.instance() or QApplication([])
+    apply_app_theme(app)
+
+    original = tmp_path / "a.jpg"
+    duplicate = tmp_path / "b.jpg"
+    original.write_bytes(b"same")
+    duplicate.write_bytes(b"same")
+
+    session = SessionState()
+    dashboard = DashboardPage(session=session)
+
+    assert dashboard.metadata_panel.gps_row.percent.text() == "--"
+    assert dashboard.duplicates_panel.total_label.text() == "--"
+
+    session.set_scan_result(
+        [original, duplicate],
+        total_size_bytes=8,
+        by_extension={".jpg": 2},
+        by_format={"JPEG": 2},
+        metadata_health=MetadataHealth(
+            gps_presence=MetadataRatio(1, 2),
+            timestamp_consistency=MetadataRatio(2, 2),
+            camera_profiles=MetadataRatio(0, 2),
+        ),
+    )
+    session.set_duplicate_groups(
+        [
+            DuplicateGroup(
+                content_hash="hash",
+                original=original,
+                duplicates=(duplicate,),
+            )
+        ]
+    )
+
+    assert dashboard.metadata_panel.gps_row.percent.text() == "50%"
+    assert dashboard.metadata_panel.timestamp_row.percent.text() == "100%"
+    assert dashboard.metadata_panel.camera_row.percent.text() == "0%"
+    assert dashboard.duplicates_panel.total_label.text() == "1"
+    assert dashboard.duplicates_panel.groups_row.value.text() == "1"
+    assert dashboard.duplicates_panel.files_row.value.text() == "2"

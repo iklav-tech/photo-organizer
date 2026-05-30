@@ -16,7 +16,13 @@ from photo_organizer.executor import (
 )
 from photo_organizer.constants import IMAGE_FORMATS
 from photo_organizer.hashing import DuplicateGroup, find_duplicate_image_groups
-from photo_organizer.metadata import DATE_HEURISTICS_DEFAULT
+from photo_organizer.gui.session import MetadataHealth, MetadataRatio
+from photo_organizer.metadata import (
+    DATE_HEURISTICS_DEFAULT,
+    extract_camera_profile,
+    extract_gps_coordinates,
+    resolve_best_available_datetime,
+)
 from photo_organizer.scanner import find_image_files
 
 
@@ -63,6 +69,44 @@ class OrganizerAdapter:
             total_size_bytes=total_size_bytes,
             by_extension=dict(sorted(by_extension.items())),
             by_format=dict(sorted(by_format.items())),
+        )
+
+    def metadata_health(self, files: list[Path]) -> MetadataHealth:
+        total = len(files)
+        if total == 0:
+            return MetadataHealth()
+
+        gps_present = 0
+        timestamp_consistent = 0
+        camera_profiles = 0
+
+        for path in files:
+            try:
+                if extract_gps_coordinates(path) is not None:
+                    gps_present += 1
+            except Exception:
+                pass
+
+            try:
+                resolved = resolve_best_available_datetime(path)
+                if (
+                    resolved.reconciliation is None
+                    or not resolved.reconciliation.conflict
+                ):
+                    timestamp_consistent += 1
+            except Exception:
+                pass
+
+            try:
+                if extract_camera_profile(path):
+                    camera_profiles += 1
+            except Exception:
+                pass
+
+        return MetadataHealth(
+            gps_presence=MetadataRatio(gps_present, total),
+            timestamp_consistency=MetadataRatio(timestamp_consistent, total),
+            camera_profiles=MetadataRatio(camera_profiles, total),
         )
 
     def find_duplicates(self, source: str) -> list[DuplicateGroup]:
