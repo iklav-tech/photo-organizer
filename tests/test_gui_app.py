@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from types import SimpleNamespace
 from pathlib import Path
 
 from photo_organizer.gui import app as gui_app
@@ -163,7 +164,7 @@ def test_main_window_wraps_pages_in_scroll_areas() -> None:
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-    from PySide6.QtWidgets import QApplication, QScrollArea
+    from PySide6.QtWidgets import QApplication, QLabel, QScrollArea
 
     from photo_organizer.gui.adapters.organizer import OrganizerAdapter
     from photo_organizer.gui.main_window import MainWindow
@@ -175,10 +176,13 @@ def test_main_window_wraps_pages_in_scroll_areas() -> None:
     window = MainWindow(adapter=OrganizerAdapter())
 
     assert window.stack.count() == 4
+    assert window.windowTitle() == "photo-organizer"
     assert all(
         isinstance(window.stack.widget(index), QScrollArea)
         for index in range(window.stack.count())
     )
+    assert any(label.text() == "PHOTO ORGANIZER" for label in window.findChildren(QLabel))
+    assert any(label.text() == "v1.1.0" for label in window.findChildren(QLabel))
 
 
 def test_main_window_select_source_directory_updates_session_and_scans(monkeypatch, tmp_path) -> None:
@@ -208,6 +212,13 @@ def test_main_window_select_source_directory_updates_session_and_scans(monkeypat
             self.scanned_sources.append(source)
             return [Path(source) / "photo.jpg"]
 
+        def scan_metrics(self, files):
+            return SimpleNamespace(
+                total_size_bytes=sum(path.stat().st_size for path in files),
+                by_extension={".jpg": len(files)},
+                by_format={"JPEG": len(files)},
+            )
+
     adapter = FakeAdapter()
     session = SessionState()
     monkeypatch.setattr(
@@ -225,3 +236,6 @@ def test_main_window_select_source_directory_updates_session_and_scans(monkeypat
     assert adapter.scanned_sources == [str(selected_source)]
     assert window.source_path_label.text() == f"SOURCE PATH: {selected_source}"
     assert window.organize_page.source_picker.text() == str(selected_source)
+    assert window.dashboard_page.total_files_card.value_label.text() == "1"
+    assert window.dashboard_page.total_size_card.value_label.text() == "4 B"
+    assert window.dashboard_page.formats_card.value_label.text() == "1"

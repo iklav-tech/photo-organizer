@@ -16,7 +16,9 @@ class SessionMetrics:
     """Computed values shown by the GUI and reused by previews/logs."""
 
     total_files: int = 0
+    total_size_bytes: int = 0
     by_extension: dict[str, int] = field(default_factory=dict)
+    by_format: dict[str, int] = field(default_factory=dict)
 
 
 class SessionState(QObject):
@@ -47,11 +49,20 @@ class SessionState(QObject):
         self.source_directory_changed.emit(normalized)
         self.metrics_changed.emit(self.metrics)
 
-    def set_scan_result(self, files: list[Path]) -> None:
+    def set_scan_result(
+        self,
+        files: list[Path],
+        *,
+        total_size_bytes: int = 0,
+        by_extension: dict[str, int] | None = None,
+        by_format: dict[str, int] | None = None,
+    ) -> None:
         self.scanned_files = files
         self.metrics = SessionMetrics(
             total_files=len(files),
-            by_extension=self._count_by_extension(files),
+            total_size_bytes=total_size_bytes,
+            by_extension=by_extension or {},
+            by_format=by_format or {},
         )
         self.metrics_changed.emit(self.metrics)
 
@@ -64,11 +75,3 @@ class SessionState(QObject):
     def add_log(self, message: str) -> None:
         self.logs.append(message)
         self.log_message_added.emit(message)
-
-    @staticmethod
-    def _count_by_extension(files: list[Path]) -> dict[str, int]:
-        counts: dict[str, int] = {}
-        for path in files:
-            extension = path.suffix.lower() or "<none>"
-            counts[extension] = counts.get(extension, 0) + 1
-        return dict(sorted(counts.items()))

@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - GUI source folder selection with `QFileDialog`, shared session state and header display of the selected path.
 - GUI session state prepared for scanned file metrics, duplicate groups, operation preview data and logs.
+- Dashboard metric cards for total files, total size and supported format distribution, backed by the GUI adapter scan summary.
+
+### Fixed
+
+- Replaced leftover mockup branding in the GUI with the project display name and package version.
 
 ## [1.1.0] - 2026-05-30
 

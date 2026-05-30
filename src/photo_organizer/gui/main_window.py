@@ -14,9 +14,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from photo_organizer import __app_name__
+from photo_organizer import __app_name__, __version__
 from photo_organizer.gui.adapters import OrganizerAdapter
-from photo_organizer.gui.pages import OrganizePage, PlaceholderPage
+from photo_organizer.gui.pages import DashboardPage, OrganizePage, PlaceholderPage
 from photo_organizer.gui.session import SessionMetrics, SessionState
 from photo_organizer.gui.theme import SPACING, set_active, set_theme_role
 from photo_organizer.gui.widgets import create_scrollable_page
@@ -26,6 +26,7 @@ PAGE_DASHBOARD = 0
 PAGE_ORGANIZE = 1
 PAGE_AUDIT = 2
 PAGE_SETTINGS = 3
+DISPLAY_NAME = "PHOTO ORGANIZER"
 
 
 class MainWindow(QMainWindow):
@@ -47,7 +48,7 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         self.stack = QStackedWidget()
-        self.dashboard_page = PlaceholderPage("Dashboard")
+        self.dashboard_page = DashboardPage(session=self.session)
         self.organize_page = OrganizePage(adapter=self._adapter, session=self.session)
         self.audit_page = PlaceholderPage("Audit")
         self.settings_page = PlaceholderPage("Settings")
@@ -75,9 +76,9 @@ class MainWindow(QMainWindow):
         sidebar.setFixedWidth(SPACING.sidebar_width)
         set_theme_role(sidebar, "sidebar")
 
-        brand = QLabel("PHOTOMASTER")
+        brand = QLabel(DISPLAY_NAME)
         set_theme_role(brand, "brand")
-        version = QLabel("V1.0.4 PRO")
+        version = QLabel(f"v{__version__}")
         set_theme_role(version, "metadata")
 
         brand_layout = QVBoxLayout()
@@ -143,7 +144,7 @@ class MainWindow(QMainWindow):
         topbar.setFixedHeight(SPACING.topbar_height)
         set_theme_role(topbar, "topbar")
 
-        title = QLabel("Photo Organizer")
+        title = QLabel(DISPLAY_NAME)
         set_theme_role(title, "headline")
         self.source_path_label = QLabel("SOURCE PATH: not selected")
         self.source_path_label.setTextInteractionFlags(
@@ -179,7 +180,7 @@ class MainWindow(QMainWindow):
         footer.setFixedHeight(SPACING.footer_height)
         set_theme_role(footer, "footer")
 
-        engine = QLabel("PHOTOMASTER.SYS   System Engine v1.0.4 - Ready")
+        engine = QLabel(f"{DISPLAY_NAME}.SYS   System Engine v{__version__} - Ready")
         set_theme_role(engine, "code")
         actions = QLabel("Terminal Output     Process Monitor     Clear Cache     9.2 ms")
         set_theme_role(actions, "code")

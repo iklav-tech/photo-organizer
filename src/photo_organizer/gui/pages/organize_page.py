@@ -300,7 +300,13 @@ class OrganizePage(QWidget):
 
         def action() -> str:
             files = self._adapter.scan(settings.source)
-            self.session.set_scan_result(files)
+            metrics = self._adapter.scan_metrics(files)
+            self.session.set_scan_result(
+                files,
+                total_size_bytes=metrics.total_size_bytes,
+                by_extension=metrics.by_extension,
+                by_format=metrics.by_format,
+            )
             self.session.add_log(f"Scan completed for {settings.source}: {len(files)} files")
             self.total_files_metric.setText(f"{len(files):,}")
             self.scan_badge.setText("SCAN_COMPLETE: 100%")
