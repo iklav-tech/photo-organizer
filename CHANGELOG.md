@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-30
+
+### Added
+
+- Initial PySide6 desktop GUI entrypoint with `photo-organizer --gui`.
+- GUI bootstrap with dependency validation and actionable install guidance when PySide6 is unavailable.
+- Base GUI architecture with application bootstrap, organizer adapter, main window shell, navigation, theme helpers, window geometry helpers, reusable widgets and task worker structure.
+- Initial desktop shell with sidebar, topbar, footer and organize page.
+
+### Changed
+
+- PySide6 is now installed with the default project dependencies so local editable installs can launch the GUI without requesting the `gui` extra separately.
+- `requirements.txt` now lists the canonical `PySide6` package directly and leaves PySide6 addon/essential packages to dependency resolution.
+- README was reorganized as the project entrypoint following Standard Readme conventions and updated for the current CLI, GUI, supported formats, reports, limitations and contribution flow.
+
 ## [1.0.0] - 2026-05-22
 
 ### Added

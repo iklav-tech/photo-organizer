@@ -36,4 +36,4 @@ Esta pagina descreve o comportamento esperado quando o projeto encontra formatos
 
 - A suite de testes usa corpus sinteticos. Testes que escrevem HEIC podem ser pulados quando o backend local nao suporta escrita nesse formato.
 - Validacao com RAWs reais e opcional e depende da variavel `PHOTO_ORGANIZER_REAL_RAW_DIR` no ambiente de testes.
-- O projeto e uma CLI local; nao inclui interface grafica, catalogo visual, sincronizacao cloud ou banco de dados de biblioteca.
+- O projeto e uma ferramenta local com CLI completa e GUI inicial; nao inclui catalogo visual, sincronizacao cloud ou banco de dados de biblioteca.
