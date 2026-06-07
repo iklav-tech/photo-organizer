@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+import logging
+
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -16,6 +19,10 @@ from PySide6.QtWidgets import (
 
 from photo_organizer import __app_name__, __version__
 from photo_organizer.gui.adapters import OrganizerAdapter
+from photo_organizer.gui.logging_bridge import (
+    drain_gui_log_queue,
+    install_gui_log_handler,
+)
 from photo_organizer.gui.pages import DashboardPage, OrganizePage, PlaceholderPage
 from photo_organizer.gui.session import SessionMetrics, SessionState
 from photo_organizer.gui.theme import SPACING, set_active, set_theme_role
@@ -41,10 +48,24 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self._adapter = adapter
         self.session = session or SessionState(self)
+        self._log_handler, self._log_queue = install_gui_log_handler()
+        self._log_timer = QTimer(self)
+        self._log_timer.setInterval(100)
+        self._log_timer.timeout.connect(self._drain_backend_logs)
+        self._log_timer.start()
         self._nav_buttons: list[QPushButton] = []
         self.setWindowTitle(__app_name__)
         self.resize(1280, 780)
         self._build_ui()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._log_timer.stop()
+        self._drain_backend_logs()
+        logging.getLogger().removeHandler(self._log_handler)
+        super().closeEvent(event)
+
+    def _drain_backend_logs(self) -> None:
+        drain_gui_log_queue(self._log_queue, self.session)
 
     def _build_ui(self) -> None:
         self.stack = QStackedWidget()

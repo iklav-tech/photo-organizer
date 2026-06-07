@@ -296,7 +296,7 @@ def app_stylesheet() -> str:
         color: {c.on_surface};
     }}
 
-    QLineEdit, QComboBox, QPlainTextEdit {{
+    QLineEdit, QComboBox, QPlainTextEdit, QTextEdit {{
         background-color: {c.surface_low};
         border: 1px solid {c.outline_variant};
         border-radius: {s.card_radius}px;
@@ -304,7 +304,7 @@ def app_stylesheet() -> str:
         padding: 7px 9px;
     }}
 
-    QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{
+    QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
         border-color: {c.primary};
     }}
 
@@ -359,7 +359,7 @@ def app_stylesheet() -> str:
         background-color: {c.secondary};
     }}
 
-    QPlainTextEdit[themeRole="logPanel"] {{
+    QPlainTextEdit[themeRole="logPanel"], QTextEdit[themeRole="logPanel"] {{
         background-color: {c.surface_dim};
         border: 0;
         color: {c.primary_soft};

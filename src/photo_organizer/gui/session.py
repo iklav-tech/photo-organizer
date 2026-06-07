@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from PySide6.QtCore import QObject, Signal
 
@@ -38,6 +40,35 @@ class MetadataHealth:
     camera_profiles: MetadataRatio = field(default_factory=MetadataRatio)
 
 
+LogLevel = Literal["INFO", "WARNING", "ERROR"]
+
+
+@dataclass(frozen=True)
+class LogEvent:
+    """Structured GUI log line emitted by user actions or backend logging."""
+
+    message: str
+    level: LogLevel = "INFO"
+    timestamp: datetime = field(default_factory=datetime.now)
+    source: str = "gui"
+
+
+@dataclass(frozen=True)
+class TaskProgress:
+    """Progress event shape shared by current and future async GUI tasks."""
+
+    label: str
+    current: int = 0
+    total: int = 0
+    detail: str = ""
+
+    @property
+    def percent(self) -> int | None:
+        if self.total <= 0:
+            return None
+        return round((max(0, min(self.current, self.total)) / self.total) * 100)
+
+
 class SessionState(QObject):
     """Mutable session state shared by the main window and pages."""
 
@@ -47,6 +78,8 @@ class SessionState(QObject):
     duplicate_groups_changed = Signal(object)
     preview_operations_changed = Signal(object)
     log_message_added = Signal(str)
+    log_event_added = Signal(object)
+    task_progress_changed = Signal(object)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -58,7 +91,7 @@ class SessionState(QObject):
         self.preview_plan_complete = False
         self.metrics = SessionMetrics()
         self.metadata_health = MetadataHealth()
-        self.logs: list[str] = []
+        self.logs: list[LogEvent] = []
 
     def set_source_directory(self, source_directory: str) -> None:
         normalized = str(Path(source_directory).expanduser())
@@ -108,6 +141,19 @@ class SessionState(QObject):
         self.preview_plan_complete = True
         self.preview_operations_changed.emit(operations)
 
-    def add_log(self, message: str) -> None:
-        self.logs.append(message)
-        self.log_message_added.emit(message)
+    def add_log(
+        self,
+        message: str,
+        *,
+        level: LogLevel = "INFO",
+        source: str = "gui",
+    ) -> None:
+        self.add_log_event(LogEvent(message=message, level=level, source=source))
+
+    def add_log_event(self, event: LogEvent) -> None:
+        self.logs.append(event)
+        self.log_event_added.emit(event)
+        self.log_message_added.emit(event.message)
+
+    def report_progress(self, progress: TaskProgress) -> None:
+        self.task_progress_changed.emit(progress)

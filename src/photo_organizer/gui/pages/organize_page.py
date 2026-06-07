@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import multiprocessing
+import tempfile
 from collections.abc import Callable
+from concurrent.futures import BrokenExecutor, Future, ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
+from queue import Queue
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread, QTimer, Qt, Slot
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -15,7 +21,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -25,9 +30,201 @@ from PySide6.QtWidgets import (
 from photo_organizer.executor import DestinationConflictError, FileOperation
 from photo_organizer.hashing import DuplicateGroup
 from photo_organizer.gui.adapters.organizer import GuiSettings, OrganizerAdapter
-from photo_organizer.gui.session import SessionMetrics, SessionState
+from photo_organizer.gui.logging_bridge import (
+    FileLogEventReader,
+    FileLogEventWriter,
+    drain_gui_log_queue,
+    install_gui_log_handler,
+)
+from photo_organizer.gui.session import (
+    LogEvent,
+    MetadataHealth,
+    SessionMetrics,
+    SessionState,
+    TaskProgress,
+)
 from photo_organizer.gui.theme import SPACING, set_theme_role
-from photo_organizer.gui.widgets import PathPicker
+from photo_organizer.gui.widgets import LogConsole, PathPicker
+from photo_organizer.gui.workers import TaskWorker
+from photo_organizer.gui.workers.task_worker import TaskReporter
+
+
+@dataclass(frozen=True)
+class ScanResult:
+    source: str
+    files: list[Path]
+    total_size_bytes: int
+    by_extension: dict[str, int]
+    by_format: dict[str, int]
+    metadata_health: MetadataHealth | None
+    output: str
+
+
+@dataclass(frozen=True)
+class DuplicateResult:
+    groups: list[DuplicateGroup]
+    output: str
+
+
+@dataclass(frozen=True)
+class PlanResult:
+    operations: list[FileOperation]
+    output: str
+
+
+@dataclass(frozen=True)
+class ExecuteResult:
+    logs: list[str]
+    output: str
+
+
+def _scan_with_default_adapter(
+    settings: GuiSettings,
+    event_sink: str | Queue[LogEvent] | FileLogEventWriter | None = None,
+) -> ScanResult:
+    _prepare_backend_process(event_sink)
+    adapter = OrganizerAdapter()
+    files = adapter.scan(settings.source)
+    metrics = adapter.scan_metrics(files)
+    metadata_health = adapter.metadata_health(files)
+    return _make_scan_result(settings.source, files, metrics, metadata_health)
+
+
+def _plan_with_default_adapter(
+    settings: GuiSettings,
+    event_sink: str | Queue[LogEvent] | FileLogEventWriter | None = None,
+) -> PlanResult:
+    _prepare_backend_process(event_sink)
+    operations = OrganizerAdapter().plan(settings)
+    return PlanResult(
+        operations=operations,
+        output=_format_plan_preview(operations),
+    )
+
+
+def _execute_with_default_adapter(
+    settings: GuiSettings,
+    event_sink: str | Queue[LogEvent] | FileLogEventWriter | None = None,
+) -> ExecuteResult:
+    _prepare_backend_process(event_sink)
+    logs = OrganizerAdapter().execute(settings)
+    return _make_execute_result(settings, logs)
+
+
+def _run_in_process(task: Callable[[GuiSettings], object], settings: GuiSettings) -> object:
+    try:
+        with ProcessPoolExecutor(
+            max_workers=1,
+            mp_context=_backend_process_context(),
+        ) as executor:
+            return executor.submit(task, settings).result()
+    except BrokenExecutor as exc:
+        raise _backend_process_crash_error(exc) from exc
+
+
+def _backend_process_crash_error(_exc: Exception) -> RuntimeError:
+    return RuntimeError(
+        "Backend worker process crashed while processing media metadata. "
+        "The GUI was kept alive; check the last logged file and native HEIF/EXIF "
+        "dependencies."
+    )
+
+
+def _backend_process_context():
+    return multiprocessing.get_context("spawn")
+
+
+def _prepare_backend_process(
+    event_sink: str | Queue[LogEvent] | FileLogEventWriter | None = None,
+) -> None:
+    root_logger = logging.getLogger()
+    for handler in list(root_logger.handlers):
+        if handler.__class__.__name__ == "GuiLogHandler":
+            root_logger.removeHandler(handler)
+    if event_sink is None:
+        return
+    if isinstance(event_sink, str):
+        install_gui_log_handler(FileLogEventWriter(event_sink))
+    else:
+        install_gui_log_handler(event_sink)
+
+
+def _make_scan_result(
+    source: str,
+    files: list[Path],
+    metrics: object,
+    metadata_health: MetadataHealth | None,
+) -> ScanResult:
+    lines = [f"Arquivos suportados: {len(files)}", ""]
+    lines.extend(str(path) for path in files[:500])
+    if len(files) > 500:
+        lines.append(f"... mais {len(files) - 500} arquivos")
+    return ScanResult(
+        source=source,
+        files=files,
+        total_size_bytes=metrics.total_size_bytes,
+        by_extension=metrics.by_extension,
+        by_format=metrics.by_format,
+        metadata_health=metadata_health,
+        output="\n".join(lines),
+    )
+
+
+def _make_execute_result(settings: GuiSettings, logs: list[str]) -> ExecuteResult:
+    summary = [
+        f"Operacoes: {len(logs)}",
+        f"Modo: {'dry-run' if settings.dry_run else 'execute'}",
+        f"Quarentena: {Path(settings.output) / '.quarantine'}",
+        "",
+    ]
+    summary.extend(logs)
+    return ExecuteResult(logs=logs, output="\n".join(summary))
+
+
+def _format_plan_preview(operations: list[FileOperation]) -> str:
+    if not operations:
+        return "Nenhuma operacao planejada."
+
+    lines = [f"Operacoes planejadas: {len(operations)}", ""]
+    for operation in operations[:100]:
+        lines.append(
+            f"{operation.mode.upper()}: "
+            f"{operation.source} -> {operation.destination}"
+        )
+    if len(operations) > 100:
+        lines.append(f"... mais {len(operations) - 100} operacoes")
+    return "\n".join(lines)
+
+
+def _format_duplicate_groups(
+    groups: list[DuplicateGroup],
+    *,
+    max_groups: int = 100,
+    max_duplicates_per_group: int = 20,
+) -> str:
+    if not groups:
+        return "Nenhuma imagem duplicada encontrada."
+
+    duplicate_files = sum(len(group.duplicates) for group in groups)
+    lines = [
+        f"Grupos duplicados: {len(groups)}",
+        f"Arquivos duplicados: {duplicate_files}",
+        "",
+    ]
+    for index, group in enumerate(groups[:max_groups], start=1):
+        lines.append(f"Grupo {index}:")
+        lines.append(f"  Hash: {group.content_hash}")
+        lines.append(f"  Original: {group.original}")
+        for duplicate in group.duplicates[:max_duplicates_per_group]:
+            lines.append(f"  Duplicada: {duplicate}")
+        hidden_duplicates = len(group.duplicates) - max_duplicates_per_group
+        if hidden_duplicates > 0:
+            lines.append(f"  ... mais {hidden_duplicates} duplicadas neste grupo")
+        lines.append("")
+    hidden_groups = len(groups) - max_groups
+    if hidden_groups > 0:
+        lines.append(f"... mais {hidden_groups} grupos duplicados")
+    return "\n".join(lines).rstrip()
 
 
 class OrganizePage(QWidget):
@@ -42,9 +239,22 @@ class OrganizePage(QWidget):
         super().__init__(parent)
         self._adapter = adapter
         self.session = session
+        self._task_thread: QThread | None = None
+        self._task_worker: TaskWorker[object] | None = None
+        self._task_label = ""
+        self._task_on_finished: Callable[[object], None] | None = None
+        self._process_executor: ProcessPoolExecutor | None = None
+        self._process_future: Future[object] | None = None
+        self._process_timer: QTimer | None = None
+        self._process_log_queue: FileLogEventReader | None = None
+        self._process_log_path: Path | None = None
+        self._process_label = ""
+        self._process_on_finished: Callable[[object], None] | None = None
         self._build_ui()
         self.session.source_directory_changed.connect(self._set_source_directory)
         self.session.metrics_changed.connect(self._update_metrics)
+        self.session.log_event_added.connect(self._append_log_event)
+        self.session.task_progress_changed.connect(self._update_task_progress)
 
     def _build_ui(self) -> None:
         set_theme_role(self, "page")
@@ -62,10 +272,7 @@ class OrganizePage(QWidget):
         self.status_label = QLabel("Pronto")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         set_theme_role(self.status_label, "badgePrimary")
-        self.output_log = QPlainTextEdit()
-        self.output_log.setReadOnly(True)
-        self.output_log.setPlaceholderText("System engine output will appear here...")
-        set_theme_role(self.output_log, "logPanel")
+        self.output_log = LogConsole()
 
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
@@ -77,23 +284,23 @@ class OrganizePage(QWidget):
         form.addRow("Organizar por", self.strategy_input)
         form.addRow("", self.dry_run_input)
 
-        scan_button = QPushButton("Scan")
-        scan_button.clicked.connect(self.scan_source)
-        dedupe_button = QPushButton("Dedupe")
-        dedupe_button.clicked.connect(self.find_duplicates)
-        plan_button = QPushButton("Planejar")
-        plan_button.clicked.connect(self.preview_plan)
-        execute_button = QPushButton("Executar")
-        set_theme_role(execute_button, "primaryButton")
-        execute_button.clicked.connect(self.execute_plan)
+        self.scan_button = QPushButton("Scan")
+        self.scan_button.clicked.connect(self.scan_source)
+        self.dedupe_button = QPushButton("Dedupe")
+        self.dedupe_button.clicked.connect(self.find_duplicates)
+        self.plan_button = QPushButton("Planejar")
+        self.plan_button.clicked.connect(self.preview_plan)
+        self.execute_button = QPushButton("Executar")
+        set_theme_role(self.execute_button, "primaryButton")
+        self.execute_button.clicked.connect(self.execute_plan)
 
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(SPACING.sm)
-        actions.addWidget(scan_button)
-        actions.addWidget(dedupe_button)
-        actions.addWidget(plan_button)
-        actions.addWidget(execute_button)
+        actions.addWidget(self.scan_button)
+        actions.addWidget(self.dedupe_button)
+        actions.addWidget(self.plan_button)
+        actions.addWidget(self.execute_button)
         actions.addStretch(1)
 
         self.source_path_label = QLabel("SOURCE PATH: not selected")
@@ -276,54 +483,265 @@ class OrganizePage(QWidget):
             organization_strategy=self.strategy_input.currentText(),
         )
 
-    def _run_action(self, label: str, action: Callable[[], str]) -> None:
+    def _run_action(
+        self,
+        label: str,
+        action: Callable[[TaskReporter], object],
+        on_finished: Callable[[object], None],
+    ) -> None:
+        if self._has_running_task():
+            self.session.add_log(
+                "A task is already running; wait for it to finish.",
+                level="WARNING",
+                source="gui",
+            )
+            return
+
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         self.status_label.setText(f"{label}...")
+        self._set_actions_enabled(False)
+        self.session.add_log(f"{label} started.", source="task")
+
+        thread = QThread(self)
+        worker: TaskWorker[object] = TaskWorker(action)
+        worker.moveToThread(thread)
+        self._task_thread = thread
+        self._task_worker = worker
+        self._task_label = label
+        self._task_on_finished = on_finished
+
+        thread.started.connect(worker.run)
+        worker.progress.connect(self.session.report_progress)
+        worker.log_event.connect(self.session.add_log_event)
+        worker.finished.connect(self._finish_current_action)
+        worker.failed.connect(self._fail_action)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._clear_task_thread)
+        thread.start()
+
+    def _run_process_action(
+        self,
+        label: str,
+        task: Callable[..., object],
+        settings: GuiSettings,
+        on_finished: Callable[[object], None],
+    ) -> None:
+        if self._has_running_task():
+            self.session.add_log(
+                "A task is already running; wait for it to finish.",
+                level="WARNING",
+                source="gui",
+            )
+            return
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        self.status_label.setText(f"{label}...")
+        self._set_actions_enabled(False)
+        self.session.add_log(f"{label} started.", source="task")
+        self.session.report_progress(
+            TaskProgress(label=label, current=0, total=1, detail=settings.source)
+        )
+
+        context = _backend_process_context()
+        spool = tempfile.NamedTemporaryFile(
+            prefix="photo-organizer-gui-logs-",
+            suffix=".jsonl",
+            delete=False,
+        )
+        spool.close()
+        log_path = Path(spool.name)
+        log_reader = FileLogEventReader(log_path)
+        executor = ProcessPoolExecutor(
+            max_workers=1,
+            mp_context=context,
+        )
+        timer = QTimer(self)
+        timer.setInterval(50)
+        timer.timeout.connect(self._poll_process_action)
+
+        self._process_executor = executor
+        self._process_future = executor.submit(task, settings, str(log_path))
+        self._process_timer = timer
+        self._process_log_queue = log_reader
+        self._process_log_path = log_path
+        self._process_label = label
+        self._process_on_finished = on_finished
+        timer.start()
+
+    @Slot()
+    def _poll_process_action(self) -> None:
+        self._drain_process_logs()
+        future = self._process_future
+        if future is None or not future.done():
+            return
+
+        label = self._process_label
+        on_finished = self._process_on_finished
         try:
-            self.output_log.setPlainText(action())
-            self.status_label.setText("Concluido")
-        except (
-            FileNotFoundError,
-            NotADirectoryError,
-            DestinationConflictError,
-            ValueError,
-        ) as exc:
-            self.status_label.setText("Erro")
-            QMessageBox.critical(self, "Erro", str(exc))
+            result = future.result()
+            self.session.report_progress(
+                TaskProgress(label=label, current=1, total=1, detail="complete")
+            )
+            if on_finished is None:
+                raise RuntimeError("Task finished without a handler.")
+            self._finish_action(label, result, on_finished)
+        except BrokenExecutor as exc:
+            self._fail_action(_backend_process_crash_error(exc))
+        except Exception as exc:
+            self._fail_action(exc)
         finally:
-            QApplication.restoreOverrideCursor()
+            self._drain_process_logs()
+            self._clear_process_action()
+
+    @Slot(object)
+    def _finish_current_action(self, result: object) -> None:
+        if self._task_on_finished is None:
+            self._show_action_error(RuntimeError("Task finished without a handler."))
+            return
+        self._finish_action(self._task_label, result, self._task_on_finished)
+
+    def _finish_action(
+        self,
+        label: str,
+        result: object,
+        on_finished: Callable[[object], None],
+    ) -> None:
+        try:
+            on_finished(result)
+            self.status_label.setText("Concluido")
+            self.session.add_log(f"{label} completed.", source="task")
+        except Exception as exc:
+            self._show_action_error(exc)
+
+    @Slot(Exception)
+    def _fail_action(self, exc: Exception) -> None:
+        self._show_action_error(exc)
+
+    def _show_action_error(self, exc: Exception) -> None:
+        self.status_label.setText("Erro")
+        self.session.add_log(str(exc), level="ERROR", source="task")
+        if isinstance(
+            exc,
+            (
+                FileNotFoundError,
+                NotADirectoryError,
+                DestinationConflictError,
+                ValueError,
+            ),
+        ):
+            QMessageBox.critical(self, "Erro", str(exc))
+        else:
+            QMessageBox.critical(self, "Erro", f"Unexpected error: {exc}")
+
+    def _clear_task_thread(self) -> None:
+        self._task_thread = None
+        self._task_worker = None
+        self._task_label = ""
+        self._task_on_finished = None
+        self._set_actions_enabled(True)
+        QApplication.restoreOverrideCursor()
+
+    def _clear_process_action(self) -> None:
+        if self._process_timer is not None:
+            self._process_timer.stop()
+            self._process_timer.deleteLater()
+        if self._process_executor is not None:
+            self._process_executor.shutdown(wait=False, cancel_futures=True)
+        if self._process_log_path is not None:
+            self._process_log_path.unlink(missing_ok=True)
+        self._process_executor = None
+        self._process_future = None
+        self._process_timer = None
+        self._process_log_queue = None
+        self._process_log_path = None
+        self._process_label = ""
+        self._process_on_finished = None
+        self._set_actions_enabled(True)
+        QApplication.restoreOverrideCursor()
+
+    def _drain_process_logs(self) -> None:
+        if self._process_log_queue is None:
+            return
+        drain_gui_log_queue(self._process_log_queue, self.session)
+
+    def _has_running_task(self) -> bool:
+        return self._task_thread is not None or self._process_future is not None
+
+    def _uses_default_adapter(self) -> bool:
+        return type(self._adapter) is OrganizerAdapter
+
+    def _set_actions_enabled(self, enabled: bool) -> None:
+        for button in (
+            self.scan_button,
+            self.dedupe_button,
+            self.plan_button,
+            self.execute_button,
+        ):
+            button.setEnabled(enabled)
+
+    def _append_log_event(self, event: object) -> None:
+        self.output_log.append_event(event)
+
+    def _update_task_progress(self, progress: TaskProgress) -> None:
+        percent = progress.percent
+        if percent is None:
+            self.status_label.setText(progress.label)
+            return
+        self.status_label.setText(f"{progress.label}: {percent}%")
 
     def scan_source(self) -> None:
         settings = self._settings(require_output=False)
         if settings is None:
             return
 
-        def action() -> str:
+        if self._uses_default_adapter():
+            self._run_process_action(
+                "Escaneando",
+                _scan_with_default_adapter,
+                settings,
+                self._apply_scan_result,
+            )
+            return
+
+        def action(reporter: TaskReporter) -> ScanResult:
+            reporter.progress("Scanning", current=0, total=3, detail=settings.source)
             files = self._adapter.scan(settings.source)
+            reporter.progress("Scanning", current=1, total=3, detail=f"{len(files)} files")
             metrics = self._adapter.scan_metrics(files)
+            reporter.progress("Scanning", current=2, total=3, detail="metadata health")
             metadata_health = (
                 self._adapter.metadata_health(files)
                 if hasattr(self._adapter, "metadata_health")
                 else None
             )
-            self.session.set_scan_result(
-                files,
-                total_size_bytes=metrics.total_size_bytes,
-                by_extension=metrics.by_extension,
-                by_format=metrics.by_format,
-                metadata_health=metadata_health,
-            )
-            self.session.add_log(f"Scan completed for {settings.source}: {len(files)} files")
-            self.total_files_metric.setText(f"{len(files):,}")
-            self.scan_badge.setText("SCAN_COMPLETE: 100%")
-            self.source_path_label.setText(f"SOURCE PATH: {settings.source}")
-            lines = [f"Arquivos suportados: {len(files)}", ""]
-            lines.extend(str(path) for path in files[:500])
-            if len(files) > 500:
-                lines.append(f"... mais {len(files) - 500} arquivos")
-            return "\n".join(lines)
+            reporter.progress("Scanning", current=3, total=3, detail="complete")
+            return _make_scan_result(settings.source, files, metrics, metadata_health)
 
-        self._run_action("Escaneando", action)
+        self._run_action("Escaneando", action, self._apply_scan_result)
+
+    def _apply_scan_result(self, result: object) -> None:
+        scan = result
+        if not isinstance(scan, ScanResult):
+            raise TypeError("Unexpected scan result")
+        self.session.set_scan_result(
+            scan.files,
+            total_size_bytes=scan.total_size_bytes,
+            by_extension=scan.by_extension,
+            by_format=scan.by_format,
+            metadata_health=scan.metadata_health,
+        )
+        self.session.add_log(
+            f"Scan completed for {scan.source}: {len(scan.files)} files",
+            source="backend",
+        )
+        self.total_files_metric.setText(f"{len(scan.files):,}")
+        self.scan_badge.setText("SCAN_COMPLETE: 100%")
+        self.source_path_label.setText(f"SOURCE PATH: {scan.source}")
+        self.output_log.set_plain_output(scan.output, source="scan")
 
     def _source_directory_selected(self, source_directory: str) -> None:
         self.session.set_source_directory(source_directory)
@@ -345,73 +763,98 @@ class OrganizePage(QWidget):
         if settings is None:
             return
 
-        def action() -> str:
+        def action(reporter: TaskReporter) -> DuplicateResult:
+            reporter.progress("Dedupe", current=0, total=1, detail=settings.source)
             groups = self._adapter.find_duplicates(settings.source)
-            self.session.set_duplicate_groups(groups)
-            self.session.add_log(
-                f"Duplicate scan completed for {settings.source}: {len(groups)} groups"
-            )
-            return self._format_duplicate_groups(groups)
+            reporter.progress("Dedupe", current=1, total=1, detail=f"{len(groups)} groups")
+            return DuplicateResult(groups=groups, output=_format_duplicate_groups(groups))
 
-        self._run_action("Procurando duplicadas", action)
+        self._run_action("Procurando duplicadas", action, self._apply_duplicate_result)
+
+    def _apply_duplicate_result(self, result: object) -> None:
+        dedupe = result
+        if not isinstance(dedupe, DuplicateResult):
+            raise TypeError("Unexpected duplicate result")
+        self.session.set_duplicate_groups(dedupe.groups)
+        self.session.add_log(
+            f"Duplicate scan completed: {len(dedupe.groups)} groups",
+            source="backend",
+        )
+        self.output_log.set_plain_output(dedupe.output, source="dedupe")
 
     def preview_plan(self) -> None:
         settings = self._settings(require_output=True)
         if settings is None:
             return
 
-        def action() -> str:
-            operations = self._adapter.plan(settings)
-            self.session.set_preview_operations(operations)
-            self.session.add_log(
-                f"Plan preview completed for {settings.source}: {len(operations)} operations"
+        if self._uses_default_adapter():
+            self._run_process_action(
+                "Planejando",
+                _plan_with_default_adapter,
+                settings,
+                self._apply_plan_result,
             )
-            return self._format_plan_preview(operations)
+            return
 
-        self._run_action("Planejando", action)
+        def action(reporter: TaskReporter) -> PlanResult:
+            reporter.progress("Planning", current=0, total=1, detail=settings.source)
+            operations = self._adapter.plan(settings)
+            reporter.progress(
+                "Planning",
+                current=1,
+                total=1,
+                detail=f"{len(operations)} operations",
+            )
+            return PlanResult(
+                operations=operations,
+                output=_format_plan_preview(operations),
+            )
+
+        self._run_action("Planejando", action, self._apply_plan_result)
+
+    def _apply_plan_result(self, result: object) -> None:
+        plan = result
+        if not isinstance(plan, PlanResult):
+            raise TypeError("Unexpected plan result")
+        self.session.set_preview_operations(plan.operations)
+        self.session.add_log(
+            f"Plan preview completed: {len(plan.operations)} operations",
+            source="backend",
+        )
+        self.output_log.set_plain_output(plan.output, source="plan")
 
     def execute_plan(self) -> None:
         settings = self._settings(require_output=True)
         if settings is None:
             return
 
-        def action() -> str:
-            logs = self._adapter.execute(settings)
-            summary = [
-                f"Operacoes: {len(logs)}",
-                f"Modo: {'dry-run' if settings.dry_run else 'execute'}",
-                f"Quarentena: {Path(settings.output) / '.quarantine'}",
-                "",
-            ]
-            summary.extend(logs)
-            return "\n".join(summary)
-
-        self._run_action("Executando", action)
-
-    def _format_plan_preview(self, operations: list[FileOperation]) -> str:
-        if not operations:
-            return "Nenhuma operacao planejada."
-
-        lines = [f"Operacoes planejadas: {len(operations)}", ""]
-        for operation in operations[:100]:
-            lines.append(
-                f"{operation.mode.upper()}: "
-                f"{operation.source} -> {operation.destination}"
+        if self._uses_default_adapter():
+            self._run_process_action(
+                "Executando",
+                _execute_with_default_adapter,
+                settings,
+                self._apply_execute_result,
             )
-        if len(operations) > 100:
-            lines.append(f"... mais {len(operations) - 100} operacoes")
-        return "\n".join(lines)
+            return
 
-    def _format_duplicate_groups(self, groups: list[DuplicateGroup]) -> str:
-        if not groups:
-            return "Nenhuma imagem duplicada encontrada."
+        def action(reporter: TaskReporter) -> ExecuteResult:
+            reporter.progress("Executing", current=0, total=1, detail=settings.source)
+            logs = self._adapter.execute(settings)
+            reporter.progress("Executing", current=1, total=1, detail=f"{len(logs)} logs")
+            return _make_execute_result(settings, logs)
 
-        lines = [f"Grupos duplicados: {len(groups)}", ""]
-        for index, group in enumerate(groups, start=1):
-            lines.append(f"Grupo {index}:")
-            lines.append(f"  Hash: {group.content_hash}")
-            lines.append(f"  Original: {group.original}")
-            for duplicate in group.duplicates:
-                lines.append(f"  Duplicada: {duplicate}")
-            lines.append("")
-        return "\n".join(lines).rstrip()
+        self._run_action("Executando", action, self._apply_execute_result)
+
+    def _apply_execute_result(self, result: object) -> None:
+        execute = result
+        if not isinstance(execute, ExecuteResult):
+            raise TypeError("Unexpected execute result")
+        for line in execute.logs:
+            if line.startswith("[ERROR]"):
+                level = "ERROR"
+            elif line.startswith("[SKIP]") or "warning" in line.lower():
+                level = "WARNING"
+            else:
+                level = "INFO"
+            self.session.add_log(line, level=level, source="backend")
+        self.output_log.set_plain_output(execute.output, source="execute")

@@ -1,12 +1,37 @@
 from __future__ import annotations
 
+import logging
+import os
 import sys
+import time
 import types
 from types import SimpleNamespace
 from pathlib import Path
 
 from photo_organizer.gui import app as gui_app
 from photo_organizer.gui import windowing
+
+
+def _crash_process_task(_settings):
+    os._exit(139)
+
+
+def _logging_process_task(_settings, event_queue):
+    from photo_organizer.gui.pages.organize_page import _prepare_backend_process
+
+    _prepare_backend_process(event_queue)
+    logging.getLogger("photo_organizer.gui.process_test").error("process error")
+    return "done"
+
+
+def _process_events_until(app, predicate, *, timeout: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        app.processEvents()
+        if predicate():
+            return
+        time.sleep(0.01)
+    assert predicate()
 
 
 def test_gui_run_applies_startup_geometry(monkeypatch) -> None:
@@ -228,6 +253,14 @@ def test_main_window_select_source_directory_updates_session_and_scans(monkeypat
 
     window = MainWindow(adapter=adapter, session=session)
     window.select_source_directory()
+    _process_events_until(
+        app,
+        lambda: (
+            bool(session.scanned_files)
+            and window.organize_page._task_thread is None
+            and window.dashboard_page.total_files_card.value_label.text() == "1"
+        ),
+    )
 
     assert session.source_directory == str(selected_source)
     assert session.scanned_files == [scanned_file]
@@ -239,6 +272,7 @@ def test_main_window_select_source_directory_updates_session_and_scans(monkeypat
     assert window.dashboard_page.total_files_card.value_label.text() == "1"
     assert window.dashboard_page.total_size_card.value_label.text() == "4 B"
     assert window.dashboard_page.formats_card.value_label.text() == "1"
+    assert "Arquivos suportados: 1" in window.organize_page.output_log.toPlainText()
 
 
 def test_dashboard_shows_metadata_health_and_duplicate_summary(tmp_path) -> None:
@@ -298,3 +332,124 @@ def test_dashboard_shows_metadata_health_and_duplicate_summary(tmp_path) -> None
     assert dashboard.duplicates_panel.total_label.text() == "1"
     assert dashboard.duplicates_panel.groups_row.value.text() == "1"
     assert dashboard.duplicates_panel.files_row.value.text() == "2"
+
+
+def test_organize_console_receives_session_and_backend_logs() -> None:
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from photo_organizer.gui.adapters.organizer import OrganizerAdapter
+    from photo_organizer.gui.main_window import MainWindow
+    from photo_organizer.gui.session import SessionState
+    from photo_organizer.gui.theme import apply_app_theme
+
+    app = QApplication.instance() or QApplication([])
+    apply_app_theme(app)
+
+    session = SessionState()
+    window = MainWindow(adapter=OrganizerAdapter(), session=session)
+
+    session.add_log("ready", source="gui")
+    logging.getLogger("photo_organizer.gui.test").warning("backend warning")
+    _process_events_until(
+        app,
+        lambda: "backend warning" in window.organize_page.output_log.toPlainText(),
+    )
+
+    console_text = window.organize_page.output_log.toPlainText()
+    assert "[INFO]" in console_text
+    assert "[WARNING]" in console_text
+    assert "ready" in console_text
+
+
+def test_process_backend_crash_is_reported_without_crashing_gui() -> None:
+    from photo_organizer.gui.adapters.organizer import GuiSettings
+    from photo_organizer.gui.pages.organize_page import _run_in_process
+
+    settings = GuiSettings(
+        source=".",
+        output="",
+        mode="copy",
+        dry_run=True,
+        organization_strategy="date",
+    )
+
+    try:
+        _run_in_process(_crash_process_task, settings)
+    except RuntimeError as exc:
+        assert "Backend worker process crashed" in str(exc)
+    else:
+        raise AssertionError("Expected backend process crash to be reported")
+
+
+def test_process_backend_logs_are_forwarded_to_console() -> None:
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from photo_organizer.gui.adapters.organizer import GuiSettings, OrganizerAdapter
+    from photo_organizer.gui.pages.organize_page import OrganizePage
+    from photo_organizer.gui.session import SessionState
+    from photo_organizer.gui.theme import apply_app_theme
+
+    app = QApplication.instance() or QApplication([])
+    apply_app_theme(app)
+
+    session = SessionState()
+    page = OrganizePage(adapter=OrganizerAdapter(), session=session)
+    settings = GuiSettings(
+        source=".",
+        output="",
+        mode="copy",
+        dry_run=True,
+        organization_strategy="date",
+    )
+    results = []
+
+    page._run_process_action(
+        "Logging",
+        _logging_process_task,
+        settings,
+        lambda result: results.append(result),
+    )
+    _process_events_until(
+        app,
+        lambda: (
+            results == ["done"]
+            and page._process_future is None
+            and "process error" in page.output_log.toPlainText()
+        ),
+    )
+
+    console_text = page.output_log.toPlainText()
+    assert "[ERROR]" in console_text
+    assert "photo_organizer.gui.process_test" in console_text
+
+
+def test_duplicate_output_is_capped_for_large_reports(tmp_path) -> None:
+    from photo_organizer.gui.pages.organize_page import _format_duplicate_groups
+    from photo_organizer.hashing import DuplicateGroup
+
+    groups = [
+        DuplicateGroup(
+            content_hash=f"hash-{group_index}",
+            original=tmp_path / f"original-{group_index}.jpg",
+            duplicates=tuple(
+                tmp_path / f"duplicate-{group_index}-{index}.jpg"
+                for index in range(25)
+            ),
+        )
+        for group_index in range(105)
+    ]
+
+    output = _format_duplicate_groups(groups)
+
+    assert "Grupos duplicados: 105" in output
+    assert "... mais 5 grupos duplicados" in output
+    assert "... mais 5 duplicadas neste grupo" in output
+    assert "Grupo 101:" not in output
