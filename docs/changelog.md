@@ -6,11 +6,45 @@ permalink: /changelog/
 
 # Changelog
 
-O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md), seguindo o formato inspirado em Keep a Changelog e versionamento semantico.
+O historico canonico do projeto fica no [`CHANGELOG.md` da raiz do repositorio](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md), seguindo Keep a Changelog e versionamento semantico.
 
 ## [Unreleased]
 
-Sem mudancas registradas ainda.
+### Added
+
+- Revisao da documentacao principal e do site para alinhar README, changelog, exemplos, GUI, limitacoes e estado de versao.
+
+### Changed
+
+- Exemplos e paginas publicas foram alinhados com a ajuda atual da CLI.
+
+## [1.2.0] - 2026-06-13
+
+### Added
+
+- Selecao de pasta de origem na GUI.
+- Dashboard com total de arquivos, tamanho total e distribuicao de formatos suportados.
+- Painel de integridade de metadados com GPS, consistencia de timestamp e perfis de camera.
+- Painel de duplicatas/conflitos baseado em scan de duplicatas e preview de destinos.
+- Console de logs e status ao vivo para tarefas longas da GUI.
+
+### Fixed
+
+- Crash do processo backend da GUI passa a ser reportado sem fechar a interface.
+- Branding remanescente de mockups foi substituido pelo nome e versao do projeto.
+
+## [1.1.0] - 2026-05-30
+
+### Added
+
+- Entrada desktop inicial com `photo-organizer --gui`.
+- Bootstrap de PySide6 com validacao de dependencia.
+- Arquitetura base da GUI, janela principal, navegacao, tema visual, helpers de geometria e estrutura de workers.
+
+### Changed
+
+- PySide6 passou a fazer parte das dependencias padrao do projeto.
+- README foi reorganizado como porta de entrada principal com Standard Readme.
 
 ## [1.0.0] - 2026-05-22
 
@@ -45,6 +79,6 @@ Sem mudancas registradas ainda.
 - README passou a refletir o estado atual do projeto como porta de entrada principal.
 - Historico de mudancas consolidado em categorias legiveis para humanos e compativeis com versionamento semantico.
 
-## Versao atual
+## Estado atual
 
-A versao mais recente registrada no changelog da raiz e `1.0.0` (`2026-05-22`). Consulte o [`CHANGELOG.md` completo](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md) para o historico completo e detalhes de cada release.
+A versao declarada em `pyproject.toml` e `1.2.0`; a ultima tag Git presente no repositorio local durante esta revisao e `v1.0.0`. Consulte o [`CHANGELOG.md` completo](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md) para o historico completo e detalhes de cada release.

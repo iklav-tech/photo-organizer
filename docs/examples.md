@@ -39,6 +39,16 @@ photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
 
 O modo `--dry-run` simula as operacoes e nao altera o sistema de arquivos. Em relatorios, as operacoes aparecem com status de simulacao e observacao indicando que nenhuma mudanca foi aplicada.
 
+## Usar staging antes de promover ao destino
+
+```bash
+photo-organizer organize ./Photos \
+  --output ./OrganizedPhotos \
+  --staging-dir /tmp/photo-organizer-staging
+```
+
+Com `--staging-dir`, a CLI escreve os arquivos em uma area temporaria e so promove o lote para `--output` se todas as operacoes planejadas forem concluidas com sucesso. Essa opcao e util para destinos em disco externo, rede ou colecoes que exigem uma promocao mais conservadora.
+
 ## Importar preservando a origem
 
 ```bash
@@ -170,6 +180,7 @@ photo-organizer organize ./Photos \
   --by event \
   --event-window-minutes 30 \
   --event-directory-pattern "{date:%Y}/{date:%m}/{date:%Y-%m-%d}_{event}" \
+  --event-name-pattern "{date:%Y-%m-%d}_{folder}" \
   --correction-manifest corrections.yaml
 ```
 
@@ -245,3 +256,11 @@ photo-organizer organize ./Photos \
 ```
 
 `--resume` exige `--journal` e pula apenas fontes ja registradas com `status=success`. Entradas com erro sao tentadas novamente.
+
+## Abrir a GUI
+
+```bash
+photo-organizer --gui
+```
+
+A GUI cobre o fluxo interativo principal: escolher origem, escanear, ver metricas, revisar integridade de metadados, localizar duplicatas/conflitos, gerar preview, executar e acompanhar logs. Para manifests, journals, arquivos de configuracao e reports completos, use a CLI.

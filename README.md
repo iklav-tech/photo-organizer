@@ -2,7 +2,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://iklav-tech.github.io/photo-organizer/)
 
-> CLI em Python para importar, auditar, renomear e organizar colecoes de fotos por data, local e metadados.
+> CLI em Python, com GUI PySide6 inicial, para importar, auditar, renomear e organizar colecoes de fotos por data, local e metadados.
 
 O `photo-organizer` percorre uma pasta de origem, identifica imagens suportadas, resolve a melhor data e local disponiveis, planeja destinos previsiveis e executa copias ou movimentos com relatorios de auditoria. Ele foi criado para organizar acervos vindos de cartoes, celulares, backups antigos e misturas de formatos sem sobrescrever arquivos existentes por padrao.
 
@@ -35,7 +35,7 @@ O projeto existe para transformar lotes de imagens em uma colecao organizada, au
 - executar `copy` ou `move` com politicas de conflito;
 - registrar manifestos para revisao, retomada e auditoria.
 
-O escopo atual e uma ferramenta local com CLI completa e bootstrap inicial de GUI em PySide6. Ela nao e um catalogador de biblioteca, editor de fotos, sincronizador cloud, conversor RAW/DNG ou ferramenta de remocao automatica de duplicatas.
+O escopo atual e uma ferramenta local com CLI completa e GUI desktop inicial em PySide6. Ela nao e um catalogador de biblioteca, editor de fotos, sincronizador cloud, conversor RAW/DNG ou ferramenta de remocao automatica de duplicatas.
 
 ## Install
 
@@ -168,6 +168,7 @@ photo-organizer organize ./Photos --output ./OrganizedPhotos --conflict-policy q
 photo-organizer organize ./Photos --output ./OrganizedPhotos --segregate-derivatives
 photo-organizer organize ./Photos --output ./OrganizedPhotos --burst-detection --review-report review.csv
 photo-organizer organize ./Photos --output ./OrganizedPhotos --journal journal.jsonl --resume
+photo-organizer organize ./Photos --output ./OrganizedPhotos --staging-dir /tmp/photo-staging
 ```
 
 ### Import
@@ -188,7 +189,9 @@ photo-organizer import ./OldBackup --output ./Photos --report import.json
 photo-organizer --gui
 ```
 
-A GUI usa PySide6 e oferece o shell inicial da aplicacao desktop, com tema visual, sidebar, topbar, footer, navegacao e pagina de organizacao. O fluxo de CLI continua sendo a referencia mais completa para automacao e operacoes avancadas.
+A GUI usa PySide6 e oferece uma experiencia desktop inicial sobre os mesmos servicos da CLI. O estado atual inclui selecao de pasta de origem, dashboard com total de arquivos, tamanho e formatos, painel de integridade de metadados, painel de duplicatas/conflitos, console de logs ao vivo e pagina de organizacao com acoes de scan, dedupe, preview e execucao.
+
+O fluxo de CLI continua sendo a referencia mais completa para automacao, configuracao avancada, reports, journals, manifests e execucao reproduzivel em scripts.
 
 ## Supported Formats
 
@@ -242,6 +245,8 @@ Estrategias de destino:
 - `location`: `Country/State/City`.
 - `location-date`: `Country/State/City/YYYY/MM`.
 - `city-state-month`: `City-State/YYYY-MM`.
+
+`--event-window-minutes` agrupa arquivos por proximidade temporal para relatorios ou diretorios. `--event-name-pattern` personaliza nomes gerados de eventos com campos como `{date}`, `{folder}`, `{city}`, `{state}`, `{country}`, `{event_id}` e `{index}`.
 
 Campos aceitos por `--name-pattern`:
 

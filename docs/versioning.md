@@ -19,7 +19,7 @@ MAJOR.MINOR.PATCH
 Exemplo:
 
 ```text
-1.0.0
+1.2.0
 ```
 
 Essa versao deve estar alinhada em:
@@ -40,7 +40,7 @@ vMAJOR.MINOR.PATCH
 Exemplo:
 
 ```text
-v1.0.0
+v1.2.0
 ```
 
 O prefixo `v` fica restrito a tags e releases. Metadados Python e referencias internas de pacote usam apenas `MAJOR.MINOR.PATCH`.
@@ -56,7 +56,7 @@ vMAJOR.MINOR.PATCH - short release summary
 Exemplo:
 
 ```text
-v1.0.0 - First stable public release
+v1.2.0 - GUI dashboard and live status
 ```
 
 ## Quando incrementar versoes
@@ -97,15 +97,16 @@ Antes de publicar uma release:
 Comandos tipicos:
 
 ```bash
-.venv/bin/python -m pytest
-git tag v1.0.0
-git push origin v1.0.0
+python -m pytest
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 Se a release for criada pela interface do GitHub, selecione a tag `vMAJOR.MINOR.PATCH` e use as notas da secao correspondente do `CHANGELOG.md`.
 
 ## Estado atual
 
-- Versao atual do pacote: `1.0.0`.
-- Tag correspondente: `v1.0.0`.
+- Versao declarada em `pyproject.toml`: `1.2.0`.
+- Versao declarada em `src/photo_organizer/__init__.py`: deve ser mantida sincronizada com `pyproject.toml` antes da publicacao.
+- Ultima tag Git presente no repositorio local durante esta revisao: `v1.0.0`.
 - Changelog canonico: [`CHANGELOG.md`](https://github.com/iklav-tech/photo-organizer/blob/main/CHANGELOG.md).

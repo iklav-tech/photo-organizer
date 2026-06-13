@@ -9,17 +9,18 @@ permalink: /usage/
 ## Comando base
 
 ```bash
-photo-organizer [--version] [--log-level DEBUG|INFO|WARNING|ERROR|CRITICAL] <comando>
+photo-organizer [--version] [--gui] [--log-level DEBUG|INFO|WARNING|ERROR|CRITICAL] <comando>
 ```
 
 Comandos existentes:
 
 - `scan`: lista imagens suportadas em uma pasta.
 - `dedupe`: identifica duplicatas por hash de conteudo; e somente leitura.
-- `inspect`: audita metadados disponiveis e decisoes finais de data/local.
+- `inspect` ou `audit-metadata`: audita metadados disponiveis e decisoes finais de data/local.
 - `explain`: gera relatorio JSON com trilha de decisao por arquivo.
 - `organize`: move por padrao fotos para uma estrutura organizada.
 - `import`: copia por padrao fotos de uma origem para uma colecao organizada.
+- `--gui`: inicia a interface grafica PySide6.
 
 ## scan
 
@@ -84,6 +85,7 @@ Opcoes principais compartilhadas por `organize` e `import`:
 
 - `--output DIR`: diretorio destino.
 - `--config PATH`: arquivo `.json`, `.yaml` ou `.yml`.
+- `--staging-dir DIR`: grava primeiro em area temporaria e promove ao destino apenas se todas as operacoes tiverem sucesso.
 - `--by date|event|location|location-date|city-state-month`.
 - `--name-pattern PATTERN`, com `{date}`, `{stem}`, `{ext}` e `{original}`.
 - `--report PATH`: relatorio `.json` ou `.csv`.
@@ -93,6 +95,7 @@ Opcoes principais compartilhadas por `organize` e `import`:
 - `--segregate-derivatives`, `--no-segregate-derivatives`, `--derived-path DIR` e `--derived-pattern PATTERN`.
 - `--event-window-minutes MINUTES`: agrupa fotos em eventos quando timestamps consecutivos ficam dentro da janela informada.
 - `--event-directory-pattern PATTERN`: define o caminho de diretorio usado por `--by event`.
+- `--event-name-pattern PATTERN`: personaliza nomes de eventos gerados com `{date}`, `{folder}`, `{city}`, `{state}`, `{country}`, `{event_id}` e `{index}`.
 - `--event-directory`: coloca arquivos organizados abaixo de um diretorio de evento gerado.
 - `--no-event-directory`: mantem o agrupamento temporal apenas nos relatorios.
 - `--burst-detection`: marca grupos provaveis de burst sem apagar arquivos.
@@ -112,3 +115,11 @@ photo-organizer import ./OldBackup --output ./Photos --report import.json
 ```
 
 `import` compartilha as regras de organizacao com `organize`, mas copia por padrao para preservar a origem. Use `--move` somente quando quiser remover os arquivos da origem apos uma copia bem-sucedida.
+
+## GUI
+
+```bash
+photo-organizer --gui
+```
+
+A GUI delega para os mesmos servicos de scan, dedupe, planejamento e execucao usados pela CLI. Ela ja inclui selecao da origem, dashboard, metricas de formatos, integridade de metadados, duplicatas/conflitos, preview, execucao e logs ao vivo. Use a CLI para fluxos que dependem de configuracao detalhada, manifests, reports, journals ou automacao em scripts.

@@ -6,7 +6,7 @@ permalink: /
 
 # photo-organizer
 
-`photo-organizer` e uma ferramenta CLI em Python para organizar colecoes de fotos localmente, com renomeacao e separacao em diretorios a partir de data, hora, metadados e regras configuraveis.
+`photo-organizer` e uma ferramenta local em Python para organizar colecoes de fotos, com CLI completa e GUI desktop inicial em PySide6. Ela renomeia e separa arquivos em diretorios a partir de data, hora, local, metadados e regras configuraveis.
 
 O projeto resolve um problema comum em acervos antigos: fotos espalhadas em pastas, cartoes, backups ou dumps de celular, com nomes inconsistentes e metadados variados. A CLI permite auditar, simular e organizar esses arquivos de forma previsivel antes de alterar a colecao original.
 
@@ -22,6 +22,7 @@ O projeto resolve um problema comum em acervos antigos: fotos espalhadas em past
 - Politicas de conflito de destino e segregacao opcional de arquivos derivados.
 - Agrupamento temporal de fotos em eventos, para relatorio ou diretorio.
 - Marcacao de sequencias burst para revisao, sem exclusao automatica.
+- GUI com selecao de pasta, dashboard, metricas de scan, integridade de metadados, duplicatas/conflitos, preview, execucao e logs ao vivo.
 - Limitacoes conhecidas documentadas para HEIC/HEIF, RAW, WEBP/BMP, inferencias e execucao segura.
 - Politica de versionamento semantico e releases com tags `vMAJOR.MINOR.PATCH`.
 
@@ -35,6 +36,7 @@ pip install -e ".[dev]"
 photo-organizer scan ./Photos
 photo-organizer organize ./Photos --output ./OrganizedPhotos --dry-run
 photo-organizer import /Volumes/SDCARD --output ./Photos --report import.json
+photo-organizer --gui
 ```
 
 ## Publicacao no GitHub Pages

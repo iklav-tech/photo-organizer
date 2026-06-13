@@ -8,13 +8,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Documentation refresh aligned with Standard Readme, Keep a Changelog and the GitHub Pages site.
+
+### Changed
+
+- README and public documentation now describe the current CLI, GUI, supported formats, limitations and release state consistently.
+- GitHub Pages documentation was reviewed to remove stale version references and align examples with the current argparse help.
+
+## [1.2.0] - 2026-06-13
+
+### Added
+
 - GUI source folder selection with `QFileDialog`, shared session state and header display of the selected path.
 - GUI session state prepared for scanned file metrics, duplicate groups, operation preview data and logs.
 - Dashboard metric cards for total files, total size and supported format distribution, backed by the GUI adapter scan summary.
+- GUI metadata integrity panel with GPS, timestamp consistency and camera profile indicators.
+- GUI duplicates/conflicts panel backed by duplicate scans and previewed destination conflicts.
+- GUI live log console and status feedback for long-running scan, duplicate, preview and execute tasks.
 
 ### Fixed
 
 - Replaced leftover mockup branding in the GUI with the project display name and package version.
+- Backend process crashes during GUI media processing are reported without closing the GUI.
 
 ## [1.1.0] - 2026-05-30
 

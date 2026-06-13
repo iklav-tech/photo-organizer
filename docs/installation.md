@@ -10,7 +10,7 @@ permalink: /installation/
 
 - Python `>=3.10`.
 - `pip` e `venv`.
-- Dependencias Python: `Pillow`, `PyYAML` e `pillow-heif`.
+- Dependencias Python: `Pillow`, `PySide6`, `PyYAML` e `pillow-heif`.
 - Para HEIC/HEIF, o backend nativo `libheif` pode ser necessario se o wheel local de `pillow-heif` nao trouxer suporte nativo suficiente.
 
 ## Instalacao para desenvolvimento
@@ -46,6 +46,22 @@ Tambem e possivel executar pelo modulo Python:
 
 ```bash
 python -m photo_organizer --help
+```
+
+## GUI opcional
+
+A interface grafica e iniciada pelo mesmo entrypoint:
+
+```bash
+photo-organizer --gui
+```
+
+No estado atual, a GUI usa PySide6 e oferece selecao de pasta de origem, dashboard, metricas de scan, integridade de metadados, painel de duplicatas/conflitos, preview, execucao e console de logs ao vivo. A CLI continua sendo a interface mais completa para automacao e configuracoes avancadas.
+
+`PySide6` esta nas dependencias de runtime do projeto. Se estiver usando um ambiente instalado de outra forma e a GUI indicar dependencia ausente, reinstale o pacote no ambiente ativo:
+
+```bash
+pip install -e .
 ```
 
 ## Executar testes
